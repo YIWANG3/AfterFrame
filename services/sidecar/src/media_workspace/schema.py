@@ -1,6 +1,6 @@
 # Catalog schema version. This is the only authoritative version declaration;
 # migration code and the public db package both import it from here.
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 
 SCHEMA_STATEMENTS = [
@@ -213,6 +213,9 @@ SCHEMA_STATEMENTS = [
         FOREIGN KEY(asset_id) REFERENCES assets(asset_id)
     )
     """,
+    # Nested folders: a folder's children are looked up by parent (sidebar
+    # tree, subtree walks for browsing and deleting).
+    "CREATE INDEX IF NOT EXISTS idx_collections_parent ON collections(parent_collection_id)",
     "CREATE INDEX IF NOT EXISTS idx_collection_items_asset ON collection_items(asset_id)",
     """
     CREATE TABLE IF NOT EXISTS asset_ai_annotations (

@@ -51,7 +51,9 @@
       "show": "Show map",
       "hide": "Hide map"
     },
-    "displayMode": "Layout"
+    "displayMode": "Layout",
+    "withSubfolders": "Showing subfolders too",
+    "thisFolderOnly": "Showing this folder only"
   },
   "discover": {
     "recentTitle": "Recently Added",
@@ -98,7 +100,8 @@
       "count": "Photos",
       "captured": "Capture dates",
       "lastAdded": "Last added",
-      "created": "Created"
+      "created": "Created",
+      "location": "Location"
     },
     "selected_one": "{{count}} folder selected · {{photos}} photos",
     "selected_other": "{{count}} folders selected · {{photos}} photos",
@@ -120,7 +123,11 @@
     "noFolders": "No folders yet",
     "noFoldersHint": "Drag photos onto a folder in the sidebar, or right-click a photo and choose Add to folder.",
     "noMatches": "No folders match “{{query}}”",
-    "noFilterMatches": "No folders match these filters"
+    "noFilterMatches": "No folders match these filters",
+    "newSubfolder": "New subfolder",
+    "moveTo": "Move to…",
+    "topLevel": "Top level",
+    "deleteConfirmMessageTree": "Their subfolders go with them. The photos stay in the library."
   },
   "sidebar": {
     "reorderHint": "Drag to reorder · Option/Alt + ↑/↓",
@@ -161,7 +168,17 @@
     "snapshotToFolder": "Copy current photos to a folder",
     "smartUnreadable": "Saved by a newer version of AfterFrame",
     "editSmartRules": "Edit conditions",
-    "tags": "Tags"
+    "tags": "Tags",
+    "newSubfolder": "New subfolder",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "moveToRoot": "Drop here to move to the top level",
+    "deleteWithChildrenTitle": "Delete “{{name}}”?",
+    "deleteWithChildren_one": "Its {{count}} subfolder goes with it. The photos stay in the library.",
+    "deleteWithChildren_other": "Its {{count}} subfolders go with it. The photos stay in the library.",
+    "deleteWithChildrenAction": "Delete folder",
+    "deleteCancel": "Cancel",
+    "folderPath": "{{path}}"
   },
   "people": {
     "title": "People",

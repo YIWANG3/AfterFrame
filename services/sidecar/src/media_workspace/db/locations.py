@@ -12,6 +12,7 @@ import sqlite3
 from ..geo_resolver import RESOLVER_VERSION as GEO_RESOLVER_VERSION
 from ..geo_resolver import load_gazetteer, resolve_location
 from .browse import _base_clause, _search_clause, _status_clause
+from .collection_scope import members_subquery, scope_collection_ids
 from .facets import _GEO_PRECISION_RANK, _facet_clauses
 
 
@@ -388,6 +389,7 @@ def list_map_points(
     base: dict | None = None,
     min_precision: str = "locality",
     limit: int = 100000,
+    include_descendants: bool = False,
 ) -> list[sqlite3.Row]:
     """Lightweight location points for the map, mirroring the gallery scope.
 
@@ -419,10 +421,11 @@ def list_map_points(
     params: list[object] = []
     if collection_id is not None:
         # Collection scope mirrors browse_collection: membership instead of a
-        # status clause, then the same search and facets.
-        scope_join = "JOIN collection_items ci ON ci.asset_id = assets.asset_id"
-        scope_clause = "ci.collection_id = ?"
-        params.append(collection_id)
+        # status clause (the folder, or its whole subtree), then the same
+        # search and facets.
+        scope_join = ""
+        scope_clause, scope_params = members_subquery(scope_collection_ids(connection, collection_id, include_descendants))
+        params.extend(scope_params)
     else:
         scope_join = ""
         # A smart collection's rules carry their own status.

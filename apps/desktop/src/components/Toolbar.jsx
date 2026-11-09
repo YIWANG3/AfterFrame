@@ -27,6 +27,7 @@ import {
   SlidersHorizontal,
   Map as MapIcon,
   Tag,
+  FolderTree,
 } from "lucide-react";
 
 // Labels resolved at render via t(`toolbar.*`); these consts carry i18n keys.
@@ -180,6 +181,10 @@ export default function Toolbar({
   sort,
   setSort,
   inFolder = false,
+  // Inside a folder with folders under it: whether their photos show too.
+  hasSubfolders = false,
+  includeDescendants = true,
+  onToggleDescendants,
   refreshAll,
   onAddProcessed,
   onAddSources,
@@ -348,6 +353,18 @@ export default function Toolbar({
         )}
       </label>
 
+      {inFolder && hasSubfolders && onToggleDescendants && (
+        <IconButton
+          data-testid="toolbar-subfolders"
+          aria-pressed={includeDescendants}
+          aria-label={includeDescendants ? t("toolbar.withSubfolders") : t("toolbar.thisFolderOnly")}
+          title={includeDescendants ? t("toolbar.withSubfolders") : t("toolbar.thisFolderOnly")}
+          className={includeDescendants ? "bg-selected text-accent" : ""}
+          onClick={() => onToggleDescendants(!includeDescendants)}
+        >
+          <FolderTree className="h-3.5 w-3.5 stroke-[1.8]" />
+        </IconButton>
+      )}
       <SortDropdown sort={sort} setSort={setSort} inFolder={inFolder} />
 
       <div className="relative">

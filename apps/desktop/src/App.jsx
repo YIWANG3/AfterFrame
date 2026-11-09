@@ -44,6 +44,7 @@ import { sidebarViews } from "../features/index.js";
 import { useView as useStickerView } from "../features/sticker/renderer/index.js";
 import PeopleView from "./components/PeopleView";
 import FoldersView from "./components/FoldersView";
+import { descendantIds, flattenForPicker, pathOf } from "./components/folderTree";
 import PeopleInspector from "./components/PeopleInspector";
 import usePeopleGroups from "./hooks/usePeopleGroups";
 import DesignSystemPanel from "./components/DesignSystemPanel";
@@ -988,7 +989,12 @@ export default function App() {
     : null;
   // The folders a filter can name ("in / not in"), and the dialog that edits
   // the bar's "any of these groups".
-  const manualFolders = useMemo(() => (workspace.collections || []).filter((c) => c.kind === "manual"), [workspace.collections]);
+  // Folders nest: the pickers list them depth-first with their depth, so a
+  // menu can indent them and a chip can show the path.
+  const manualFolders = useMemo(
+    () => flattenForPicker(workspace.collections, { locale: i18n.language }).map(({ folder, depth }) => ({ ...folder, depth })),
+    [workspace.collections],
+  );
   const [filterGroupsOpen, setFilterGroupsOpen] = useState(false);
 
   async function rewriteSmartCollection() {
@@ -1215,6 +1221,7 @@ export default function App() {
             workspace.selectCollection(id);
           }}
           onCreateCollection={workspace.createCollection}
+          onMoveCollection={workspace.moveCollection}
           onReorderCollections={workspace.reorderCollections}
           reorderingCollections={workspace.reorderingCollections}
           onRenameCollection={workspace.renameCollection}
@@ -1300,6 +1307,7 @@ export default function App() {
                 workspace.selectCollection(id);
               }}
               onCreateFolder={workspace.createCollection}
+              onMoveFolder={workspace.moveCollection}
               onRenameFolder={workspace.renameCollection}
               onDeleteFolder={workspace.deleteCollection}
               onAnnotateFolder={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
@@ -1309,7 +1317,7 @@ export default function App() {
             <>
               <Toolbar
                 title={workspace.activeCollectionId
-                  ? (workspace.collections.find((c) => c.collection_id === workspace.activeCollectionId)?.name || "Folder")
+                  ? (pathOf(workspace.collections, workspace.activeCollectionId) || "Folder")
                   : (activeSmartCollection?.name
                     || (workspace.similarTo ? tNav("browse.similar")
                       : peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : tNav(`browse.${workspace.status}`, filterTitle(workspace.status))))}
@@ -1322,6 +1330,9 @@ export default function App() {
                 }}
                 sort={workspace.sort}
                 inFolder={!!workspace.activeCollectionId}
+                hasSubfolders={!!workspace.activeCollectionId && descendantIds(workspace.collections, workspace.activeCollectionId).length > 0}
+                includeDescendants={workspace.includeDescendants}
+                onToggleDescendants={workspace.setIncludeDescendants}
                 setSort={workspace.setSort}
                 refreshAll={() => workspace.refreshAll()}
                 onAddProcessed={workspace.addImages}
@@ -1413,6 +1424,7 @@ export default function App() {
                   expanded={mapExpanded}
                   status={workspace.status}
                   collectionId={workspace.activeCollectionId}
+                  includeDescendants={workspace.includeDescendants}
                   search={workspace.query}
                   filters={workspace.filters}
                   base={workspace.activeBase}

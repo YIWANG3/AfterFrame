@@ -380,14 +380,24 @@ test.describe("Batch collage", () => {
     await window.getByRole("button", { name: /Export 2 to folder/ }).click();
 
     const expected = ["collage_01.jpg", "collage_02.jpg"].map((n) => path.join(exportDir, n));
+    // sharp writes each page straight to its final name, so a file that
+    // exists with bytes in it may still be mid-write (a slow CI runner read a
+    // "premature end of JPEG" here). Wait until every file decodes.
+    const metadataOf = async (file) => {
+      try {
+        return fs.existsSync(file) ? await sharp(file).metadata() : null;
+      } catch {
+        return null;
+      }
+    };
     await expect.poll(
-      () => expected.every((p) => fs.existsSync(p) && fs.statSync(p).size > 0),
+      async () => (await Promise.all(expected.map(metadataOf))).every(Boolean),
       { timeout: 30_000 },
     ).toBe(true);
 
     // Default export: 4096px wide, 1:1 ratio
     for (const file of expected) {
-      const meta = await sharp(file).metadata();
+      const meta = await metadataOf(file);
       expect(meta.format).toBe("jpeg");
       expect(meta.width).toBe(4096);
       expect(meta.height).toBe(4096);

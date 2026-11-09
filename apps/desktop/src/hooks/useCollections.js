@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import api from "../api";
 import { rulesFromScope } from "./workspaceLogic";
 import { readTargetFolderId, resolveTargetFolder, writeTargetFolderId } from "./targetFolder";
+import { ancestorIds, canDropInto, descendantIds } from "../components/folderTree";
 
 // `catalogKey` tells catalogs apart for the remembered target folder.
 export default function useCollections(bridgeRef, catalogKey = null) {
@@ -42,20 +43,55 @@ export default function useCollections(bridgeRef, catalogKey = null) {
     }
   }
 
-  async function createCollection(name) {
-    const col = await api.createCollection(name, "manual");
+  // `parentId` makes the folder inside another folder (folders nest).
+  async function createCollection(name, parentId = null) {
+    const col = await api.createCollection(name, "manual", null, parentId || null);
     await loadCollections();
     if (col?.collection_id) setTargetFolder(col.collection_id);
     return col;
+  }
+
+  // Put a folder inside another, or at the top level (parentId null). The
+  // sidebar shows the move at once; the list is reloaded either way.
+  async function moveCollection(collectionId, parentId = null) {
+    const bridge = bridgeRef.current;
+    const target = parentId || null;
+    if (!canDropInto(collections, collectionId, target)) return false;
+    setCollections((current) => current.map((c) => (c.collection_id === collectionId ? { ...c, parent_collection_id: target } : c)));
+    try {
+      await api.moveCollection(collectionId, target);
+      return true;
+    } catch (error) {
+      bridge.pushToast?.({ title: bridge.t("folderMoveFailed"), message: String(error?.message || error), tone: "error" });
+      return false;
+    } finally {
+      await loadCollections();
+    }
+  }
+
+  // Is the folder on screen showing this folder's photos: the folder itself,
+  // or one of its ancestors with its subfolders included?
+  function showsFolder(collectionId) {
+    const scope = bridgeRef.current.scopeRef.current;
+    if (!scope.collectionId) return false;
+    if (scope.collectionId === collectionId) return true;
+    return scope.includeDescendants !== false && ancestorIds(collections, collectionId).includes(scope.collectionId);
   }
 
   // Save the current view as a smart collection: where the user is plus the
   // refinement (workspaceLogic.rulesFromScope). The new collection then becomes
   // the place, which also empties the filter bar: what was a refinement is now
   // its rules.
+  // Inside a folder with folders under it (and them showing), the saved rule
+  // follows the whole subtree.
+  const rulesOnScreen = () => {
+    const scope = bridgeRef.current.scopeRef.current;
+    return rulesFromScope(scope, { hasSubfolders: !!scope.collectionId && descendantIds(collections, scope.collectionId).length > 0 });
+  };
+
   async function saveSmartCollection(name) {
     const bridge = bridgeRef.current;
-    const rules = rulesFromScope(bridge.scopeRef.current);
+    const rules = rulesOnScreen();
     if (!rules) return null;
     const col = await api.createCollection(name, "smart", rules);
     const saved = (await loadCollections()).find((c) => c.collection_id === col.collection_id);
@@ -78,7 +114,7 @@ export default function useCollections(bridgeRef, catalogKey = null) {
   //   editing                → the bar's conditions replace its top layer
   async function updateSmartCollectionRules(collectionId) {
     const bridge = bridgeRef.current;
-    const rules = rulesFromScope(bridge.scopeRef.current);
+    const rules = rulesOnScreen();
     if (!rules) return;
     await api.updateCollection(collectionId, { rules });
     const saved = (await loadCollections()).find((c) => c.collection_id === collectionId);
@@ -104,17 +140,16 @@ export default function useCollections(bridgeRef, catalogKey = null) {
 
   const reorderingCollectionsRef = useRef(false);
   const [reorderingCollections, setReorderingCollections] = useState(false);
-  async function reorderCollections(collectionIds) {
+  // The order of one level: the folders directly under `parentId` (the top
+  // level when null), all of them.
+  async function reorderCollections(collectionIds, parentId = null) {
     if (reorderingCollectionsRef.current) return;
     reorderingCollectionsRef.current = true;
     setReorderingCollections(true);
-    const byId = new Map(collections.map((c) => [c.collection_id, c]));
-    setCollections([
-      ...collectionIds.map((id, sort_order) => ({ ...byId.get(id), sort_order })),
-      ...collections.filter((c) => c.kind !== "manual"),
-    ]);
+    const position = new Map(collectionIds.map((id, index) => [id, index]));
+    setCollections(collections.map((c) => (position.has(c.collection_id) ? { ...c, sort_order: position.get(c.collection_id) } : c)));
     try {
-      await api.reorderCollections(collectionIds);
+      await api.reorderCollections(collectionIds, parentId || null);
     } catch (error) {
       const bridge = bridgeRef.current;
       bridge.pushToast?.({ title: bridge.t("folderOrderFailed"), message: String(error?.message || error), tone: "error" });
@@ -130,12 +165,15 @@ export default function useCollections(bridgeRef, catalogKey = null) {
     await loadCollections();
   }
 
+  // A folder goes with every folder under it (the sidecar deletes the
+  // subtree): the view and the target folder leave with any of them.
   async function deleteCollection(collectionId) {
     const bridge = bridgeRef.current;
+    const gone = new Set([collectionId, ...descendantIds(collections, collectionId)]);
     await api.deleteCollection(collectionId);
-    if (collectionId === targetFolderId) setTargetFolder(null);
+    if (gone.has(targetFolderId)) setTargetFolder(null);
     bridge.bumpCatalogRevision();
-    if (bridge.scopeRef.current.collectionId === collectionId) bridge.updateScope({ collectionId: null });
+    if (gone.has(bridge.scopeRef.current.collectionId)) bridge.updateScope({ collectionId: null });
     if (bridge.scopeRef.current.smartCollectionId === collectionId) bridge.goTo({});
     await loadCollections();
   }
@@ -146,7 +184,7 @@ export default function useCollections(bridgeRef, catalogKey = null) {
     setTargetFolder(collectionId);
     bridge.bumpCatalogRevision();
     await loadCollections();
-    if (bridge.scopeRef.current.collectionId === collectionId) {
+    if (showsFolder(collectionId)) {
       await bridge.refreshBrowse();
     }
   }
@@ -159,6 +197,9 @@ export default function useCollections(bridgeRef, catalogKey = null) {
     bridge.bumpCatalogRevision();
     await loadCollections();
     if (bridge.scopeRef.current.collectionId === collectionId) bridge.dropLoadedItems(targetIds);
+    // Shown through an ancestor: the photo may still be there by way of
+    // another folder, so ask again instead of dropping it.
+    else if (showsFolder(collectionId)) await bridge.refreshBrowse();
   }
 
   return {
@@ -167,6 +208,7 @@ export default function useCollections(bridgeRef, catalogKey = null) {
     hasSmartCollections,
     loadCollections,
     createCollection,
+    moveCollection,
     saveSmartCollection,
     updateSmartCollectionRules,
     snapshotSmartCollection,

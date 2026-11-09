@@ -1133,6 +1133,7 @@ def run_annotation_job(
     only_missing: bool = True,
     asset_ids: list[str] | None = None,
     collection_id: str | None = None,
+    include_descendants: bool = False,
     languages: list[str] | None = None,
     max_tags: int = 10,
     max_caption_chars: int = 200,
@@ -1153,6 +1154,7 @@ def run_annotation_job(
             only_missing=only_missing,
             asset_ids=asset_ids,
             collection_id=collection_id,
+            include_descendants=include_descendants,
             limit=limit,
         )
         return _annotation.annotate_batch(

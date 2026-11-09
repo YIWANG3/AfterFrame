@@ -861,6 +861,16 @@ html.electron .discover-drag-region { pointer-events: auto; -webkit-app-region: 
 }
 .sidebar-folder-row[data-folder-insertion="before"]::after { top: 0; }
 .sidebar-folder-row[data-folder-insertion="after"]::after { bottom: 0; }
+/* Dropping INTO a folder (nesting): the whole row lights up instead of a line. */
+.sidebar-folder-row[data-folder-insertion="into"]::after {
+  inset: 0;
+  height: auto;
+  left: 0;
+  right: 0;
+  border-radius: 6px;
+  background: rgb(var(--accent-color) / .12);
+  box-shadow: inset 0 0 0 1px rgb(var(--accent-color) / .6);
+}
 
 /* ───────── Windows 窗口外壳(html.platform-win32,见 electron/windowChrome.js) ─────────
    不透明窗口 + 36px 自绘标题条;原生最小化 / 最大化(含贴靠布局)/ 关闭按钮由 titleBarOverlay 画在标题条右端。

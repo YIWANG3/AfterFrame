@@ -6,6 +6,34 @@
 export const assets = []; // insertion order = import order
 export const collections = []; // rows carry asset_ids; item_count derives from it
 let nextId = 1;
+
+// Folders nest (parent_collection_id). The folder and every folder under it,
+// the folder first; a cycle or a missing parent ends the walk.
+export function subtreeIds(collectionId) {
+  const out = [];
+  const walk = (id) => {
+    if (out.includes(id)) return;
+    out.push(id);
+    for (const row of collections) if (row.kind === "manual" && row.parent_collection_id === id) walk(row.collection_id);
+  };
+  walk(collectionId);
+  return out;
+}
+
+// The members of a folder — or, with descendants, of its whole subtree, each
+// once, in the order they joined (a photo in several folders keeps its
+// earliest place).
+export function folderAssetIds(collectionId, includeDescendants = false) {
+  const ids = includeDescendants ? subtreeIds(collectionId) : [collectionId];
+  const seen = new Set();
+  const out = [];
+  for (const id of ids) {
+    for (const assetId of collections.find((c) => c.collection_id === id)?.asset_ids || []) {
+      if (!seen.has(assetId)) { seen.add(assetId); out.push(assetId); }
+    }
+  }
+  return out;
+}
 export const newAssetId = () => `web-${nextId++}`;
 
 // ── BYOK provider keys ──

@@ -154,5 +154,6 @@
     "trashed_other": "Moved {{count}} rejected photos to the Trash"
   },
   "compareNeedsTwo": "Select two photos to compare",
-  "descriptionFailed": "Could not save the description"
+  "descriptionFailed": "Could not save the description",
+  "folderMoveFailed": "Could not move the folder"
 }

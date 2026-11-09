@@ -83,6 +83,7 @@ module.exports = (ctx) => {
           person_id: { type: "string", description: "Only photos of this person (a people group id from list_people)" },
           annotated: { type: "string", enum: ["with", "without"], description: "Whether AI annotation exists" },
           collection_id: { type: "string", description: "Only photos in this folder (a manual collection from manage_collections)" },
+          include_descendants: { type: "boolean", description: "With collection_id: photos in the folders under it count too (folders nest), each once. Default false." },
           exclude: EXCLUDE_ARG,
           any_of: ANY_OF_ARG,
           geo: {
@@ -231,6 +232,7 @@ module.exports = (ctx) => {
         properties: {
           query: { type: "string", description: "Free-text scope, same as search_assets query" },
           collection_id: { type: "string" },
+          include_descendants: { type: "boolean", description: "With collection_id: the folders under it too" },
           min_precision: { type: "string", enum: ["exact", "locality", "admin1", "country"], description: "Default locality" },
           limit: { type: "number", description: "Default 5000" },
         },
@@ -239,6 +241,7 @@ module.exports = (ctx) => {
         requireCatalog();
         const points = await commands.browseMapPoints({
           collectionId: args.collection_id,
+          includeDescendants: args.include_descendants === true,
           search: args.query,
           minPrecision: args.min_precision,
           limit: args.limit || 5000,

@@ -1,6 +1,6 @@
 # 标签（tags）重构设计：分组、归并与整条链路
 
-> **状态（2026-11-09）**：已按本稿实现（分支 `feat/tag-groups`）。用户拍板：迁移时词表概念的中英双写法自动合并；多选默认语义保持「任意一个」，「按组」为可选模式；管理面是侧栏「标签」页；内置组 13 个。实现与本稿的差异见各节 **实现备注**。目标版本 0.5.19，catalog schema 12 → 13（与同期「多级文件夹」改动争用迁移号：先合的用 13，后合的改 14，PR 描述里写明）。
+> **状态（2026-11-09）**：已按本稿实现（分支 `feat/tag-groups`）。用户拍板：迁移时词表概念的中英双写法自动合并；多选默认语义保持「任意一个」，「按组」为可选模式；管理面是侧栏「标签」页；内置组 13 个。实现与本稿的差异见各节 **实现备注**。目标版本 0.5.19，catalog schema 13 → 14（「多级文件夹」#270 先合用了 13，本分支随后改成 14）。
 
 ## 1. 现状与问题
 
@@ -51,7 +51,7 @@
 
 ## 3. 分组模型
 
-### 3.1 表结构（schema 13）
+### 3.1 表结构（schema 14）
 
 ```sql
 CREATE TABLE tag_groups (
@@ -210,9 +210,9 @@ prompt 里列出目录当前 `ai_fill = 1` 的分组（内置 + 自定义，按 
 
 规则字典多了 `tag_group` 和 `tag_match: by_group`，`normalize_rules` 靠 `FACET_KEYS` 自动放行，`FilterGroupsDialog` 嵌的是同一个 `FilterBar`，所以「条件分组（或）」里也能用。老规则不受影响。标签被重命名 / 合并后，规则里存的是旧字符串：`merge_tags` / `rename_tag` 顺手改写所有智能合集 `rules_json` 里的 `tag` 值（递归进 `any_of` 和 `base`），别让合集静默变空。
 
-## 7. 数据迁移（12 → 13）
+## 7. 数据迁移（13 → 14）
 
-`_migrate_to_13`：
+`_migrate_to_14`：
 
 1. 建三张表，`INSERT OR IGNORE` 13 个内置组。
 2. `INSERT INTO tags(tag) SELECT DISTINCT tag FROM asset_tags`。
@@ -251,7 +251,7 @@ prompt 里列出目录当前 `ai_fill = 1` 的分组（内置 + 自定义，按 
 **Python（`tests/`）**
 
 - `test_tag_groups.py`：`resolve_tag`（大小写、别名、词表跨语言）；`save_annotation` 按组输出与扁平回退；用户的组赢过模型；`add_asset_tag(s)` 自动落组；`merge_tags` / `rename_tag` / `set_tag_group` / `delete_tag` / `pin_tag`，含智能合集规则改写；`remove_asset_tags`；facets `by_group`、`tag_group`、`exclude`；`get_facet_values` 的分组形状；`search_facet_values(group=…)`；`_search_clause` 命中别名；CLI 命令（经 `cli.main`）。
-- `test_schema_migrations.py`：12 → 13 用例（见第 7 节）。
+- `test_schema_migrations.py`：12 → 14 用例（见第 7 节）。
 - `test_annotation_prompt.py`：分组 prompt 的形状、每组复用提示上限、自定义组出现在 prompt 里。
 - `test_smart_collections*.py`：`tag_group` / `by_group` 通过校验，旧规则不变。
 
@@ -265,7 +265,7 @@ prompt 里列出目录当前 `ai_fill = 1` 的分组（内置 + 自定义，按 
 
 **E2E（`e2e/80-tag-groups.spec.js`，一个 app 串行）**
 
-1. 启动即走 12 → 13 迁移（fixture 还是 12；它的 `city` 应落到「地点类型」，`seeded-tag` 留在未分组）。
+1. 启动即走 12 → 14 迁移（fixture 还是 12；它的 `city` 应落到「地点类型」，`seeded-tag` 留在未分组）。
 2. Inspector 分组显示；添加一个词表标签（`sunset`）落「时段」，再添 `日落` 折叠成同一个芯片。
 3. 筛选栏：弹层按组列出并计数；选同组两个 + 另一组一个，验证按组语义下的张数；切「任意」张数变化；勾组标题 = 有这组标签。
 4. T 批量添加两个标签到两张；Shift+T 批量移除其中一个。
@@ -276,7 +276,7 @@ prompt 里列出目录当前 `ai_fill = 1` 的分组（内置 + 自定义，按 
 
 ## 12. 实施顺序（一个 PR，按提交拆）
 
-1. sidecar：schema 13 + 迁移 + 词表 + `tags.py` 数据层（resolve / merge / rename / move / delete / pin）+ CLI 命令 + 单测。
+1. sidecar：schema 14 + 迁移 + 词表 + `tags.py` 数据层（resolve / merge / rename / move / delete / pin）+ CLI 命令 + 单测。
 2. sidecar：facets（`by_group`、`tag_group`）、`get_facet_values` / `search_facet_values` 分组、搜索命中别名、智能合集规则改写 + 单测。
 3. sidecar：分组 prompt、解析回退、保存时的组优先级 + 单测。
 4. 渲染层：`tagStore` 扩展（组列表、词表显示名）、`TagsSection` 分组 + 芯片菜单 + 组选择、`TagGroupPopover`、`TagBatchDialog` 移除模式、搜索框标签建议、i18n。

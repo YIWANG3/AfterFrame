@@ -217,6 +217,40 @@ class ColorsMigrationTest(unittest.TestCase):
         self.assertEqual(connection.execute("SELECT COUNT(*) FROM asset_colors").fetchone()[0], 0)
 
 
+    def test_v12_catalog_keeps_its_folders_and_gets_the_parent_index(self) -> None:
+        # Nested folders (v13): the parent column is indexed, a parent that
+        # points nowhere is cleared, and the folders and memberships of a v12
+        # catalog come through untouched.
+        connection = sqlite3.connect(":memory:")
+        self.addCleanup(connection.close)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys=OFF")
+        init_db(connection)
+        connection.execute("DROP INDEX idx_collections_parent")
+        connection.execute("INSERT INTO collections (collection_id, name, kind) VALUES ('col_trips', 'Trips', 'manual')")
+        connection.execute("INSERT INTO collections (collection_id, name, kind, parent_collection_id) VALUES ('col_japan', 'Japan', 'manual', 'col_trips')")
+        connection.execute("INSERT INTO collections (collection_id, name, kind, parent_collection_id) VALUES ('col_lost', 'Lost', 'manual', 'col_gone')")
+        connection.execute(
+            "INSERT INTO assets (asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension, fingerprint, file_size, modified_time) "
+            "VALUES ('image_a', 'image', '/p/a.jpg', 'a', 'a', 'a', '.jpg', 'fp', 1, '2026-01-01')"
+        )
+        connection.execute("INSERT INTO collection_items (collection_id, asset_id) VALUES ('col_japan', 'image_a')")
+        connection.execute("UPDATE catalog_info SET schema_version = 12")
+        connection.execute("PRAGMA user_version = 0")
+        connection.commit()
+        connection.execute("PRAGMA foreign_keys=ON")
+
+        init_db(connection)
+
+        self.assertEqual(connection.execute("SELECT schema_version FROM catalog_info").fetchone()[0], SCHEMA_VERSION)
+        self.assertIsNotNone(connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_collections_parent'"
+        ).fetchone())
+        parents = dict(connection.execute("SELECT collection_id, parent_collection_id FROM collections").fetchall())
+        self.assertEqual(parents, {"col_trips": None, "col_japan": "col_trips", "col_lost": None})
+        self.assertEqual(connection.execute("SELECT COUNT(*) FROM collection_items").fetchone()[0], 1)
+
+
 class CaptureTimeMigrationTest(unittest.TestCase):
     def test_photo_capture_times_lose_their_false_utc_label(self) -> None:
         # EXIF's clock time was stored as +00:00 and shown shifted by the

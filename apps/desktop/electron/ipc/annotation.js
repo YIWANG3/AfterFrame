@@ -100,7 +100,8 @@ function register({
   // ── Batch annotation job ──────────────────────────────────────────────────
   // scope: "all" | "selection" | "collection"
   //   selection → opts.assetIds (multi-select)
-  //   collection → opts.collectionId (folder)
+  //   collection → opts.collectionId (folder); opts.includeDescendants takes
+  //                the folders under it too
   // onlyMissing (default true) skips already-annotated assets; pass false to
   // re-annotate. Reads provider + annotation options from saved settings.
   // Shared by the IPC handler below and the MCP annotate_assets tool.
@@ -114,6 +115,7 @@ function register({
     const onlyMissing = opts.onlyMissing !== false;
     const assetIds = Array.isArray(opts.assetIds) ? opts.assetIds.filter(Boolean) : [];
     const collectionId = opts.collectionId || null;
+    const includeDescendants = !!collectionId && opts.includeDescendants === true;
 
     const job = await createJob("annotation", {
       provider: sidecarProvider,
@@ -133,6 +135,7 @@ function register({
       reannotate: !onlyMissing,
       assetIds,
       collectionId,
+      includeDescendants,
       settings,
     }));
     return formatJobStatus(job);
@@ -148,6 +151,7 @@ function register({
       onlyMissing: opts.onlyMissing,
       assetIds: opts.assetIds,
       collectionId: opts.collectionId,
+      includeDescendants: opts.includeDescendants === true,
     });
   }));
 

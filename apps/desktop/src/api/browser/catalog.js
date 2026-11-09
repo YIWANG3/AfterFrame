@@ -4,7 +4,7 @@
 
 import { familyOf, formatLabel } from "../../../shared/formats.mjs";
 import sampleManifest from "../../../sample-photos/manifest.json";
-import { assets, collections, newAssetId, showDescription } from "./state";
+import { assets, collections, folderAssetIds, newAssetId, showDescription } from "./state";
 import { aggregateTags, facetUniverse, groupedTagOptions, matchesFacetFilters, matchesRules, matchesSearch, sortAssets } from "./query";
 
 const samplePhotos = import.meta.glob("../../../sample-photos/*.jpg", { query: "?url", import: "default", eager: true });
@@ -22,11 +22,12 @@ async function browseImages({ status = "all", limit = 180, offset = 0, search, s
   return sortAssets(list, sort).slice(offset, offset + limit);
 }
 
-async function browseCollection(collectionId, { limit = 180, offset = 0, search, filters, sort } = {}) {
+// `includeDescendants`: the folders under it too, each photo once.
+async function browseCollection(collectionId, { limit = 180, offset = 0, search, filters, sort, includeDescendants = false } = {}) {
   const row = collections.find((c) => c.collection_id === collectionId);
   if (!row) return [];
   const byId = new Map(assets.map((a) => [a.asset_id, a]));
-  let list = (row.asset_ids || []).map((id) => byId.get(id)).filter(Boolean);
+  let list = folderAssetIds(collectionId, includeDescendants).map((id) => byId.get(id)).filter(Boolean);
   if (search) list = list.filter((a) => matchesSearch(a, search));
   if (filters) list = list.filter((a) => matchesFacetFilters(a, filters));
   // asset_ids is in the order photos were added; the sidecar's default is
@@ -152,9 +153,9 @@ export const catalogMethods = {
   },
 
   // ── browse ──
-  locateImageAsset: async ({ assetId, collectionId, ...scope } = {}) => {
+  locateImageAsset: async ({ assetId, collectionId, includeDescendants, ...scope } = {}) => {
     const rows = collectionId
-      ? await browseCollection(collectionId, { limit: Number.MAX_SAFE_INTEGER })
+      ? await browseCollection(collectionId, { limit: Number.MAX_SAFE_INTEGER, includeDescendants })
       : await browseImages({ ...scope, limit: Number.MAX_SAFE_INTEGER });
     const index = rows.findIndex((row) => row.asset_id === assetId);
     return { index: index < 0 ? null : index };
@@ -165,12 +166,11 @@ export const catalogMethods = {
   discoverCollections: async () => ({ places: [], memories: [] }),
   // Location points for the map drawer, scoped like the gallery. Same row
   // shape as the sidecar's browse-map-points; all web points are EXIF-exact.
-  browseMapPoints: async ({ status = "all", collectionId, search, filters, base } = {}) => {
+  browseMapPoints: async ({ status = "all", collectionId, includeDescendants, search, filters, base } = {}) => {
     let list = assets;
     if (base && !collectionId) list = list.filter((a) => matchesRules(a, base));
     if (collectionId) {
-      const row = collections.find((c) => c.collection_id === collectionId);
-      const member = new Set(row?.asset_ids || []);
+      const member = new Set(folderAssetIds(collectionId, includeDescendants));
       list = list.filter((a) => member.has(a.asset_id));
     } else if (!base && status === "rated") list = list.filter((a) => a.app_rating > 0);
     else if (!base && status === "matched") list = [];

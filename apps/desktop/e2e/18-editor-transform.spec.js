@@ -130,6 +130,17 @@ test.describe("Golden: crop + transform", () => {
       }, [originalSize[0], targetHeight]);
       await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize()[1])).toBe(targetHeight);
       await expect.poll(async () => (await state(window)).imageRect.width).not.toBe(before.width);
+      // The photo rect and the full-photo crop move in separate renders
+      // after a resize; a save between them exports the crop measured
+      // against the old rect (CI once got 507 px of 512). Wait until the
+      // rendered crop hugs the new rect again.
+      await expect.poll(async () => {
+        const s = await state(window);
+        const r = s.imageRect;
+        const c = s.cropRectRendered;
+        if (!r || !c) return false;
+        return ["x", "y", "width", "height"].every((k) => Math.abs(c[k] - r[k]) < 0.5);
+      }).toBe(true);
       await save(window, out("rot-resize.jpg"));
       const resized = await sharp(out("rot-resize.jpg")).metadata();
       expect([resized.width, resized.height]).toEqual([srcH, srcW]);

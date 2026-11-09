@@ -443,6 +443,30 @@ def _migrate_to_12(connection: sqlite3.Connection) -> None:
 
 
 def _migrate_to_13(connection: sqlite3.Connection) -> None:
+    """Nested folders. The collections table has carried parent_collection_id
+    since it was created, unused; this makes sure of the column on every
+    catalog, indexes it (children are looked up by parent) and clears a
+    parent that no longer exists, so every folder has a place in the tree.
+    A catalog from before collections existed has no table yet: init_db
+    creates it, in its current shape, right after the chain."""
+    if not _table_exists(connection, "collections"):
+        return
+    ensure_column(
+        connection, "collections", "parent_collection_id",
+        "TEXT REFERENCES collections(collection_id) ON DELETE SET NULL",
+    )
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_collections_parent ON collections(parent_collection_id)")
+    connection.execute(
+        """
+        UPDATE collections SET parent_collection_id = NULL
+        WHERE parent_collection_id IS NOT NULL
+          AND (parent_collection_id = collection_id
+               OR parent_collection_id NOT IN (SELECT collection_id FROM collections WHERE kind = 'manual'))
+        """
+    )
+
+
+def _migrate_to_14(connection: sqlite3.Connection) -> None:
     """Tags become entities with groups and aliases (db/tags.py). The
     built-in groups are created; every tag a photo carries gets its row; the
     vocabulary gives the tags it knows their group and their other-language
@@ -498,6 +522,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     11: _migrate_to_11,
     12: _migrate_to_12,
     13: _migrate_to_13,
+    14: _migrate_to_14,
 }
 
 

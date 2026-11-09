@@ -14,26 +14,31 @@ module.exports = (ctx) => {
       description:
         "Collections management. Two kinds: a folder holds photos you add to it; a SMART collection is a saved " +
         "filter that fills itself and stays current (e.g. 5-star photos from the last 30 days). " +
-        "Actions: 'list' all collections (smart ones include their rules and live item_count; folders also carry " +
-        "last_added_at, captured_from / captured_to — the capture-time span of their photos — and cover_preview_paths, " +
-        "the previews of the newest four photos); 'create' (name; " +
-        "pass rules to make it smart); 'update_rules' (collection_id, rules) to change a smart collection's " +
-        "conditions; 'rename' (collection_id, name); 'delete' (collection_id); 'add_items' / 'remove_items' " +
-        "(collection_id, asset_ids; folders only); 'browse' (collection_id, limit/offset) to list the assets of either kind.",
+        "Folders nest: a folder can sit inside another folder, any depth (parent_collection_id; smart collections stay top-level). " +
+        "Actions: 'list' all collections (each with parent_collection_id, path like 'Trips / Japan / Kyoto', depth, item_count = photos " +
+        "added to it directly and subtree_count = photos in it or any folder under it, once each; smart ones include their rules and a live item_count; " +
+        "folders also carry last_added_at, captured_from / captured_to — the capture-time span of their photos — and cover_preview_paths, " +
+        "the previews of the newest four photos); 'create' (name; parent_id to make it inside a folder; " +
+        "pass rules to make it smart); 'move' (collection_id, parent_id or none for the top level) to put a folder inside another; " +
+        "'update_rules' (collection_id, rules) to change a smart collection's " +
+        "conditions; 'rename' (collection_id, name); 'delete' (collection_id; a folder's subfolders go with it, the photos stay); 'add_items' / 'remove_items' " +
+        "(collection_id, asset_ids; folders only); 'browse' (collection_id, limit/offset, include_descendants) to list the assets of either kind.",
       inputSchema: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["list", "create", "update_rules", "rename", "delete", "add_items", "remove_items", "browse"] },
+          action: { type: "string", enum: ["list", "create", "move", "update_rules", "rename", "delete", "add_items", "remove_items", "browse"] },
           rules: {
             type: "object",
             description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
               "search_assets (camera, lens, tag, tag_group, extension, country and city take one value or a list meaning any of them; tag_match: 'all' requires every tag, 'by_group' makes same-group tags alternatives): query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
               "date_from, date_to, date_within_days, rating_min, rating_max (0 = unrated), flag (pick | reject | none), orientation, tag, tag_match, tag_group, asset_type, extension, people, person_id, annotated, location_source, country, city, color, color_tolerance, caption_contains, ocr_contains, path_contains, " +
-              "collection_id ('only photos in that folder'); " +
+              "collection_id ('only photos in that folder'; add include_descendants: true for the folders under it too); " +
               "exclude (a list of those condition names to turn into their opposite: exclude ['collection_id'] = not in that folder); " +
               "any_of (a list of groups of the same conditions, at least one of which must hold: OR).",
           },
           collection_id: { type: "string" },
+          parent_id: { type: "string", description: "For create: the folder to make it in. For move: the folder to move it into; omit or null for the top level" },
+          include_descendants: { type: "boolean", description: "For browse (folders): the folders under it too, each photo once" },
           name: { type: "string", description: "For create/rename" },
           sort_order: { type: "number", description: "For rename: optional new position in the sidebar" },
           asset_ids: { type: "array", items: { type: "string" }, description: "For add_items/remove_items" },
@@ -46,18 +51,25 @@ module.exports = (ctx) => {
         requireCatalog();
         const action = args.action;
         const ids = (args.asset_ids || []).map(String).filter(Boolean);
-        const needsId = ["update_rules", "rename", "delete", "add_items", "remove_items", "browse"];
+        const needsId = ["move", "update_rules", "rename", "delete", "add_items", "remove_items", "browse"];
+        const parentId = args.parent_id ? String(args.parent_id) : null;
         if (needsId.includes(action) && !args.collection_id) throw new Error(`collection_id is required for ${action}.`);
         if (action === "list") {
           return { collections: await commands.listCollections() };
         }
         if (action === "create") {
           if (!args.name) throw new Error("name is required for create.");
+          if (args.rules && parentId) throw new Error("A smart collection cannot sit inside a folder.");
           const created = args.rules
             ? await commands.createCollection(String(args.name), "smart", smartRulesFrom(args.rules))
-            : await commands.createCollection(String(args.name), "manual");
+            : await commands.createCollection(String(args.name), "manual", null, parentId);
           deps.broadcastCatalogChanged?.("collections");
           return created;
+        }
+        if (action === "move") {
+          const moved = await commands.moveCollection(String(args.collection_id), parentId);
+          deps.broadcastCatalogChanged?.("collections");
+          return moved;
         }
         if (action === "update_rules") {
           const updated = await commands.updateCollection(String(args.collection_id), { rules: smartRulesFrom(args.rules) });
@@ -93,7 +105,7 @@ module.exports = (ctx) => {
           const page = { limit: args.limit || 24, offset: args.offset || 0 };
           const rows = smart
             ? await commands.browseImages({ status: "all", base: smart.rules, ...page })
-            : await commands.browseCollection(String(args.collection_id), page);
+            : await commands.browseCollection(String(args.collection_id), { ...page, includeDescendants: args.include_descendants === true });
           for (const row of rows) rememberPreview(row.asset_id, row.preview_path, row.preview_hd_path);
           return { count: rows.length, assets: rows.map((row) => compactAsset(row, port)) };
         }

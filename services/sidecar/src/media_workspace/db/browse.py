@@ -10,6 +10,7 @@ import sqlite3
 # The facet filters (what the filter bar sends) live in facets.py: one registry
 # that the WHERE builder, the rules validation and the option counts all read.
 from .. import formats
+from .collection_scope import members_join, members_subquery, scope_collection_ids
 from .facets import _LOCATION_OWNER, LOCATION_SOURCES, _facet_clauses, _values
 from .facets import FACET_OWN_KEYS as _FACET_OWN_KEYS
 from .tags import list_tag_groups
@@ -287,19 +288,18 @@ def count_image_assets(
 def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
                        status: str = "all", search: str | None = None,
                        sort: str | None = None, filters: dict | None = None,
-                       collection_id: str | None = None, base: dict | None = None) -> int | None:
+                       collection_id: str | None = None, base: dict | None = None,
+                       include_descendants: bool = False) -> int | None:
     """Zero-based gallery position, without hydrating metadata or statting files."""
     if collection_id:
         # A folder narrows by membership; search and facets narrow it further,
         # exactly as browse_collection does, in the same order.
-        joins = (
-            "JOIN collection_items ci ON ci.asset_id = assets.asset_id "
-            "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"
-        )
+        members_sql, members_params = members_join(scope_collection_ids(connection, collection_id, include_descendants))
+        joins = f"{members_sql} LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"
         search_clause, search_params = _search_clause(search)
         facet_clause, facet_params = _facet_clauses(filters)
-        where = f"ci.collection_id = ? AND assets.asset_type IN ('image', 'video', 'raw') {search_clause} {facet_clause}"
-        params: list[object] = [collection_id, *search_params, *facet_params]
+        where = f"assets.asset_type IN ('image', 'video', 'raw') {search_clause} {facet_clause}"
+        params: list[object] = [*members_params, *search_params, *facet_params]
         order = _collection_order_clause(sort)
     else:
         joins = "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"
@@ -341,16 +341,19 @@ def _facet_scope(
     search: str | None,
     filters: dict | None,
     base: dict | None = None,
+    collection_ids: list[str] | None = None,
 ) -> tuple[str, list[object]]:
-    """WHERE (without the keyword) + params for counting one facet's options."""
+    """WHERE (without the keyword) + params for counting one facet's options.
+    `collection_ids` is the folder scope already resolved (the folder alone,
+    or with the folders under it); `collection_id` alone means that folder."""
     own = _FACET_OWN_KEYS[facet]
     others = {k: v for k, v in (filters or {}).items() if k not in own}
     if collection_id:
         # A folder replaces the status, exactly as browse_collection does.
         search_clause, search_params = _search_clause(search)
         facet_clause, facet_params = _facet_clauses(others)
-        where = "assets.asset_id IN (SELECT asset_id FROM collection_items WHERE collection_id = ?)"
-        return f"{where} {search_clause} {facet_clause}", [collection_id, *search_params, *facet_params]
+        where, where_params = members_subquery(collection_ids or [collection_id])
+        return f"{where} {search_clause} {facet_clause}", [*where_params, *search_params, *facet_params]
     # A smart collection's rules are the base set, never dropped as "own keys":
     # inside "PNG screenshots", JPG must honestly count 0.
     return _view_where(status or "all", search, others, base)
@@ -364,6 +367,7 @@ def get_facet_values(
     search: str | None = None,
     filters: dict | None = None,
     base: dict | None = None,
+    include_descendants: bool = False,
 ) -> dict[str, object]:
     """Options for the filter bar: distinct cameras / lenses / tags / formats
     with counts, numeric ranges for the sliders, and the capture-time span.
@@ -373,8 +377,11 @@ def get_facet_values(
     reverse-lookup source does not. With no arguments this describes the whole
     library, which is what get_catalog_info reports to agents.
     """
+    collection_ids = scope_collection_ids(connection, collection_id, include_descendants) if collection_id else None
+
     def scope_for(facet: str) -> tuple[str, list[object]]:
-        return _facet_scope(facet, collection_id=collection_id, status=status, search=search, filters=filters, base=base)
+        return _facet_scope(facet, collection_id=collection_id, status=status, search=search, filters=filters, base=base,
+                            collection_ids=collection_ids)
 
     def value_counts(facet: str, expr: str, order: str = "c DESC") -> list[dict[str, object]]:
         where, params = scope_for(facet)
@@ -544,6 +551,7 @@ def search_facet_values(
     filters: dict | None = None,
     base: dict | None = None,
     group: str | None = None,
+    include_descendants: bool = False,
 ) -> list[dict[str, object]]:
     """Server-side facet search, so a dropdown never loads more than `limit`
     rows regardless of how many distinct values exist. Matches substring,
@@ -553,7 +561,9 @@ def search_facet_values(
     if field not in ("tag", "camera", "lens", "city"):
         return []
     like = f"%{q}%" if q else "%"
-    where, params = _facet_scope(field, collection_id=collection_id, status=status, search=search, filters=filters, base=base)
+    collection_ids = scope_collection_ids(connection, collection_id, include_descendants) if collection_id else None
+    where, params = _facet_scope(field, collection_id=collection_id, status=status, search=search, filters=filters, base=base,
+                                 collection_ids=collection_ids)
     if field == "city":
         return _city_options(connection, where, params, like=like, limit=limit)
     if field == "tag":
@@ -719,29 +729,31 @@ def browse_collection(
     search: str | None = None,
     filters: dict | None = None,
     sort: str | None = None,
+    include_descendants: bool = False,
 ) -> list[sqlite3.Row]:
     """A folder's photos, narrowed by the same search text and facet filters
     the library view takes, in the toolbar's sort order. No sort (or
-    "added-desc") keeps the folder's own order: most recently added first."""
+    "added-desc") keeps the folder's own order: most recently added first.
+    `include_descendants` reads the folders under it too, each photo once."""
+    members_sql, members_params = members_join(scope_collection_ids(connection, collection_id, include_descendants))
     search_clause, search_params = _search_clause(search)
     facet_clause, facet_params = _facet_clauses(filters)
     return connection.execute(
         f"""
         SELECT
 {_BROWSE_SELECT_COLUMNS}
-        FROM collection_items ci
-        JOIN assets ON assets.asset_id = ci.asset_id
+        FROM assets
+        {members_sql}
         JOIN image_lookup_registry AS registry
             ON registry.image_asset_id = assets.asset_id
 {_BROWSE_SHARED_JOINS}
-        WHERE ci.collection_id = ?
-          AND assets.asset_type IN ('image', 'video', 'raw')
+        WHERE assets.asset_type IN ('image', 'video', 'raw')
           {search_clause}
           {facet_clause}
         ORDER BY {_collection_order_clause(sort)}
         LIMIT ? OFFSET ?
         """,
-        [collection_id, *search_params, *facet_params, limit, offset],
+        [*members_params, *search_params, *facet_params, limit, offset],
     ).fetchall()
 
 
