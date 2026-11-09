@@ -15,7 +15,7 @@ import { groupLabel, invalidateTagGroups, invalidateTags, tagLabel } from "./ann
 import InlineEdit from "./InlineEdit";
 import LibraryToolbar from "./LibraryToolbar";
 import { confirm } from "./confirm";
-import { DEFAULT_TAG_PAGE_SORT, TAG_PAGE_SORTS, allTags, tagSections } from "./tagsPage";
+import { DEFAULT_TAG_PAGE_SORT, TAG_PAGE_SORTS, allTags, otherSpellings, tagSections } from "./tagsPage";
 
 const SORT_KEY = "tags.sort";
 const readSort = () => { try { const v = localStorage.getItem(SORT_KEY); return TAG_PAGE_SORTS.includes(v) ? v : DEFAULT_TAG_PAGE_SORT; } catch { return DEFAULT_TAG_PAGE_SORT; } };
@@ -293,7 +293,7 @@ export default function TagsView({ catalogRevision, onOpenTag, pushToast }) {
                           {labelOf(entry.tag)}
                         </button>
                       )}
-                      {entry.aliases?.length > 0 && <span className="truncate text-[11px] text-muted3">{entry.aliases.join(" · ")}</span>}
+                      {otherSpellings(entry, labelOf(entry.tag)).length > 0 && <span className="truncate text-[11px] text-muted3">{otherSpellings(entry, labelOf(entry.tag)).join(" · ")}</span>}
                       <span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted2">{t("tags.photos", { count: entry.count })}</span>
                       <button
                         type="button"

@@ -38,3 +38,18 @@ export function tagSections(listed, { query = "", sort = DEFAULT_TAG_PAGE_SORT, 
 export function allTags(listed) {
   return [...(listed?.groups || []).flatMap((group) => group.tags || []), ...(listed?.ungrouped || [])];
 }
+
+// The spellings a row shows beside its label: the tag's own name and its
+// aliases, minus the one already shown as the label. A vocabulary tag shown
+// in the interface language keeps its other-language spelling visible
+// ("雾 · fog" under a Chinese interface, "fog · 雾" under an English one).
+export function otherSpellings(entry, label) {
+  const shown = String(label ?? "").trim().toLowerCase();
+  const out = [];
+  for (const value of [entry.tag, ...(entry.aliases || [])]) {
+    const text = String(value ?? "").trim();
+    if (!text || text.toLowerCase() === shown || out.some((x) => x.toLowerCase() === text.toLowerCase())) continue;
+    out.push(text);
+  }
+  return out;
+}

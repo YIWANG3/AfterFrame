@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allTags, tagMatches, tagSections } from "./tagsPage";
+import { allTags, otherSpellings, tagMatches, tagSections } from "./tagsPage";
 
 const listed = {
   groups: [
@@ -40,5 +40,17 @@ describe("tagSections", () => {
   it("lists every tag flat", () => {
     expect(allTags(listed).map((i) => i.tag)).toEqual(["rain", "sunny", "fog", "trip", "Grandma"]);
     expect(allTags(null)).toEqual([]);
+  });
+});
+
+describe("otherSpellings", () => {
+  it("drops the spelling the label already shows", () => {
+    const entry = { tag: "fog", aliases: ["雾"] };
+    expect(otherSpellings(entry, "雾")).toEqual(["fog"]);
+    expect(otherSpellings(entry, "fog")).toEqual(["雾"]);
+  });
+  it("keeps every other alias once, case-insensitively", () => {
+    expect(otherSpellings({ tag: "Keepers", aliases: ["keepers", "picks"] }, "Keepers")).toEqual(["picks"]);
+    expect(otherSpellings({ tag: "plain", aliases: [] }, "plain")).toEqual([]);
   });
 });
