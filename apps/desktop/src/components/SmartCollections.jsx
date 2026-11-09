@@ -49,9 +49,10 @@ export default function SmartCollections({ collections, activeId, view = "list",
 
   return (
     // Open, the section takes at most two fifths of the sidebar and scrolls
-    // inside that, so the folders below always keep their room.
+    // inside that, so the folders below always keep their room; in a short
+    // window it shrinks further, down to its heading and a couple of rows.
     <div
-      className={!open ? "mb-3 shrink-0" : grow ? "mb-3 flex min-h-0 flex-1 flex-col" : "mb-3 flex max-h-[40%] shrink-0 flex-col"}
+      className={!open ? "mb-3 shrink-0" : grow ? "mb-3 flex min-h-0 flex-1 flex-col" : "mb-3 flex min-h-[96px] max-h-[40%] shrink flex-col"}
       data-smart-collections="true"
       data-open={open ? "true" : "false"}
     >

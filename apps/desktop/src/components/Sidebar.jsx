@@ -453,7 +453,9 @@ export default function Sidebar({
           onSnapshot={onSnapshotSmartCollection}
         />
 
-        <div className={foldersOpen ? "flex min-h-0 flex-1 flex-col" : "shrink-0"} data-sidebar-folders="true" data-open={foldersOpen ? "true" : "false"}>
+        {/* Open, the folders keep at least a few rows however short the window:
+            the smart collections above give way first (they may shrink). */}
+        <div className={foldersOpen ? "flex min-h-[180px] flex-1 flex-col" : "shrink-0"} data-sidebar-folders="true" data-open={foldersOpen ? "true" : "false"}>
           <SectionHeading
             id="folders"
             label={t("sidebar.folders")}

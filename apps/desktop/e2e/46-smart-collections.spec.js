@@ -385,9 +385,17 @@ test("with many smart collections the folders keep their room", async () => {
   const list = section.locator("[data-smart-collections-list]");
   expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
   // The folders still have a usable list: the snapshot folder is on screen.
-  const folderScroll = await window.getByTestId("sidebar-folder-scroll").boundingBox();
-  expect(folderScroll.height).toBeGreaterThan(120);
+  const folderScroll = async () => (await window.getByTestId("sidebar-folder-scroll").boundingBox()).height;
+  expect(await folderScroll()).toBeGreaterThan(120);
   await expect(window.locator("[data-collection-id]").filter({ hasText: "Five stars (snapshot)" })).toBeVisible();
+  // A short window (the CI runner's screen) squeezes the smart collections
+  // first: the folders keep their rows, the collections still show some.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 560));
+  await expect.poll(folderScroll).toBeGreaterThan(120);
+  expect((await section.boundingBox()).height).toBeGreaterThan(80);
+  expect(await list.evaluate((el) => el.clientHeight > 0 && el.scrollHeight > el.clientHeight)).toBe(true);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760));
+  await expect.poll(async () => (await section.boundingBox()).height).toBeLessThanOrEqual(nav.height * 0.4 + 1);
   for (const id of made) await tool("manage_collections", { action: "delete", collection_id: id });
   await expect(smartRow("Bulk 00")).toHaveCount(0);
 });
