@@ -123,10 +123,12 @@ if (!reportOnly) {
       "--coverage.reporter=json", "--coverage.reportsDirectory", path.join(UNIT, "renderer"),
     ]) !== 0) { testStatus = 1; console.warn("[coverage] renderer unit tests failed — reporting what was collected"); }
 
+    // Main-process units. Reuse the test:electron script as is: node --test
+    // with no file arguments would walk every *.test.js in the package,
+    // including the vitest renderer suites it cannot resolve (#255 turned the
+    // file list into quoted globs, which a text parse of the script dropped).
     console.log("[coverage] unit: main (node --test)");
-    const electronTests = JSON.parse(fs.readFileSync(path.join(DESKTOP, "package.json"), "utf8"))
-      .scripts["test:electron"].split(/\s+/).filter((a) => a.endsWith(".test.js"));
-    if (run("node", ["--test", ...electronTests], {
+    if (run("npm", ["run", "test:electron"], {
       env: { ...process.env, NODE_V8_COVERAGE: path.join(UNIT, "main") },
     }) !== 0) { testStatus = 1; console.warn("[coverage] main unit tests failed — reporting what was collected"); }
 
