@@ -73,7 +73,7 @@ export default function Popover({ label, active, summary, children, width = 220,
   );
 }
 
-export const MODE_LABELS = { any: "filter.match.any", all: "filter.match.all", include: "filter.matchInclude", exclude: "filter.matchExclude" };
+export const MODE_LABELS = { any: "filter.match.any", by_group: "filter.match.byGroup", all: "filter.match.all", include: "filter.matchInclude", exclude: "filter.matchExclude" };
 
 // The switch at the top of a facet's list: include / exclude, and for several
 // tags any / all / exclude ("night AND neon", "none of these").

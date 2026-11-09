@@ -10,7 +10,7 @@
 |---|---|
 | [developer-setup.md](developer-setup.md) | 开发环境、命令、质量门（lint / 单测 / E2E / Python ruff+mypy） |
 | [../apps/desktop/features/README.md](../apps/desktop/features/README.md) | feature module 的目录形状和约定（清单、`electron/`、`renderer/`、测试和 lint 怎么找到它们）；已迁：LUT（#257）、AI 重绘（#258）、贴纸提取（#259）；清单 v1 的字段表在文末；每个功能自己的 i18n namespace |
-| [agent-native-mcp.md](agent-native-mcp.md) | 内嵌 MCP server 设计与 34 个 tool 的现状（顶部状态行持续更新） |
+| [agent-native-mcp.md](agent-native-mcp.md) | 内嵌 MCP server 设计与 38 个 tool 的现状（顶部状态行持续更新） |
 | [settings-scope.md](settings-scope.md) | 哪些设置属于 app、哪些属于 catalog |
 | [naming.md](naming.md) | 产品为什么有四个名字（AfterFrame / media-workspace / …） |
 | [mcp-testing.md](mcp-testing.md) | MCP 从协议到真实 agent 的测试方法 |
@@ -23,7 +23,7 @@
 
 | 文档 | 状态 |
 |---|---|
-| [tags-redesign.md](tags-redesign.md) | 标签分组 / 同义归并 / 管理页设计稿（2026-11-09），待确认后实现（schema 13） |
+| [tags-redesign.md](tags-redesign.md) | 标签分组 / 同义归并 / 标签页：设计与实现备注（2026-11-09，schema 13，feat/tag-groups） |
 | [geo-map-design.md](geo-map-design.md) | Phase 1（GPS）+ Phase 2（AI 地名离线解析）已实现；Phase 3 未开始 |
 | [mcp-parity-plan.md](mcp-parity-plan.md) | Phase 1–2 已实现（17→34 tools）；Phase 3–4 未开始 |
 | [web-app-plan.md](web-app-plan.md) | Phase 0 + Phase 1 骨架已实现 |

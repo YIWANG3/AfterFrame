@@ -97,7 +97,7 @@ export default function TagGroupPopover({
   return (
     <Popover label={t("filter.tag")} active={activeCount > 0} summary={chipSummary} width={260} excluded={excluded && activeCount > 0}>
       <TextInput autoFocus value={q} onChange={setQ} placeholder={t("filter.searchPlaceholder", { label: t("filter.tag") })} className="mb-1.5 w-full" data-testid="tag-facet-search" />
-      {onMode && modes?.length > 1 && picked.length > 1 && <MatchModes modes={modes} mode={mode} onMode={onMode} />}
+      {onMode && modes?.length > 1 && picked.length > 0 && <MatchModes modes={modes} mode={mode} onMode={onMode} />}
       <div className="popover-scroll -mr-2 max-h-[320px] overflow-y-auto pr-1" data-tag-facet="true">
         <button
           type="button"

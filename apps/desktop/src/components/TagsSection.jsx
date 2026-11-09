@@ -62,12 +62,16 @@ function TagAdder({ onAdd, existing, groups, pinned, labelOf, groupLabelOf }) {
     );
   }
   return (
-    <div className="relative flex items-center gap-1">
+    // Focus leaving the whole adder (input and group picker) closes it; moving
+    // between the two does not.
+    <div
+      className="relative flex items-center gap-1"
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setTimeout(() => setOpen(false), 150); }}
+    >
       <input
         autoFocus
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
           // Enter that ends an input method's composition picks the
           // characters; it isn't the tag yet.
@@ -123,10 +127,12 @@ function ChipMenu({ at, tag, info, groups, groupLabelOf, onClose, onFilter, onMo
   const [moving, setMoving] = useState(false);
   useDismiss(ref, onClose, { enabled: true });
   const item = "flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-1 text-left text-[11px] text-muted hover:bg-hover hover:text-text";
+  // Kept on screen: the group list scrolls inside the menu when it is long.
+  const maxHeight = Math.min(360, window.innerHeight - 16);
   const left = Math.min(at.x, window.innerWidth - 200);
-  const top = Math.min(at.y, window.innerHeight - 220);
+  const top = Math.max(8, Math.min(at.y, window.innerHeight - maxHeight - 8));
   return createPortal(
-    <div ref={ref} data-tag-chip-menu={tag} className="fixed min-w-[168px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top, zIndex: Z.popover }}>
+    <div ref={ref} data-tag-chip-menu={tag} className="fixed min-w-[168px] overflow-y-auto rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top, maxHeight, zIndex: Z.popover }}>
       {renaming ? (
         <input
           autoFocus

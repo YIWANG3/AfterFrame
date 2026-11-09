@@ -24,10 +24,12 @@ const readSort = () => { try { const v = localStorage.getItem(SORT_KEY); return 
 function Menu({ anchor, onClose, children, testId }) {
   const ref = useRef(null);
   useDismiss(ref, onClose, { enabled: true });
+  // Kept on screen: a long list (every group) scrolls inside the menu.
+  const maxHeight = Math.min(400, window.innerHeight - 16);
   const left = Math.min(anchor.x, window.innerWidth - 220);
-  const top = Math.min(anchor.y, window.innerHeight - 260);
+  const top = Math.max(8, Math.min(anchor.y, window.innerHeight - maxHeight - 8));
   return createPortal(
-    <div ref={ref} data-testid={testId} className="fixed min-w-[180px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top, zIndex: Z.popover }}>
+    <div ref={ref} data-testid={testId} className="fixed min-w-[180px] overflow-y-auto rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top, maxHeight, zIndex: Z.popover }}>
       {children}
     </div>,
     document.body,
@@ -213,7 +215,7 @@ export default function TagsView({ catalogRevision, onOpenTag, pushToast }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-2">
         {creating && (
-          <div className="mb-3 max-w-[280px]">
+          <div className="mb-3 max-w-[280px]" data-testid="tags-new-group-input">
             <InlineEdit
               initial=""
               placeholder={t("tags.groupNamePlaceholder")}
