@@ -483,8 +483,24 @@ def get_facet_values(
         country_params,
     ).fetchall()
 
+    # With / without a bound RAW file; only once the catalog has any RAW
+    # pairing, so a JPEG-only library never sees the option.
+    raw_where, raw_params = scope_for("has_raw")
+    raw_rows = connection.execute(
+        f"""
+        SELECT CASE WHEN registry.match_status IN ('auto_bound', 'manual_confirmed') THEN 'true' ELSE 'false' END AS v,
+               COUNT(*) AS c
+        {_FACET_FROM}
+        WHERE {raw_where}
+        GROUP BY v
+        """,
+        raw_params,
+    ).fetchall()
+    raw_counts = {r["v"]: r["c"] for r in raw_rows}
+
     return {
         "location_sources": [{"value": v, "count": source_counts[v]} for v in LOCATION_SOURCES if source_counts.get(v)],
+        "has_raw": [{"value": v, "count": raw_counts[v]} for v in ("true", "false") if raw_counts.get(v)] if raw_counts.get("true") else [],
         "countries": [_country_option(r["v"], r["c"]) for r in country_rows],
         # The colour filter takes any colour, so it has no options to count;
         # the bar only needs to know whether any photo has colours yet.

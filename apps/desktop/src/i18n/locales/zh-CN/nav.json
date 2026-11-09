@@ -238,6 +238,11 @@
     "annotated": "有 AI 标注",
     "notAnnotated": "无 AI 标注",
     "annotatedHint": "按是否有 AI 标注筛选，点击在 有 / 无 / 关闭 之间切换",
+    "hasRaw": {
+      "label": "RAW",
+      "true": "含 RAW",
+      "false": "无 RAW"
+    },
     "iso": "ISO",
     "aperture": "光圈",
     "focal": "焦距",

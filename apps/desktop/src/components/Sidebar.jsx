@@ -2,11 +2,12 @@ import { useState, useRef, useEffect, Fragment } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Link, Copy, FolderPlus, FolderCog, Folder, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, ChevronDown, ChevronRight, X, Tags } from "lucide-react";
+import { Images, Clock, Star, Copy, FolderPlus, FolderCog, Folder, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, ChevronDown, ChevronRight, X, Tags } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
 import InlineEdit from "./InlineEdit";
+import { SectionHeading, useSectionOpen } from "./SidebarSection";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { FOLDER_SORTS, canReorderFolders } from "./folderList";
 import { ancestorIds, canDropInto, descendantIds, parentIdOf, siblingIds, visibleTreeRows } from "./folderTree";
@@ -72,7 +73,7 @@ function FolderSortMenu({ sort, onChange }) {
   );
 }
 
-const ICON_MAP = { Archive: Images, Clock, Star, Link, Copy };
+const ICON_MAP = { Archive: Images, Clock, Star, Copy };
 
 
 export default function Sidebar({
@@ -126,6 +127,7 @@ export default function Sidebar({
   const [creatingFolder, setCreatingFolder] = useState(false);
   // The folder a new subfolder is being named under (its field sits below its row).
   const [creatingUnder, setCreatingUnder] = useState(null);
+  const [foldersOpen, toggleFolders, showFolders] = useSectionOpen("folders");
   // Folder list view: plain rows, or rows with a cover thumbnail (demo C's library list).
   const [folderView, setFolderView] = useState(() => {
     try { return localStorage.getItem(FOLDER_VIEW_KEY) === "covers" ? "covers" : "list"; } catch { return "list"; }
@@ -443,6 +445,7 @@ export default function Sidebar({
           collections={collections}
           activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode ? null : activeSmartCollectionId}
           view={folderView}
+          grow={!foldersOpen}
           onOpen={onOpenSmartCollection}
           onEditRules={onEditSmartCollection}
           onRename={onRenameCollection}
@@ -450,9 +453,14 @@ export default function Sidebar({
           onSnapshot={onSnapshotSmartCollection}
         />
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div
-            className={`flex shrink-0 items-center justify-between rounded-md px-2.5 pb-1.5 ${rootDrop ? "ring-1 ring-inset ring-accent/45" : ""}`}
+        <div className={foldersOpen ? "flex min-h-0 flex-1 flex-col" : "shrink-0"} data-sidebar-folders="true" data-open={foldersOpen ? "true" : "false"}>
+          <SectionHeading
+            id="folders"
+            label={t("sidebar.folders")}
+            open={foldersOpen}
+            onToggle={toggleFolders}
+            holdsActive={manualCollections.some((c) => c.collection_id === activeCollectionId)}
+            className={rootDrop ? "rounded-md ring-1 ring-inset ring-accent/45" : ""}
             data-folder-root-drop={draggingFolderId ? "true" : undefined}
             onDragOver={(event) => {
               if (!draggingFolderId || parentIdOf(collections, draggingFolderId) === null) return;
@@ -470,14 +478,12 @@ export default function Sidebar({
               moveToRoot(source);
             }}
           >
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sidebar.folders")}</span>
-            <span className="flex items-center gap-0.5">
               <button
                 type="button"
                 className={`rounded p-0.5 transition-colors hover:bg-hover hover:text-text ${searchingFolders ? "text-text" : "text-muted2"}`}
                 title={t("sidebar.searchFolders")}
                 aria-pressed={searchingFolders}
-                onClick={() => (searchingFolders ? closeFolderSearch() : setSearchingFolders(true))}
+                onClick={() => { if (searchingFolders) closeFolderSearch(); else { showFolders(); setSearchingFolders(true); } }}
               >
                 <Search className="h-3.5 w-3.5" />
               </button>
@@ -499,6 +505,7 @@ export default function Sidebar({
                   // search hide the folder it makes.
                   closeFolderSearch();
                   setCreatingUnder(null);
+                  showFolders();
                   setCreatingFolder(true);
                   if (folderScrollRef.current) folderScrollRef.current.scrollTop = 0;
                 }}
@@ -518,9 +525,9 @@ export default function Sidebar({
                   <FolderCog className="h-3.5 w-3.5" />
                 </button>
               )}
-            </span>
-          </div>
+          </SectionHeading>
 
+          {foldersOpen && (<>
           {searchingFolders && (
             <div className="relative mx-2.5 mb-1.5 shrink-0">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted2" />
@@ -890,6 +897,7 @@ export default function Sidebar({
               </div>
             )}
           </div>
+          </>)}
         </div>
       </nav>
 

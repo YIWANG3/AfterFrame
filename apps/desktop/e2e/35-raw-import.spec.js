@@ -139,6 +139,14 @@ test("status scopes split paired from unpaired", async () => {
     .toEqual(["luna-evening-2.jpg", "sunset-edit.jpg"]);
   const viaMcp = await tool("search_assets", { status: "matched", limit: 50 });
   expect(viaMcp.assets.map((a) => a.asset_id)).toEqual(matched.map((r) => r.asset_id));
+  // "With Raw" left the sidebar for the filter bar: the has_raw condition is the same set.
+  const withRaw = await tool("search_assets", { has_raw: true, limit: 50 });
+  expect(withRaw.assets.map((a) => a.asset_id)).toEqual(matched.map((r) => r.asset_id));
+  const withoutRaw = await tool("search_assets", { has_raw: false, limit: 50 });
+  expect(withoutRaw.assets.map((a) => a.asset_id)).not.toContain(matched[0].asset_id);
+  expect(withoutRaw.assets.map((a) => a.asset_id)).toEqual(expect.arrayContaining(unmatched.map((r) => r.asset_id)));
+  const options = await ctx.window.evaluate(() => window.mediaWorkspace.getFacetValues({ status: "all" }));
+  expect(options.has_raw).toEqual([{ value: "true", count: 1 }, { value: "false", count: expect.any(Number) }]);
 });
 
 test("raw_pairing lists the ambiguous match; confirm_match settles it and links the assets", async () => {

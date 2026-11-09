@@ -59,7 +59,7 @@ export const FACET_OWN_KEYS = {
   focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
   capture_time: ["date_from", "date_to", "date_within_days"], rating: ["rating_min", "rating_max"], flag: ["flag"],
   orientation: ["orientation"], asset_type: ["asset_type"], tag: ["tag", "tag_match"], tag_group: ["tag_group"], extension: ["extension"],
-  people: ["people"], annotated: ["annotated"], person_group: ["person_group"], location_source: ["location_source"],
+  people: ["people"], annotated: ["annotated"], has_raw: ["has_raw"], person_group: ["person_group"], location_source: ["location_source"],
   country: ["country"], city: ["city"], color: ["color", "color_tolerance"], caption_contains: ["caption_contains"],
   ocr_contains: ["ocr_contains"], path_contains: ["path_contains"], geo: ["geo"], in_collection: ["in_collection"],
 };
@@ -136,6 +136,9 @@ function matchesFacetConditions(asset, filters) {
   if (filters.people === "with_faces") return false;
   if (filters.annotated === "with" && !asset.annotation) return false;
   if (filters.annotated === "without" && asset.annotation) return false;
+  // No RAW files in the browser: "with RAW" matches nothing, "without" everything.
+  const rawWanted = facetValues(filters.has_raw).map((v) => String(v).toLowerCase());
+  if (rawWanted.length && !rawWanted.some((v) => ["false", "0", "no", "without"].includes(v))) return false;
   if (filters.person_group) return false;
   // Web locations only ever come from EXIF.
   const sources = facetValues(filters.location_source);

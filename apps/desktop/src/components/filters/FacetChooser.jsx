@@ -23,6 +23,7 @@ export const FACET_SLOTS = [
   { id: "color", keys: ["color", "color_tolerance"], capability: "colors" },
   { id: "people", keys: ["people"], capability: "people" },
   { id: "annotated", keys: ["annotated"], capability: "annotation" },
+  { id: "has_raw", keys: ["has_raw"] },
   { id: "person_group", keys: ["person_group"], capability: "people" },
   { id: "in_collection", keys: ["in_collection"] },
   { id: "iso", keys: ["iso_min", "iso_max"] },

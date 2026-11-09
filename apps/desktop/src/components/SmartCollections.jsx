@@ -7,12 +7,15 @@ import { FolderInput, ListFilter, Pencil, SlidersHorizontal, Trash2 } from "luci
 import api from "../api";
 import { localFileUrl } from "../utils/format";
 import InlineEdit from "./InlineEdit";
+import { SectionHeading, useSectionOpen } from "./SidebarSection";
 
 // `view` is the sidebar's list / covers switch, shared with the folders below.
-export default function SmartCollections({ collections, activeId, view = "list", onOpen, onEditRules, onRename, onDelete, onSnapshot }) {
+// `grow`: the folders below are folded, so this section may take their room.
+export default function SmartCollections({ collections, activeId, view = "list", grow = false, onOpen, onEditRules, onRename, onDelete, onSnapshot }) {
   const { t } = useTranslation("nav");
   const [editingId, setEditingId] = useState(null);
   const smart = (collections || []).filter((c) => c.kind === "smart");
+  const [open, toggleOpen] = useSectionOpen("smart");
 
   // Covers: the first photo the saved filter currently shows. Keyed on the
   // conditions and the live count, so a cover follows its collection when a
@@ -20,7 +23,7 @@ export default function SmartCollections({ collections, activeId, view = "list",
   const [covers, setCovers] = useState({});
   const coverKey = smart.map((c) => `${c.collection_id}:${c.item_count || 0}:${JSON.stringify(c.rules || null)}`).join("|");
   useEffect(() => {
-    if (view !== "covers") return undefined;
+    if (view !== "covers" || !open) return undefined;
     let cancelled = false;
     const stale = smart.filter((c) => covers[c.collection_id]?.key !== `${c.item_count || 0}:${JSON.stringify(c.rules || null)}`);
     if (!stale.length) return undefined;
@@ -40,15 +43,27 @@ export default function SmartCollections({ collections, activeId, view = "list",
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, coverKey]);
+  }, [view, open, coverKey]);
 
   if (!smart.length) return null;
 
   return (
-    <div className="mb-3 shrink-0" data-smart-collections="true">
-      <div className="px-2.5 pb-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sidebar.smartCollections")}</span>
-      </div>
+    // Open, the section takes at most two fifths of the sidebar and scrolls
+    // inside that, so the folders below always keep their room.
+    <div
+      className={!open ? "mb-3 shrink-0" : grow ? "mb-3 flex min-h-0 flex-1 flex-col" : "mb-3 flex max-h-[40%] shrink-0 flex-col"}
+      data-smart-collections="true"
+      data-open={open ? "true" : "false"}
+    >
+      <SectionHeading
+        id="smart"
+        label={t("sidebar.smartCollections")}
+        open={open}
+        onToggle={toggleOpen}
+        holdsActive={smart.some((c) => c.collection_id === activeId)}
+      />
+      {open && (
+      <div className="min-h-0 overflow-y-auto overscroll-contain" data-smart-collections-list="true">
       {smart.map((col) => {
         const active = activeId === col.collection_id;
         // Rules this version cannot read (written by a newer one): shown, but inert.
@@ -151,6 +166,8 @@ export default function SmartCollections({ collections, activeId, view = "list",
           </div>
         );
       })}
+      </div>
+      )}
     </div>
   );
 }

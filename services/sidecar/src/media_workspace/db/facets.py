@@ -303,6 +303,39 @@ def _annotated(filters: dict) -> list[Clause]:
     return []
 
 
+# A photo with its RAW file bound to it (the pairing the import makes, or
+# one confirmed by hand). The sidebar used to offer this as a place of its own
+# ("With Raw", status "matched"); now it is a condition like any other.
+_HAS_RAW = (
+    "EXISTS (SELECT 1 FROM image_lookup_registry AS reg WHERE reg.image_asset_id = assets.asset_id"
+    " AND reg.match_status IN ('auto_bound', 'manual_confirmed'))"
+)
+_TRUE_WORDS = {"true", "yes", "1", "with"}
+_FALSE_WORDS = {"false", "no", "0", "without"}
+
+
+def has_raw_value(raw: object) -> bool | None:
+    """The facet's value as a bool: true / false, 1 / 0, "yes" / "no", "with" / "without"; anything else is no condition."""
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    word = str(raw).strip().lower()
+    if word in _TRUE_WORDS:
+        return True
+    if word in _FALSE_WORDS:
+        return False
+    return None
+
+
+def _has_raw(filters: dict) -> list[Clause]:
+    values = _values(filters.get("has_raw"))
+    wanted = {has_raw_value(value) for value in values} - {None}
+    if len(wanted) != 1:  # none given, or both: no condition
+        return []
+    return [(_HAS_RAW if True in wanted else f"NOT {_HAS_RAW}", [])]
+
+
 def _person_group(filters: dict) -> list[Clause]:
     values = _values(filters.get("person_group"))
     if not values:
@@ -443,6 +476,7 @@ FACETS: tuple[Facet, ...] = (
     Facet("extension", ("extension",), _extension),
     Facet("people", ("people",), _people),
     Facet("annotated", ("annotated",), _annotated),
+    Facet("has_raw", ("has_raw",), _has_raw),
     Facet("person_group", ("person_group",), _person_group),
     Facet("location_source", ("location_source",), _location_source),
     _place_facet("country", "country_code", upper=True),

@@ -82,6 +82,7 @@ module.exports = (ctx) => {
           people: { type: "string", enum: ["with_faces", "without_faces"], description: "Filter by detected faces" },
           person_id: { type: "string", description: "Only photos of this person (a people group id from list_people)" },
           annotated: { type: "string", enum: ["with", "without"], description: "Whether AI annotation exists" },
+          has_raw: { type: "boolean", description: "true: only photos with their RAW file paired (bound on import or confirmed by hand); false: only photos without one" },
           collection_id: { type: "string", description: "Only photos in this folder (a manual collection from manage_collections)" },
           include_descendants: { type: "boolean", description: "With collection_id: photos in the folders under it count too (folders nest), each once. Default false." },
           exclude: EXCLUDE_ARG,
