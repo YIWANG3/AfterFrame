@@ -42,10 +42,12 @@ test("tools/list exposes the full tool surface", async () => {
     "get_editor_capabilities", "render_collage", "edit_asset", "apply_frame",
     // Look-alikes (coverage in 78-lookalikes.spec.js)
     "find_similar", "list_lookalikes", "index_lookalikes",
+    // Tag groups (coverage in 80-tag-groups.spec.js)
+    "manage_tags",
   ]) {
     expect(names).toContain(expected);
   }
-  expect(tools.length).toBe(37);
+  expect(tools.length).toBe(38);
 });
 
 test("search_assets returns the seeded catalog with thumbnail urls", async () => {

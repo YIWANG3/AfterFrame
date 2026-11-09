@@ -13,7 +13,9 @@ module.exports = (ctx) => {
       name: "update_assets",
       description:
         "Batch-edit asset metadata: set star rating (0-5, 0 clears), the pick/reject flag, the description, and/or add/remove tags. " +
-        "The app UI refreshes automatically. Tags power search; ratings and flags power filters and smart collections.",
+        "The app UI refreshes automatically. Tags power search; ratings and flags power filters and smart collections. " +
+        "A tag new to the library lands in the group the built-in vocabulary knows it by, else in tag_group if given, else ungrouped; " +
+        "an existing tag keeps its group (manage_tags moves it).",
       inputSchema: {
         type: "object",
         properties: {
@@ -22,6 +24,7 @@ module.exports = (ctx) => {
           flag: { type: "string", enum: ["pick", "reject", "none"], description: "Pick/reject flag, as Lightroom's P/X/U; none clears it" },
           description: { type: "string", description: "The photo's description, as the user would write it (wins over the AI caption, which annotation never overwrites). An empty string leaves it empty." },
           add_tags: { type: "array", items: { type: "string" } },
+          tag_group: { type: "string", description: "With add_tags: the group id (see list_tags) for tags the library does not have yet" },
           remove_tags: { type: "array", items: { type: "string" } },
         },
         required: ["asset_ids"],
@@ -60,24 +63,20 @@ module.exports = (ctx) => {
           // doesn't hold come back as missing.
           if (addTags.length) {
             try {
-              const added = await commands.addAssetTags(ids, addTags);
+              const added = await commands.addAssetTags(ids, addTags, args.tag_group ? String(args.tag_group) : undefined);
               mutated = true;
               for (const id of added?.missing || []) errors.push({ asset_id: id, op: "add_tags", error: "unknown asset" });
             } catch (error) {
               for (const id of ids) errors.push({ asset_id: id, op: "add_tags", error: error.message });
             }
           }
-          // Sequential on purpose: SQLite single-writer, and per-asset-per-tag CLI.
-          // Per-asset errors are collected, not thrown — a mid-loop failure must
-          // not hide the writes that already landed.
-          for (const id of ids) {
-            for (const tag of removeTags) {
-              try {
-                await commands.removeAssetTag(id, tag);
-                mutated = true;
-              } catch (error) {
-                errors.push({ asset_id: id, op: `remove_tag:${tag}`, error: error.message });
-              }
+          // Every tag off every photo in one write.
+          if (removeTags.length) {
+            try {
+              await commands.removeAssetTags(ids, removeTags);
+              mutated = true;
+            } catch (error) {
+              for (const id of ids) errors.push({ asset_id: id, op: "remove_tags", error: error.message });
             }
           }
         } finally {
@@ -93,6 +92,73 @@ module.exports = (ctx) => {
           removed_tags: removeTags.length ? removeTags : undefined,
           errors: errors.length ? errors : undefined,
         };
+      },
+    },
+    {
+      name: "manage_tags",
+      description:
+        "Tag and tag group management (list_tags shows the current state). Actions: 'create_group' (name, optional ai_fill: whether " +
+        "AI annotation may put tags in it, default true); 'rename_group' (group_id, name); 'set_group_ai_fill' (group_id, ai_fill); " +
+        "'delete_group' (group_id; its tags become ungrouped); 'move' (tags, group_id or null for ungrouped); 'rename' (tag, name; " +
+        "the old spelling stays as an alias); 'merge' (tags → into: every photo keeps one tag, the merged names become aliases); " +
+        "'delete' (tag; off every photo); 'pin' (tag, pinned: pinned tags lead every list); 'regroup' (give ungrouped tags the " +
+        "built-in vocabulary knows their group). Renames and merges also update smart collections that named the tag. The app UI refreshes automatically.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["create_group", "rename_group", "set_group_ai_fill", "delete_group", "move", "rename", "merge", "delete", "pin", "regroup"] },
+          group_id: { type: "string", description: "A group id from list_tags; for move, omit or null = ungrouped" },
+          name: { type: "string", description: "For create_group / rename_group: the group's name; for rename: the tag's new spelling" },
+          ai_fill: { type: "boolean", description: "For create_group / set_group_ai_fill" },
+          tags: { type: "array", items: { type: "string" }, description: "For move / merge: the tags to move, or to merge away" },
+          tag: { type: "string", description: "For rename / delete / pin" },
+          into: { type: "string", description: "For merge: the tag that remains (existing, or a new name)" },
+          pinned: { type: "boolean", description: "For pin" },
+        },
+        required: ["action"],
+      },
+      async handler(args) {
+        requireCatalog();
+        const action = args.action;
+        const tags = (args.tags || []).map(String).filter(Boolean);
+        let result;
+        try {
+          if (action === "create_group") {
+            if (!args.name) throw new Error("name is required for create_group.");
+            result = await commands.manageTagGroups({ action: "create", name: String(args.name), aiFill: args.ai_fill !== false });
+          } else if (action === "rename_group") {
+            if (!args.group_id || !args.name) throw new Error("group_id and name are required for rename_group.");
+            result = await commands.manageTagGroups({ action: "rename", group: String(args.group_id), name: String(args.name) });
+          } else if (action === "set_group_ai_fill") {
+            if (!args.group_id || typeof args.ai_fill !== "boolean") throw new Error("group_id and ai_fill are required for set_group_ai_fill.");
+            result = await commands.manageTagGroups({ action: "ai-fill", group: String(args.group_id), aiFill: args.ai_fill });
+          } else if (action === "delete_group") {
+            if (!args.group_id) throw new Error("group_id is required for delete_group.");
+            result = await commands.manageTagGroups({ action: "delete", group: String(args.group_id) });
+          } else if (action === "move") {
+            if (!tags.length) throw new Error("tags is required for move.");
+            result = await commands.setTagGroup(tags, args.group_id ? String(args.group_id) : undefined);
+          } else if (action === "rename") {
+            if (!args.tag || !args.name) throw new Error("tag and name are required for rename.");
+            result = await commands.renameTag(String(args.tag), String(args.name));
+          } else if (action === "merge") {
+            if (!tags.length || !args.into) throw new Error("tags and into are required for merge.");
+            result = await commands.mergeTags(tags, String(args.into));
+          } else if (action === "delete") {
+            if (!args.tag) throw new Error("tag is required for delete.");
+            result = await commands.deleteTag(String(args.tag));
+          } else if (action === "pin") {
+            if (!args.tag || typeof args.pinned !== "boolean") throw new Error("tag and pinned are required for pin.");
+            result = await commands.pinTag(String(args.tag), args.pinned);
+          } else if (action === "regroup") {
+            result = await commands.regroupTags();
+          } else {
+            throw new Error(`Unknown action: ${action}`);
+          }
+        } finally {
+          deps.broadcastCatalogChanged?.("tags");
+        }
+        return result;
       },
     },
     {
