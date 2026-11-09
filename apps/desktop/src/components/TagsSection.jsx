@@ -81,7 +81,7 @@ function TagAdder({ onAdd, existing, groups, pinned, labelOf, groupLabelOf }) {
         }}
         placeholder={t("addTag")}
         data-testid="tag-add-input"
-        className="w-28 rounded-md border border-accent/50 bg-app px-2 py-[2px] text-[10px] text-text outline-none placeholder:text-muted2"
+        className="h-[22px] w-28 rounded-md border border-accent/50 bg-app px-2 text-[10px] leading-none text-text outline-none placeholder:text-muted2"
       />
       {/* Where a NEW tag goes; a tag the library has keeps its group. */}
       <select
@@ -89,7 +89,7 @@ function TagAdder({ onAdd, existing, groups, pinned, labelOf, groupLabelOf }) {
         onMouseDown={(e) => e.stopPropagation()}
         onChange={(e) => setGroup(e.target.value)}
         data-testid="tag-add-group"
-        className="h-[20px] max-w-[88px] rounded-md border border-border/60 bg-app px-1 text-[10px] text-muted outline-none"
+        className="h-[22px] max-w-[88px] rounded-md border border-border/60 bg-app px-1 text-[10px] leading-none text-muted outline-none"
       >
         <option value={AUTO}>{t("group.auto")}</option>
         {groups.map((g) => <option key={g.group_id} value={g.group_id}>{groupLabelOf(g)}</option>)}
