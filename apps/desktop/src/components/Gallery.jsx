@@ -30,6 +30,7 @@ export default function Gallery({
   thumbSize,
   collections,
   activeCollectionId,
+  targetFolderId = null,
   onAddToCollection,
   onRemoveFromCollection,
   onDeleteFromCatalog,
@@ -529,6 +530,7 @@ export default function Gallery({
           assetIds={contextMenu.assetIds}
           collections={collections}
           activeCollectionId={activeCollectionId}
+          targetFolderId={targetFolderId}
           onAddTo={(collectionId) => onAddToCollection?.(collectionId, contextMenu.assetIds || [contextMenu.item.asset_id])}
           onRemoveFrom={() => onRemoveFromCollection?.(activeCollectionId, contextMenu.assetIds || [contextMenu.item.asset_id])}
           onDeleteFromCatalog={() => onDeleteFromCatalog?.(contextMenu.assetIds || [contextMenu.item.asset_id])}

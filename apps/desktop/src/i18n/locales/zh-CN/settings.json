@@ -383,6 +383,9 @@
         "delete": "从图库移除",
         "deleteRejected": "删除排除的照片…"
       },
+      "folder": {
+        "addToTarget": "加入目标文件夹"
+      },
       "select": {
         "all": "全选",
         "none": "取消选择"

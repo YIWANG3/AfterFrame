@@ -383,6 +383,9 @@
         "delete": "Remove from Library",
         "deleteRejected": "Delete Rejected Photos…"
       },
+      "folder": {
+        "addToTarget": "Add to Target Folder"
+      },
       "select": {
         "all": "Select All",
         "none": "Deselect All"

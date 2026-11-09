@@ -7,6 +7,7 @@ import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
 import InlineEdit from "./InlineEdit";
+import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { FOLDER_SORTS, canReorderFolders, visibleFolders } from "./folderList";
 import { Z } from "../ui";
 // The feature modules' library views (manifest `sidebarView`), listed below the browse rows.
@@ -78,6 +79,8 @@ export default function Sidebar({
   onDeleteCollection,
   onAnnotateCollection,
   onAddToCollection,
+  // The folder the B key adds to (hooks/targetFolder.js): marked with its key.
+  targetFolderId = null,
   onOpenView,
   onOpenPeople,
   onOpenDiscover,
@@ -90,6 +93,8 @@ export default function Sidebar({
 }) {
   const { t, i18n } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
+  useShortcuts();
+  const targetKey = shortcutLabel("folder.addToTarget");
   const browse = navItems(summary);
   const featureViewMode = sidebarViews.some((view) => view.id === activeView);
   const rootSummary = [];
@@ -479,6 +484,7 @@ export default function Sidebar({
                   role="button"
                   tabIndex={0}
                   data-collection-id={col.collection_id}
+                  data-target-folder={targetFolderId === col.collection_id ? "true" : undefined}
                   data-folder-insertion={folderInsertion?.id === col.collection_id ? (folderInsertion.after ? "after" : "before") : undefined}
                   draggable={reorderable}
                   title={reorderTitle}
@@ -585,6 +591,14 @@ export default function Sidebar({
                     </span>
                   )}
                   <span className="flex shrink-0 items-center gap-1">
+                    {targetFolderId === col.collection_id && targetKey && (
+                      <kbd
+                        className="rounded border border-border/60 px-1 font-sans text-[10px] leading-4 text-muted2"
+                        title={t("sidebar.targetFolder", { keys: targetKey })}
+                      >
+                        {targetKey}
+                      </kbd>
+                    )}
                     {folderView !== "covers" && (
                       <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>
                         {col.item_count || 0}

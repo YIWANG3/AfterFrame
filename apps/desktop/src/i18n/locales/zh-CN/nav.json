@@ -140,6 +140,7 @@
     "folders": "文件夹",
     "newFolder": "新建文件夹",
     "noFolders": "暂无文件夹",
+    "targetFolder": "按 {{keys}} 把选中的照片加入这里",
     "viewCovers": "切换为缩略图视图",
     "viewList": "切换为文字视图",
     "folderMeta": "{{count}} 张",

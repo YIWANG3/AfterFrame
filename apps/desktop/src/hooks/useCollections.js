@@ -9,13 +9,27 @@
 //   refreshBrowse()               re-browse the folder on screen
 //   dropLoadedItems(ids)          rows taken out of the folder on screen
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api";
 import { rulesFromScope } from "./workspaceLogic";
+import { readTargetFolderId, resolveTargetFolder, writeTargetFolderId } from "./targetFolder";
 
-export default function useCollections(bridgeRef) {
+// `catalogKey` tells catalogs apart for the remembered target folder.
+export default function useCollections(bridgeRef, catalogKey = null) {
   const [collections, setCollections] = useState([]);
   const hasSmartCollections = () => collections.some((c) => c.kind === "smart");
+
+  // The target folder (hooks/targetFolder.js): the one B adds to. Set by
+  // making a folder or adding to one; read back per catalog.
+  const [targetFolderId, setTargetFolderId] = useState(null);
+  useEffect(() => {
+    setTargetFolderId(readTargetFolderId(catalogKey));
+  }, [catalogKey]);
+  function setTargetFolder(collectionId) {
+    setTargetFolderId(collectionId || null);
+    writeTargetFolderId(catalogKey, collectionId || null);
+  }
+  const targetFolder = resolveTargetFolder(collections, targetFolderId);
 
   async function loadCollections() {
     try {
@@ -31,6 +45,7 @@ export default function useCollections(bridgeRef) {
   async function createCollection(name) {
     const col = await api.createCollection(name, "manual");
     await loadCollections();
+    if (col?.collection_id) setTargetFolder(col.collection_id);
     return col;
   }
 
@@ -83,6 +98,7 @@ export default function useCollections(bridgeRef) {
     const folder = await api.createCollection(name, "manual");
     if (ids.length) await api.collectionAddItems(folder.collection_id, ids);
     await loadCollections();
+    if (folder?.collection_id) setTargetFolder(folder.collection_id);
     return { ...folder, count: ids.length };
   }
 
@@ -117,6 +133,7 @@ export default function useCollections(bridgeRef) {
   async function deleteCollection(collectionId) {
     const bridge = bridgeRef.current;
     await api.deleteCollection(collectionId);
+    if (collectionId === targetFolderId) setTargetFolder(null);
     bridge.bumpCatalogRevision();
     if (bridge.scopeRef.current.collectionId === collectionId) bridge.updateScope({ collectionId: null });
     if (bridge.scopeRef.current.smartCollectionId === collectionId) bridge.goTo({});
@@ -126,6 +143,7 @@ export default function useCollections(bridgeRef) {
   async function addToCollection(collectionId, assetIds) {
     const bridge = bridgeRef.current;
     await api.collectionAddItems(collectionId, assetIds);
+    setTargetFolder(collectionId);
     bridge.bumpCatalogRevision();
     await loadCollections();
     if (bridge.scopeRef.current.collectionId === collectionId) {
@@ -158,5 +176,7 @@ export default function useCollections(bridgeRef) {
     deleteCollection,
     addToCollection,
     removeFromCollection,
+    targetFolder,
+    setTargetFolder,
   };
 }

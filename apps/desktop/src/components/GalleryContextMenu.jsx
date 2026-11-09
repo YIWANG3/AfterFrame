@@ -88,7 +88,7 @@ function SubMenuItem({ icon: Icon, label, shortcut, onClick, ...rest }) {
   );
 }
 
-export default function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onFindSimilar, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopy, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onClose }) {
+export default function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, targetFolderId = null, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onFindSimilar, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopy, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
   useDismiss(ref, onClose);
@@ -106,6 +106,9 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
   }, [x, y]);
 
   const manualFolders = (collections || []).filter((c) => c.kind === "manual");
+  // The target folder (the B key's) leads the list, with its key.
+  const targetFolder = manualFolders.find((c) => c.collection_id === targetFolderId) || null;
+  const otherFolders = targetFolder ? manualFolders.filter((c) => c !== targetFolder) : manualFolders;
   const inActiveFolder = !!activeCollectionId;
 
   return createPortal(
@@ -188,7 +191,21 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
 
       {manualFolders.length > 0 && (
         <MenuItem icon={FolderPlus} label={t("gallery.menu.addToFolder")}>
-          {manualFolders.map((col) => (
+          {targetFolder && (
+            <button
+              type="button"
+              data-target-folder="true"
+              className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+              onClick={() => { onAddTo(targetFolder.collection_id); onClose(); }}
+            >
+              <Folder className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{targetFolder.name}</span>
+              {/* A visual hint only: the button's name stays the folder's. */}
+              <span className="text-[10px] text-muted2" aria-hidden="true">{shortcutLabel("folder.addToTarget")}</span>
+            </button>
+          )}
+          {targetFolder && otherFolders.length > 0 && <div className="my-1 border-t border-border/40" />}
+          {otherFolders.map((col) => (
             <button
               key={col.collection_id}
               type="button"

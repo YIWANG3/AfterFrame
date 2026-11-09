@@ -830,6 +830,27 @@ export default function App() {
     if (advance) advanceAfter(targetIds);
   }
 
+  // B: the selected photos join the target folder, the one last made or last
+  // added to (hooks/targetFolder.js). Without one, a hint says how to get one.
+  async function addToTargetFolder(ids, { advance = false } = {}) {
+    const folder = workspace.targetFolder;
+    if (!folder) {
+      pushToast({
+        title: t("targetFolder.none"),
+        message: t("targetFolder.noneHint", { key: shortcutLabel("folder.addToTarget") || "B" }),
+        ttl: 5000,
+      });
+      return;
+    }
+    if (advance) advanceAfter(ids);
+    try {
+      await workspace.addToCollection(folder.collection_id, ids);
+      pushToast({ title: t("targetFolder.added", { count: ids.length, name: folder.name }), ttl: 3000 });
+    } catch (error) {
+      pushToast({ title: t("targetFolder.failed", { name: folder.name }), message: String(error?.message || error), tone: "error", ttl: 6000 });
+    }
+  }
+
   function openSettings(tab = null) {
     setSettingsTab(tab);
     setSettingsOpen(true);
@@ -1032,6 +1053,12 @@ export default function App() {
       case "photo.deleteRejected":
         void deleteRejected();
         return true;
+      case "folder.addToTarget": {
+        const ids = keyTargets();
+        if (!ids.length) return false;
+        void addToTargetFolder(ids, { advance });
+        return true;
+      }
       case "select.all":
         return selectAllAssets();
       case "select.none":
@@ -1188,6 +1215,7 @@ export default function App() {
           onDeleteCollection={workspace.deleteCollection}
           onAnnotateCollection={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
           onAddToCollection={workspace.addToCollection}
+          targetFolderId={workspace.targetFolder?.collection_id || null}
           activeView={viewMode}
           peopleMode={viewMode === "people"}
           discoverMode={viewMode === "discover"}
@@ -1406,6 +1434,7 @@ export default function App() {
                   thumbSize={thumbSize}
                   collections={workspace.collections}
                   activeCollectionId={workspace.activeCollectionId}
+                  targetFolderId={workspace.targetFolder?.collection_id || null}
                   onAddToCollection={workspace.addToCollection}
                   onRemoveFromCollection={workspace.removeFromCollection}
                   onDeleteFromCatalog={deleteAssets}

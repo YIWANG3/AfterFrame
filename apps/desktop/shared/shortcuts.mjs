@@ -52,6 +52,8 @@ export const SHORTCUT_ACTIONS = [
   { id: "photo.reveal", group: "organize", scope: "library", defaults: ["Mod+Enter"] },
   { id: "photo.delete", group: "organize", scope: "library", defaults: ["Backspace", "Delete"] },
   { id: "photo.deleteRejected", group: "organize", scope: "library", defaults: ["Mod+Backspace"] },
+  // Lightroom's target collection: the folder last made or last added to.
+  { id: "folder.addToTarget", group: "organize", scope: "library", defaults: ["KeyB"], advance: true },
 
   { id: "select.all", group: "browse", scope: "gallery", defaults: ["Mod+KeyA"], menu: "edit:select-all" },
   { id: "select.none", group: "browse", scope: "gallery", defaults: ["Mod+KeyD"] },

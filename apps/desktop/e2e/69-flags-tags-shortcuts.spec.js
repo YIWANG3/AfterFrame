@@ -242,6 +242,52 @@ test("a description is written by hand; the AI's shows until one is, and comes b
   await expect.poll(() => shownOf(bare)).toEqual(["Party at home", "user"]);
 });
 
+test("B adds the selection to the folder last made, and the folder keeps the key after a restart", async () => {
+  // A folder made in the sidebar becomes the target: its row shows the key.
+  await ctx.window.getByTitle("New folder").click();
+  const field = ctx.window.getByTestId("sidebar-folder-scroll").locator("input");
+  await field.fill("Keepers");
+  await field.press("Enter");
+  const folderRow = ctx.window.locator("[data-target-folder='true'][data-collection-id]");
+  await expect(folderRow).toContainText("Keepers");
+  await expect(folderRow.locator("kbd")).toHaveText("B");
+  const folderId = await folderRow.getAttribute("data-collection-id");
+  const countOf = async () => (await ctx.window.evaluate(() => window.mediaWorkspace.listCollections()))
+    .find((c) => c.collection_id === folderId)?.item_count ?? null;
+
+  // Two photos, B: both join, and a toast says so.
+  const a = await idAt(3);
+  const b = await idAt(4);
+  await card(a).click();
+  await card(b).click({ modifiers: ["ControlOrMeta"] });
+  await ctx.window.keyboard.press("b");
+  await expect.poll(countOf).toBe(2);
+  await expect(ctx.window.getByText("Added 2 photos to “Keepers”")).toBeVisible();
+
+  // Shift+B adds the photo and moves on to the next.
+  const c = await idAt(5);
+  await card(c).click();
+  await ctx.window.keyboard.press("Shift+B");
+  await expect.poll(countOf).toBe(3);
+  await expect(cards().nth(6)).toHaveAttribute("data-selected", "true");
+
+  // The menu's folder list leads with it, key and all.
+  await card(c).click({ button: "right" });
+  await ctx.window.getByText("Add to Folder", { exact: true }).hover();
+  const menuTarget = ctx.window.locator("[data-target-folder='true']:not([data-collection-id])");
+  await expect(menuTarget).toContainText("Keepers");
+  await expect(menuTarget).toContainText("B");
+  await ctx.window.keyboard.press("Escape");
+
+  // The target outlives a restart.
+  await restart();
+  await expect(ctx.window.locator("[data-target-folder='true'][data-collection-id]")).toContainText("Keepers");
+  const d = await idAt(6);
+  await card(d).click();
+  await ctx.window.keyboard.press("b");
+  await expect.poll(countOf).toBe(4);
+});
+
 test("⌘⌫ deletes the rejected photos of the view from the library", async () => {
   const before = await rows();
   const rejectedIds = before.filter((row) => row.app_flag === -1).map((row) => row.asset_id);
