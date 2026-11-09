@@ -64,6 +64,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Sort by imported time, captured time, rating, or name
 - Smart collections (a saved filter with a live count: exclude any filter, ratings below a value or unrated, either-or condition groups) and manual folders
 - Folder list you can sort (custom order, name, newest, most photos) and search by name; new folders go on top
+- **Target folder**: the folder you last made or last added to is marked with a `B` in the sidebar, and **B** adds the selected photos to it (Shift+B adds one and moves on), like Lightroom's target collection
 - **A page for your folders** shows every folder at once, with a mosaic of its newest photos, its count and the span of capture dates. Sort by last added or capture date too, filter by status, count or dates, switch to a sortable table, and select several to annotate or delete
 - **Look-alikes**: every photo gets a perceptual hash and, on the Mac, Apple Vision's feature print, so another export, a re-encode or a crop of one picture is found. A Look-alikes view in the sidebar, **Find Similar** on any photo, and a Similar strip in the inspector
 - **Copy** (⌘C) puts the selected photos on the clipboard as files, like Finder: paste them in Finder, WeChat, Notes or anything that takes a file drop
@@ -118,7 +119,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 - **Stickers** — extract subjects from any photo with one click (VisionKit on macOS 14+), save to a per-catalog library with optional outline and shadow, then drop them as image layers on any other photo. Stickers share the same depth, opacity, rotation, outline (with opacity), shadow, and outer-glow controls as text layers
 
-- **Collage** maker with 80 layout templates for 1 to 12 photos, gap, padding and corner radius by slider or typed value, background color, an **edge blend** that cross-fades neighbouring photos, a box that marks the parts of a cell its photo doesn't cover, and export at 4096 px by default. Per-cell pan and zoom with snap-to-center alignment guides, precise zoom slider, and trackpad pinch sync — drag any cell to reframe, swap two cells by dropping one on the other
+- **Collage** maker with 80 layout templates for 1 to 12 photos, gap, padding and corner radius by slider or typed value, background color, an **edge blend** that cross-fades neighbouring photos, a box that marks the parts of a cell its photo doesn't cover, and export at 4096 px by default. Per-cell pan and zoom with snap-to-center alignment guides, precise zoom slider, and trackpad pinch sync — drag any cell to reframe, swap two cells by dropping one on the other, or **Shuffle** the photos into a new arrangement with one click
 
 ![Batch collage](docs/assets/en/collage-batch.webp)
 
