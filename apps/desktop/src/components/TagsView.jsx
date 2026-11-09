@@ -43,7 +43,7 @@ function SortDropdown({ sort, setSort }) {
   const ref = useRef(null);
   useDismiss(ref, () => setOpen(false), { enabled: open });
   return (
-    <div ref={ref} className="relative ml-1">
+    <div ref={ref} className="relative ml-1 shrink-0">
       <button
         type="button"
         data-testid="tags-sort"
@@ -177,7 +177,7 @@ export default function TagsView({ catalogRevision, onOpenTag, pushToast }) {
         searchPlaceholder={t("tags.search")}
         actions={(
           <>
-            <Button variant="ghost" size="sm" data-testid="tags-new-group" onClick={() => setCreating(true)} className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" data-testid="tags-new-group" onClick={() => setCreating(true)} className="shrink-0 gap-1 whitespace-nowrap">
               <Plus className="h-3.5 w-3.5" />
               {t("tags.newGroup")}
             </Button>
@@ -251,7 +251,7 @@ export default function TagsView({ catalogRevision, onOpenTag, pushToast }) {
                   </button>
                 ) : (
                   items.length > 0 && (
-                    <Button variant="ghost" size="xs" data-testid="tags-regroup" className="flex items-center gap-1" onClick={() => void edit(() => api.regroupTags())}>
+                    <Button variant="ghost" size="xs" data-testid="tags-regroup" className="shrink-0 gap-1 whitespace-nowrap" onClick={() => void edit(() => api.regroupTags())}>
                       <Sparkles className="h-3 w-3" />
                       {t("tags.regroup")}
                     </Button>
