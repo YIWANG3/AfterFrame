@@ -4,16 +4,16 @@
 
 import { describe, expect, it } from "vitest";
 import PROMPT from "@sidecar-data/annotation_prompt.json";
-import { buildAnnotationSystemPrompt, filterTagsByLanguage } from "./llm";
+import { buildAnnotationSystemPrompt, filterTagsByLanguage, parseTags } from "./llm";
 
 describe("buildAnnotationSystemPrompt", () => {
   it("fills the shared template and leaves no placeholder behind", () => {
     const prompt = buildAnnotationSystemPrompt({ languages: ["en", "zh"], maxTags: 10, maxCaptionChars: 200 });
     expect(prompt.startsWith("You are an image annotator")).toBe(true);
     expect(prompt).toContain("Max 200 characters.");
-    expect(prompt).toContain("up to 10 short tags. " + PROMPT.lang_clause["en+zh"] + " Lowercase.");
+    expect(prompt).toContain('"tags": an array of up to 10 short tags. ' + PROMPT.lang_clause["en+zh"] + " Lowercase.");
     expect(prompt.endsWith("Respond with ONLY the JSON object, no commentary.")).toBe(true);
-    expect(prompt).not.toMatch(/\{(max_caption_chars|max_tags|lang_clause)\}/);
+    expect(prompt).not.toMatch(/\{(max_caption_chars|max_tags|lang_clause|tags_shape)\}/);
     // The location schema's braces are literal, not placeholders.
     expect(prompt).toContain('{"country": str|null');
   });
@@ -39,6 +39,30 @@ describe("buildAnnotationSystemPrompt", () => {
     const prompt = buildAnnotationSystemPrompt({ languages: ["en"], existingTags: tags });
     expect(prompt).toContain(`tag${PROMPT.tag_reuse_hint_limit - 1}`);
     expect(prompt).not.toContain(`tag${PROMPT.tag_reuse_hint_limit},`);
+  });
+});
+
+describe("grouped tags", () => {
+  it("lists the groups with their examples, the way the sidecar does", () => {
+    const groups = [
+      { id: "weather", name: "Weather", examples: ["sunny", "雨"] },
+      { id: "mood", name: "Mood", examples: [] },
+      { id: "other", name: "Other", examples: ["mystery"] },
+    ];
+    const prompt = buildAnnotationSystemPrompt({ languages: ["en"], maxTags: 6, maxCaptionChars: 120, customInstructions: "Short.", tagGroups: groups });
+    expect(prompt).toContain(PROMPT.tags_grouped.replaceAll("{max_tags}", "6"));
+    expect(prompt).toContain(PROMPT.groups_intro + "- weather (Weather): sunny\n- mood (Mood)");
+    expect(prompt).not.toContain("mystery");
+    expect(prompt).not.toContain(PROMPT.tag_pool_intro);
+    expect(prompt.endsWith(PROMPT.custom_instructions_intro + "Short.")).toBe(true);
+  });
+
+  it("reads grouped or flat tag output", () => {
+    expect(parseTags({ subject: ["cat", "cat"], mood: ["cozy"], other: ["blanket"] }, 10)).toEqual({
+      tags: ["cat", "cozy", "blanket"], groupsOf: { cat: "subject", cozy: "mood" },
+    });
+    expect(parseTags(["Sunset", { tag: "beach" }, "x"], 2)).toEqual({ tags: ["Sunset", "beach"], groupsOf: {} });
+    expect(parseTags("nope", 5)).toEqual({ tags: [], groupsOf: {} });
   });
 });
 

@@ -49,6 +49,7 @@ export default function Gallery({
   onAnnotate,
   onFlag,
   onAddTags,
+  onRemoveTags,
   // Only passed when the grid shows less than the whole library.
   onShowInAllAssets,
   // Only passed where the look-alike index can answer (the desktop app).
@@ -550,6 +551,7 @@ export default function Gallery({
           onAnnotate={(ids, opts) => onAnnotate?.(ids, opts)}
           onFlag={onFlag ? (flag) => onFlag(flag, contextMenu.assetIds || [contextMenu.item.asset_id]) : undefined}
           onAddTags={onAddTags ? () => onAddTags(contextMenu.assetIds || [contextMenu.item.asset_id]) : undefined}
+          onRemoveTags={onRemoveTags ? () => onRemoveTags(contextMenu.assetIds || [contextMenu.item.asset_id]) : undefined}
           onClose={closeContextMenu}
         />
       )}

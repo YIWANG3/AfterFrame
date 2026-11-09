@@ -13,7 +13,7 @@ import { TEXT_FACETS } from "./TextContainsPopover";
 export const FACET_SLOTS = [
   { id: "camera", keys: ["camera"] },
   { id: "lens", keys: ["lens"] },
-  { id: "tag", keys: ["tag", "tag_match"] },
+  { id: "tag", keys: ["tag", "tag_match", "tag_group"] },
   { id: "extension", keys: ["extension"] },
   { id: "orientation", keys: ["orientation"] },
   { id: "location_source", keys: ["location_source"] },

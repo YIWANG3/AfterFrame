@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
-import { invalidateTags, seedTags } from "../components/annotation/tagStore";
+import { invalidateTagGroups, invalidateTags, seedTags } from "../components/annotation/tagStore";
 import api from "../api";
 import useJobs from "./useJobs";
 import useCollections from "./useCollections";
@@ -443,6 +443,16 @@ export default function useWorkspace({ pushToast } = {}) {
     if (scope_ === "collections") {
       void loadCollections();
       if (scopeRef.current.collectionId && !revealRef.current) void refreshBrowse();
+      return;
+    }
+    if (scope_ === "tags") {
+      // An agent edited tags at the library level (manage_tags): groups,
+      // names and pins may all differ; a view that selects by tag too.
+      invalidateTags();
+      invalidateTagGroups();
+      loadFacetValues();
+      void loadCollections();
+      if (!revealRef.current) void refreshBrowse();
       return;
     }
     if (revealRef.current) return;
@@ -987,6 +997,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setAssetFlag: assetMutations.setAssetFlag,
     setAssetDescription: assetMutations.setAssetDescription,
     addTagsToAssets: assetMutations.addTagsToAssets,
+    removeTagsFromAssets: assetMutations.removeTagsFromAssets,
     collectRejected,
   };
 }

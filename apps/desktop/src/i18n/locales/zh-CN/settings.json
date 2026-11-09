@@ -377,6 +377,7 @@
       },
       "photo": {
         "addTags": "添加标签…",
+        "removeTags": "移除标签…",
         "edit": "编辑",
         "compare": "对比两张照片",
         "reveal": "在访达中显示",

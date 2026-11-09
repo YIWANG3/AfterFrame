@@ -154,7 +154,7 @@ const scopeNaming = (keys) => {
   return (scope) => !!scope && (filtersName(scope.filters) || rulesName(scope.base));
 };
 export const scopeSelectsByFlag = scopeNaming(["flag"]);
-export const scopeSelectsByTag = scopeNaming(["tag"]);
+export const scopeSelectsByTag = scopeNaming(["tag", "tag_group"]);
 
 // The filters that find the rejected photos of a view: the view's own, with
 // the flag condition replaced by "rejected" (and no longer excluded).

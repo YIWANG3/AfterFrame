@@ -4,6 +4,7 @@
 
 import { filterExtensions } from "../../../shared/formats.mjs";
 import { assets, collections, fileExt, normalizeTag } from "./state";
+import { aliasesOf, groups as tagGroups, tagEntry } from "./tags";
 
 // The toolbar's sort orders. `assets` is in import order, oldest first.
 export function sortAssets(list, sort) {
@@ -40,7 +41,7 @@ export function matchesSearch(asset, search) {
   const ann = asset.annotation;
   return [asset.stem, meta.camera_model, meta.lens_model, asset.userDescription, ann?.caption, ann?.detected_text]
     .some((v) => v && String(v).toLowerCase().includes(q))
-    || (asset.tags || []).some((t) => String(t).toLowerCase().includes(q));
+    || (asset.tags || []).some((t) => String(t).toLowerCase().includes(q) || aliasesOf(t).some((alias) => alias.includes(q)));
 }
 
 // Mirrors the sidecar's facet filter semantics (db/browse.py _facet_clauses),
@@ -57,7 +58,7 @@ export const FACET_OWN_KEYS = {
   camera: ["camera"], lens: ["lens"], iso: ["iso_min", "iso_max"], aperture: ["aperture_min", "aperture_max"],
   focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
   capture_time: ["date_from", "date_to", "date_within_days"], rating: ["rating_min", "rating_max"], flag: ["flag"],
-  orientation: ["orientation"], asset_type: ["asset_type"], tag: ["tag", "tag_match"], extension: ["extension"],
+  orientation: ["orientation"], asset_type: ["asset_type"], tag: ["tag", "tag_match"], tag_group: ["tag_group"], extension: ["extension"],
   people: ["people"], annotated: ["annotated"], person_group: ["person_group"], location_source: ["location_source"],
   country: ["country"], city: ["city"], color: ["color", "color_tolerance"], caption_contains: ["caption_contains"],
   ocr_contains: ["ocr_contains"], path_contains: ["path_contains"], geo: ["geo"], in_collection: ["in_collection"],
@@ -118,9 +119,20 @@ function matchesFacetConditions(asset, filters) {
   const wanted = facetValues(filters.tag).map(normalizeTag);
   if (wanted.length) {
     const has = new Set((asset.tags || []).map(normalizeTag));
-    const hit = filters.tag_match === "all" ? wanted.every((t) => has.has(t)) : wanted.some((t) => has.has(t));
+    let hit;
+    if (filters.tag_match === "all") hit = wanted.every((t) => has.has(t));
+    else if (filters.tag_match === "by_group") {
+      // Tags of one group are alternatives; groups stack; an ungrouped tag
+      // is a condition of its own (sidecar _tag_buckets).
+      const bucketOf = (t) => tagEntry(t)?.group_id || `tag:${t}`;
+      const buckets = new Map();
+      for (const t of wanted) { const key = bucketOf(t); if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(t); }
+      hit = [...buckets.values()].every((bucket) => bucket.some((t) => has.has(t)));
+    } else hit = wanted.some((t) => has.has(t));
     if (!hit) return false;
   }
+  const wantedGroups = facetValues(filters.tag_group).map(String);
+  if (wantedGroups.length && !(asset.tags || []).some((t) => wantedGroups.includes(tagEntry(t)?.group_id))) return false;
   if (filters.people === "with_faces") return false;
   if (filters.annotated === "with" && !asset.annotation) return false;
   if (filters.annotated === "without" && asset.annotation) return false;
@@ -182,14 +194,42 @@ export function facetUniverse(facet, { collectionId, status = "all", search, fil
   return Object.keys(others).length ? list.filter((a) => matchesFacetFilters(a, others)) : list;
 }
 
-export function aggregateTags(limit = 50, needle = "", universe = assets) {
+// The tags in a universe with counts, pinned first, then most used; `group`
+// narrows to one group id ("ungrouped" for none); a tag's aliases match too.
+export function aggregateTags(limit = 50, needle = "", universe = assets, group = null) {
   const q = needle.toLowerCase();
   const m = new Map();
   for (const a of universe) {
     for (const t of a.tags || []) {
-      if (!q || t.toLowerCase().includes(q)) m.set(t, (m.get(t) || 0) + 1);
+      const entry = tagEntry(t);
+      if (group === "ungrouped" ? entry?.group_id : group && entry?.group_id !== group) continue;
+      if (!q || t.toLowerCase().includes(q) || aliasesOf(t).some((alias) => alias.includes(q))) m.set(t, (m.get(t) || 0) + 1);
     }
   }
-  return [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, limit)
-    .map(([value, count]) => ({ value, count }));
+  return [...m.entries()]
+    .map(([value, count]) => ({ value, count, group_id: tagEntry(value)?.group_id || null, pinned: !!tagEntry(value)?.pinned }))
+    .sort((x, y) => (y.pinned - x.pinned) || (y.count - x.count) || x.value.localeCompare(y.value))
+    .slice(0, limit);
+}
+
+// The filter bar's tag options (sidecar get_facet_values): each group's most
+// used, plus the group list with how many photos carry any tag of each.
+export function groupedTagOptions(universe, { perGroup = 12, picked = [] } = {}) {
+  const all = aggregateTags(Number.MAX_SAFE_INTEGER, "", universe);
+  const tags = [];
+  const shown = new Map();
+  for (const option of all) {
+    const key = option.group_id || null;
+    shown.set(key, (shown.get(key) || 0) + 1);
+    if (shown.get(key) <= perGroup || option.pinned || picked.includes(option.value)) tags.push(option);
+  }
+  const ordered = [...tagGroups.map((g) => g.group_id), null];
+  tags.sort((a, b) => ordered.indexOf(a.group_id || null) - ordered.indexOf(b.group_id || null));
+  const tag_groups = tagGroups.map((g) => ({
+    ...g,
+    tag_count: all.filter((o) => o.group_id === g.group_id).length,
+    asset_count: universe.filter((a) => (a.tags || []).some((t) => tagEntry(t)?.group_id === g.group_id)).length,
+    shown_count: shown.get(g.group_id) || 0,
+  }));
+  return { tags, tag_groups, ungrouped_tag_count: shown.get(null) || 0 };
 }

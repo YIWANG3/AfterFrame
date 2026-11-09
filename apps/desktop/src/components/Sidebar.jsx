@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Fragment } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Link, Copy, FolderPlus, FolderCog, Folder, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X } from "lucide-react";
+import { Images, Clock, Star, Link, Copy, FolderPlus, FolderCog, Folder, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X, Tags } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
@@ -85,11 +85,13 @@ export default function Sidebar({
   onOpenPeople,
   onOpenDiscover,
   onOpenFolders,
+  onOpenTags,
   // The view App is showing: "assets", "people", … or a feature view's id.
   activeView = "assets",
   peopleMode = false,
   discoverMode = false,
   foldersMode = false,
+  tagsMode = false,
 }) {
   const { t, i18n } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
@@ -248,7 +250,7 @@ export default function Sidebar({
                 </span>
               </button>
             ) : null;
-            const active = !activeCollectionId && !activeSmartCollectionId && !similarTo && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && item.key === status;
+            const active = !activeCollectionId && !activeSmartCollectionId && !similarTo && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && !tagsMode && item.key === status;
             return (
               <Fragment key={item.key}>
               <button
@@ -317,11 +319,27 @@ export default function Sidebar({
               <span className="text-[13px]">{t("sidebar.people")}</span>
             </span>
           </button>
+          {onOpenTags && (
+            <button
+              type="button"
+              data-testid="sidebar-tags"
+              onClick={(e) => { e.currentTarget.blur(); onOpenTags(); }}
+              className={[
+                "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
+                tagsMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
+              ].join(" ")}
+            >
+              <span className="flex items-center gap-2.5">
+                <Tags className={`h-4 w-4 stroke-[1.6] ${tagsMode ? "text-accent" : ""}`} />
+                <span className="text-[13px]">{t("sidebar.tags")}</span>
+              </span>
+            </button>
+          )}
         </div>
 
         <SmartCollections
           collections={collections}
-          activeId={featureViewMode || peopleMode || discoverMode || foldersMode ? null : activeSmartCollectionId}
+          activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode ? null : activeSmartCollectionId}
           view={folderView}
           onOpen={onOpenSmartCollection}
           onEditRules={onEditSmartCollection}

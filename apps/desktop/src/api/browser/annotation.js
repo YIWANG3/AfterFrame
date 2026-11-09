@@ -2,8 +2,8 @@
 // annotation.py semantics), the photos' tags, and the batch annotation job.
 
 import { assets, collections, emitCatalogChanged, jobStatus, normalizeTag, persistTokens, sessionTokens, showDescription } from "./state";
-import { aggregateTags } from "./query";
-import { buildAnnotationSystemPrompt, encodeImageForLlm, parseLlmJson } from "./llm";
+import { buildAnnotationSystemPrompt, encodeImageForLlm, parseLlmJson, parseTags } from "./llm";
+import { ensureTag, groups as tagGroups, resolveTag, reuseHints, tagMethods } from "./tags";
 
 const ANNOTATION_SETTINGS_KEY = "afterframe.annotationSettings";
 let annotationJob = null; // batch job singleton
@@ -86,7 +86,7 @@ async function annotateOne(opts) {
     maxTags: opts.maxTags,
     maxCaptionChars: opts.maxCaptionChars,
     customInstructions: opts.customInstructions,
-    existingTags: aggregateTags(200).map((t) => t.value),
+    tagGroups: reuseHints(),
   });
   let promptText = "Annotate this image as instructed.";
   if (opts.hint) promptText += ` User correction: this photo was taken at/in: ${opts.hint}. Trust this over visual inference.`;
@@ -98,11 +98,17 @@ async function annotateOne(opts) {
   const now = new Date().toISOString();
   const maxTags = opts.maxTags || 10;
   const maxCaption = opts.maxCaptionChars || 200;
-  const aiTags = [...new Set((Array.isArray(parsed.tags) ? parsed.tags : [])
-    .map((t) => (typeof t === "string" ? t : t?.tag))
-    .filter((t) => typeof t === "string" && t.trim())
-    .map((t) => normalizeTag(t)))]
-    .slice(0, maxTags);
+  // Each tag in the library's spelling with its record; the model's group
+  // only places a tag that has none, into a group it may fill.
+  const { tags: rawTags, groupsOf } = parseTags(parsed.tags, maxTags);
+  const fillable = new Set(tagGroups.filter((g) => g.ai_fill).map((g) => g.group_id));
+  const aiTags = [];
+  for (const raw of rawTags) {
+    const resolved = resolveTag(raw);
+    if (!resolved || aiTags.includes(resolved.tag)) continue;
+    ensureTag(resolved, fillable.has(groupsOf[raw]) ? groupsOf[raw] : null, { fillable });
+    aiTags.push(resolved.tag);
+  }
   // The run's tags join the photo's: the previous run's are replaced, the
   // user's stay (and an AI tag the user has is still the user's).
   const userTags = (asset.tags || []).filter((t) => !(asset.aiTags || []).includes(t));
@@ -212,17 +218,28 @@ export function activeAnnotationJob() {
 
 // A tag by hand: onto the photo's tags (no annotation is made — a
 // hand-tagged photo is still un-annotated). One the AI proposed becomes the user's.
-async function addAssetTag(assetId, tag) {
+async function addAssetTag(assetId, tag, group) {
   const asset = assets.find((a) => a.asset_id === assetId);
   if (!asset) return null;
-  const t = normalizeTag(tag);
-  if (t) {
+  const resolved = resolveTag(tag);
+  if (resolved) {
+    ensureTag(resolved, group || null);
+    const t = resolved.tag;
     asset.tags = asset.tags || [];
     if (!asset.tags.includes(t)) asset.tags = [...asset.tags, t];
     asset.aiTags = (asset.aiTags || []).filter((x) => x !== t);
     if (asset.annotation) asset.annotation = { ...asset.annotation, tags: asset.tags };
   }
   return { asset_id: assetId, tags: asset.tags || [] };
+}
+
+function takeOff(asset, tag) {
+  const resolved = resolveTag(tag);
+  const t = resolved ? resolved.tag : null;
+  const same = (x) => x === t || normalizeTag(x) === normalizeTag(tag);
+  asset.tags = (asset.tags || []).filter((x) => !same(x));
+  asset.aiTags = (asset.aiTags || []).filter((x) => !same(x));
+  if (asset.annotation) asset.annotation = { ...asset.annotation, tags: asset.tags };
 }
 
 export const annotationMethods = {
@@ -246,24 +263,40 @@ export const annotationMethods = {
     const asset = assets.find((a) => a.asset_id === assetId);
     return { asset_id: assetId, tags: asset?.tags || [] };
   },
-  addAssetTags: async (assetIds, tags) => {
+  addAssetTags: async (assetIds, tags, group) => {
     const updated = [];
+    const written = [];
     for (const assetId of new Set(assetIds || [])) {
       if (!assets.some((a) => a.asset_id === assetId)) continue;
-      for (const tag of tags || []) await addAssetTag(assetId, tag);
+      for (const tag of tags || []) {
+        const result = await addAssetTag(assetId, tag, group);
+        const spelled = resolveTag(tag)?.tag;
+        if (result && spelled && !written.includes(spelled)) written.push(spelled);
+      }
       updated.push(assetId);
     }
-    return { ok: true, asset_ids: updated, tags: [...new Set((tags || []).map(normalizeTag).filter(Boolean))] };
+    return { ok: true, asset_ids: updated, tags: written };
   },
   removeAssetTag: async (assetId, tag) => {
     const asset = assets.find((a) => a.asset_id === assetId);
     if (!asset) return null;
-    const t = normalizeTag(tag);
-    asset.tags = (asset.tags || []).filter((x) => normalizeTag(x) !== t);
-    asset.aiTags = (asset.aiTags || []).filter((x) => normalizeTag(x) !== t);
-    if (asset.annotation) asset.annotation = { ...asset.annotation, tags: asset.tags };
+    takeOff(asset, tag);
     return { asset_id: assetId, tags: asset.tags };
   },
+  removeAssetTags: async (assetIds, tags) => {
+    const wanted = new Set(assetIds || []);
+    let removed = 0;
+    for (const asset of assets) {
+      if (!wanted.has(asset.asset_id)) continue;
+      for (const tag of tags || []) {
+        const before = (asset.tags || []).length;
+        takeOff(asset, tag);
+        removed += before - asset.tags.length;
+      }
+    }
+    return { ok: true, asset_ids: [...wanted], tags: [...new Set((tags || []).map((tag) => resolveTag(tag)?.tag).filter(Boolean))], removed };
+  },
+  ...tagMethods,
   clearAiLocation: async (assetId) => {
     const asset = assets.find((a) => a.asset_id === assetId);
     if (!asset?.annotation) return asset?.annotation || null;

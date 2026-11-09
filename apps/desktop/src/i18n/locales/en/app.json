@@ -132,7 +132,10 @@
     "added_one": "Tags added to 1 photo",
     "added_other": "Tags added to {{count}} photos",
     "separator": ", ",
-    "failed": "Could not add tags"
+    "failed": "Could not add tags",
+    "removed_one": "Tags removed from 1 photo",
+    "removed_other": "Tags removed from {{count}} photos",
+    "removeFailed": "Could not remove tags"
   },
   "rejected": {
     "failed": "Could not find the rejected photos",

@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import useDismiss from "../ui/useDismiss";
 import api from "../api";
+import { groupLabel, tagLabel, useTagGroups } from "./annotation/tagStore";
 import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
@@ -25,6 +26,7 @@ import {
   Tags,
   SlidersHorizontal,
   Map as MapIcon,
+  Tag,
 } from "lucide-react";
 
 // Labels resolved at render via t(`toolbar.*`); these consts carry i18n keys.
@@ -195,13 +197,29 @@ export default function Toolbar({
   showFilters,
   onToggleFilters,
   filterCount = 0,
+  // Typing in the search box offers matching tags; picking one filters by it.
+  onPickTag,
   activityJobs,
   lastFinishedJob,
   onCancelJob,
   onPauseJob,
   onResumeJob,
 }) {
-  const { t } = useTranslation("nav");
+  const { t, i18n } = useTranslation("nav");
+  const tagGroups = useTagGroups();
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [tagHits, setTagHits] = useState([]);
+  useEffect(() => {
+    if (!onPickTag) return undefined;
+    const term = String(query || "").trim();
+    if (!term) { setTagHits([]); return undefined; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const found = (await Promise.resolve(api.searchFacet({ field: "tag", q: term, limit: 6 })).catch(() => [])) || [];
+      if (!cancelled) setTagHits(found);
+    }, 200);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [query, onPickTag]);
   const { t: tc } = useTranslation("common");
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -300,11 +318,34 @@ export default function Toolbar({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
           // ⌘F (src/shortcuts) focuses this box.
           data-toolbar-search="true"
           placeholder={t("toolbar.search")}
           className="h-8 w-full rounded-md border border-border/70 bg-app py-0 pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
         />
+        {/* The tags the text matches: one click turns the word into a tag filter. */}
+        {onPickTag && searchFocused && tagHits.length > 0 && (
+          <div data-testid="search-tag-suggestions" className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border/60 bg-chrome py-1 shadow-overlay">
+            {tagHits.map((hit) => (
+              <button
+                key={hit.value}
+                type="button"
+                data-search-tag={hit.value}
+                onMouseDown={(e) => { e.preventDefault(); onPickTag(hit.value); setSearchFocused(false); }}
+                className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[11px] text-muted hover:bg-hover hover:text-text"
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Tag className="h-3 w-3 shrink-0 text-muted2" />
+                  <span className="truncate">{tagLabel(hit.value, i18n.language)}</span>
+                  {hit.group_id && <span className="shrink-0 text-[9.5px] text-muted2">{groupLabel(tagGroups.find((g) => g.group_id === hit.group_id), t)}</span>}
+                </span>
+                <span className="shrink-0 text-[10px] tabular-nums text-muted2">{hit.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </label>
 
       <SortDropdown sort={sort} setSort={setSort} inFolder={inFolder} />

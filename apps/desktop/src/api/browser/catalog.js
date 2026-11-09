@@ -5,7 +5,7 @@
 import { familyOf, formatLabel } from "../../../shared/formats.mjs";
 import sampleManifest from "../../../sample-photos/manifest.json";
 import { assets, collections, newAssetId, showDescription } from "./state";
-import { aggregateTags, facetUniverse, matchesFacetFilters, matchesRules, matchesSearch, sortAssets } from "./query";
+import { aggregateTags, facetUniverse, groupedTagOptions, matchesFacetFilters, matchesRules, matchesSearch, sortAssets } from "./query";
 
 const samplePhotos = import.meta.glob("../../../sample-photos/*.jpg", { query: "?url", import: "default", eager: true });
 const sampleThumbs = import.meta.glob("../../../sample-photos/previews/*.jpg", { query: "?url", import: "default", eager: true });
@@ -107,7 +107,7 @@ export const catalogMethods = {
         .filter((row) => row.count > 0),
       cameras: counts(metasFor("camera").map((m) => m.camera_model)),
       lenses: counts(metasFor("lens").map((m) => m.lens_model)),
-      tags: aggregateTags(60, "", facetUniverse("tag", view)),
+      ...groupedTagOptions(facetUniverse("tag", view), { picked: [].concat(view.filters?.tag || []) }),
       extensions: counts(facetUniverse("extension", view).map((a) => familyOf(a.file_name)))
         .map((row) => ({ ...row, label: formatLabel(row.value) })),
       iso: minMax("iso", "iso"),
@@ -132,7 +132,7 @@ export const catalogMethods = {
       .sort((a, b) => b.count - a.count || a.make.localeCompare(b.make))
       .map(({ make, count, models }) => ({ make, count, models: [...models.entries()].sort((a, b) => b[1] - a[1]).map(([m]) => m) }));
   },
-  searchFacet: async ({ field, q = "", limit = 50, ...view } = {}) => {
+  searchFacet: async ({ field, q = "", limit = 50, group, ...view } = {}) => {
     const needle = String(q).toLowerCase();
     const universe = facetUniverse(field, view);
     const pick = (get) => {
@@ -147,7 +147,7 @@ export const catalogMethods = {
     if (field === "camera") return pick((a) => a.image_metadata?.camera_model);
     if (field === "lens") return pick((a) => a.image_metadata?.lens_model);
     if (field === "extension") return pick((a) => familyOf(a.file_name));
-    if (field === "tag") return aggregateTags(limit, needle, universe);
+    if (field === "tag") return aggregateTags(limit, needle, universe, group || null);
     return [];
   },
 

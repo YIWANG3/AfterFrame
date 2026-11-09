@@ -160,7 +160,8 @@
     "smartCollections": "Smart collections",
     "snapshotToFolder": "Copy current photos to a folder",
     "smartUnreadable": "Saved by a newer version of AfterFrame",
-    "editSmartRules": "Edit conditions"
+    "editSmartRules": "Edit conditions",
+    "tags": "Tags"
   },
   "people": {
     "title": "People",
@@ -261,7 +262,8 @@
     "pickedMore": "{{first}} +{{count}}",
     "match": {
       "any": "Any of these",
-      "all": "All of these"
+      "all": "All of these",
+      "byGroup": "By group"
     },
     "locationSource": {
       "label": "Location",
@@ -326,7 +328,12 @@
       "landscape": "Landscape",
       "portrait": "Portrait",
       "square": "Square"
-    }
+    },
+    "tagGroupPick": "Any {{group}} tag",
+    "tagMore_one": "{{count}} more",
+    "tagMore_other": "{{count}} more",
+    "ungrouped": "Ungrouped",
+    "anyInGroup": "Any tag of this group"
   },
   "activity": {
     "title": "Background Activity",
@@ -413,7 +420,9 @@
       "copyName": "Copy Name",
       "openWith": "Open With",
       "flag": "Flag",
-      "addTags": "Add Tags…"
+      "addTags": "Add Tags…",
+      "removeTags_one": "Remove Tags…",
+      "removeTags_other": "Remove Tags…"
     }
   },
   "map": {
@@ -433,5 +442,61 @@
     "reject": "Rejected",
     "none": "Remove Flag",
     "unflagged": "No Flag"
+  },
+  "tagGroups": {
+    "weather": "Weather",
+    "season": "Season",
+    "time": "Time of day",
+    "light": "Light",
+    "subject": "Subject",
+    "place": "Place type",
+    "event": "Occasion",
+    "gear": "Gear",
+    "technique": "Technique",
+    "style": "Style",
+    "color": "Color",
+    "mood": "Mood",
+    "workflow": "Workflow"
+  },
+  "tags": {
+    "title": "Tags",
+    "search": "Search tags",
+    "sort": {
+      "usage": "Most used",
+      "name": "Name"
+    },
+    "newGroup": "New group",
+    "groupNamePlaceholder": "Group name",
+    "ungrouped": "Ungrouped",
+    "emptyGroup": "No tags yet",
+    "empty": "No tags yet. AI annotation and the Inspector add them.",
+    "photos_one": "{{count}} photo",
+    "photos_other": "{{count}} photos",
+    "open": "Show photos",
+    "openHint": "Show the photos with this tag",
+    "moveTo": "Move to…",
+    "rename": "Rename",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "mergeInto": "Merge into…",
+    "mergePlaceholder": "Tag that remains",
+    "selected_one": "{{count}} tag",
+    "selected_other": "{{count}} tags",
+    "clearSelection": "Clear selection",
+    "renameGroup": "Rename group",
+    "deleteGroup": "Delete group",
+    "aiFill": "Let AI fill this group",
+    "aiOff": "AI annotation does not fill this group",
+    "aiOffShort": "manual",
+    "regroup": "Group by vocabulary",
+    "deleteConfirmOne": "Delete the tag “{{tag}}”?",
+    "deleteConfirmMany": "Delete {{count}} tags?",
+    "deleteConfirmMessage": "It comes off {{count}} photos. This cannot be undone.",
+    "deleteGroupConfirm": "Delete the group “{{name}}”?",
+    "deleteGroupMessage": "Its {{count}} tags become ungrouped; no photo loses a tag.",
+    "loadFailed": "Could not load tags",
+    "editFailed": "Could not change tags"
   }
 }

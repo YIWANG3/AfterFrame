@@ -57,7 +57,8 @@
     "failedMsg": "Annotation failed",
     "addTagFailed": "Couldn't add tag",
     "removeTagFailed": "Couldn't remove tag",
-    "failedFallback": "Failed"
+    "failedFallback": "Failed",
+    "tagEditFailed": "Could not change the tag"
   },
   "batch": {
     "title_one": "Add Tags to 1 Photo",
@@ -67,7 +68,16 @@
     "existing": "Tags in this library",
     "removeTag": "Remove {{tag}}",
     "cancel": "Cancel",
-    "apply": "Add"
+    "apply": "Add",
+    "mode": {
+      "add": "Add",
+      "remove": "Remove"
+    },
+    "removeTitle_one": "Remove Tags from {{count}} Photo",
+    "removeTitle_other": "Remove Tags from {{count}} Photos",
+    "removeApply_one": "Remove {{count}}",
+    "removeApply_other": "Remove {{count}}",
+    "nothingToRemove": "These photos have no tags."
   },
   "noTags": "No tags yet",
   "analyzedWith": "By {{model}}, {{date}}",
@@ -80,5 +90,17 @@
     "placeholder": "Describe this photo…",
     "keys": "Enter saves · Shift+Enter new line · Esc cancels",
     "useAi": "Use the AI's description"
+  },
+  "group": {
+    "auto": "Auto"
+  },
+  "chip": {
+    "filter": "Filter by this tag",
+    "moveTo": "Move to group",
+    "ungrouped": "Ungrouped",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "rename": "Rename…",
+    "remove": "Remove from this photo"
   }
 }

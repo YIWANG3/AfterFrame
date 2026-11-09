@@ -64,19 +64,51 @@ export function filterTagsByLanguage(tags, languages) {
 }
 
 // Sidecar annotation.build_system_prompt, step for step: the shared template
-// filled in, then the library's tag sample and the user's instructions.
-export function buildAnnotationSystemPrompt({ languages = ["en", "zh"], maxTags = 10, maxCaptionChars = 200, customInstructions = null, existingTags = [] }) {
+// filled in, then either the tag groups with the library's tags in each
+// (`tagGroups`: [{id, name, examples}], the model answers by group) or the
+// flat tag sample, then the user's instructions.
+export function buildAnnotationSystemPrompt({ languages = ["en", "zh"], maxTags = 10, maxCaptionChars = 200, customInstructions = null, existingTags = [], tagGroups = null }) {
   const wantEn = languages.includes("en");
   const wantZh = languages.includes("zh");
   const langClause = PROMPT.lang_clause[wantEn && wantZh ? "en+zh" : wantEn ? "en" : "zh"];
+  const shape = String(PROMPT[tagGroups ? "tags_grouped" : "tags_flat"]).replaceAll("{max_tags}", String(maxTags));
   let prompt = String(PROMPT.template)
     .replaceAll("{max_caption_chars}", String(maxCaptionChars))
-    .replaceAll("{max_tags}", String(maxTags))
+    .replaceAll("{tags_shape}", shape)
     .replaceAll("{lang_clause}", langClause);
-  if (existingTags.length) {
+  if (tagGroups) {
+    const lines = tagGroups.filter((group) => String(group.id) !== "other").map((group) => {
+      const examples = filterTagsByLanguage((group.examples || []).map(String), languages);
+      return String(PROMPT[examples.length ? "group_line" : "group_line_bare"])
+        .replaceAll("{id}", String(group.id)).replaceAll("{name}", String(group.name || group.id)).replaceAll("{examples}", examples.join(", "));
+    });
+    if (lines.length) prompt += PROMPT.groups_intro + lines.join("\n");
+  } else if (existingTags.length) {
     const sample = filterTagsByLanguage(existingTags, languages).slice(0, PROMPT.tag_reuse_hint_limit);
     if (sample.length) prompt += PROMPT.tag_pool_intro + sample.join(", ");
   }
   if (customInstructions) prompt += PROMPT.custom_instructions_intro + customInstructions.trim();
   return prompt;
+}
+
+// Sidecar annotation.parse_tags: grouped output (an object keyed by group id)
+// or a flat array; "other" is no group. Capped at maxTags over everything.
+export function parseTags(raw, maxTags) {
+  const tags = [];
+  const groupsOf = {};
+  const take = (value, group) => {
+    const text = value == null ? "" : String(typeof value === "string" ? value : value?.tag ?? "").trim();
+    if (!text || tags.includes(text) || tags.length >= maxTags) return;
+    tags.push(text);
+    if (group && group !== "other") groupsOf[text] = group;
+  };
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [group, values] of Object.entries(raw)) {
+      if (Array.isArray(values)) for (const value of values) take(value, group);
+      else if (typeof values === "string") take(values, group);
+    }
+  } else if (Array.isArray(raw)) {
+    for (const value of raw) take(value, null);
+  }
+  return { tags, groupsOf };
 }
