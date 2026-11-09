@@ -9,6 +9,8 @@ import { ACTION_CHIP } from "./filters/Popover";
 import { setOrDelete, toList, fromList } from "./filters/filterValues";
 import TextContainsPopover from "./filters/TextContainsPopover";
 import ListPopover from "./filters/ListPopover";
+import TagGroupPopover from "./filters/TagGroupPopover";
+import { tagMatchMode, tagMatchModes } from "./tags/tagGroups";
 import RangePopover from "./filters/RangePopover";
 import DateRangePopover from "./filters/DateRangePopover";
 import PersonFilterPopover from "./filters/PersonFilterPopover";
@@ -112,8 +114,8 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
     mode: excludedFacets.includes(facet) ? "exclude" : "include",
     onMode: (mode) => onChange(withExcluded(f, facet, mode === "exclude")),
   });
-  const tagModes = toList(f.tag).length > 1 ? ["any", "all", "exclude"] : ["include", "exclude"];
-  const tagMode = excludedFacets.includes("tag") ? "exclude" : f.tag_match === "all" ? "all" : tagModes[0];
+  const tagModes = tagMatchModes(toList(f.tag).length);
+  const tagMode = tagMatchMode({ excluded: excludedFacets.includes("tag"), tagMatch: f.tag_match, pickedCount: toList(f.tag).length });
   const shows = (id) => !hidden.includes(id) || slotActive(id);
   const slotLabel = (id) => ({
     camera: t("filter.camera"), lens: t("filter.lens"), tag: t("filter.tag"), extension: t("filter.format"),
@@ -181,18 +183,25 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
       {shows("lens") && (lenses.length > 0 || toList(f.lens).length > 0) && (
         <ListPopover label={t("filter.lens")} value={f.lens} options={lenses} {...exclusion("lens")} onSelect={(v) => onChange(setFacet("lens", "lens", v))} />
       )}
-      {shows("tag") && (tags.length > 0 || toList(f.tag).length > 0) && (
-        <ListPopover
-          label={t("filter.tag")}
+      {shows("tag") && (tags.length > 0 || toList(f.tag).length > 0 || toList(f.tag_group).length > 0) && (
+        <TagGroupPopover
           value={f.tag}
+          groupValue={f.tag_group}
           options={tags}
-          onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60, ...(facetScope || {}) })}
-          // "All" only means something with several tags; a single pick drops it.
+          groups={facetValues?.tag_groups || []}
+          ungroupedCount={facetValues?.ungrouped_tag_count || 0}
+          onSearch={(q, group) => api.searchFacet({ field: "tag", q, group, limit: 60, ...(facetScope || {}) })}
+          // A match mode only means something with several tags; a single pick drops it.
           onSelect={(v) => onChange(setOrDelete(setFacet("tag", "tag", v), "tag_match", Array.isArray(v) ? f.tag_match : undefined))}
+          // "Any tag of the group" shares the chip and the exclude switch with the tags.
+          onSelectGroups={(v) => onChange(setFacet("tag_group", "tag_group", v))}
           modes={tagModes}
           mode={tagMode}
-          onMode={(mode) => onChange(setOrDelete(withExcluded(f, "tag", mode === "exclude"), "tag_match", mode === "all" ? "all" : undefined))}
-          excludeKey="filter.excludedTag"
+          onMode={(mode) => onChange(setOrDelete(
+            withExcluded(withExcluded(f, "tag", mode === "exclude"), "tag_group", mode === "exclude" && toList(f.tag_group).length > 0),
+            "tag_match", mode === "all" || mode === "by_group" ? mode : undefined,
+          ))}
+          excluded={excludedFacets.includes("tag")}
         />
       )}
       {shows("extension") && (extensions.length > 0 || toList(f.extension).length > 0) && (

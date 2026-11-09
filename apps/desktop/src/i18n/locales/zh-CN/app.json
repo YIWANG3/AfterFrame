@@ -125,7 +125,10 @@
     "added_one": "已给 {{count}} 张照片添加标签",
     "added_other": "已给 {{count}} 张照片添加标签",
     "separator": "、",
-    "failed": "标签添加失败"
+    "failed": "标签添加失败",
+    "removed_one": "已从 1 张照片移除标签",
+    "removed_other": "已从 {{count}} 张照片移除标签",
+    "removeFailed": "无法移除标签"
   },
   "rejected": {
     "failed": "无法读取排除的照片",

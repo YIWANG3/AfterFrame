@@ -47,6 +47,7 @@ export const SHORTCUT_ACTIONS = [
   })),
 
   { id: "photo.addTags", group: "organize", scope: "library", defaults: ["KeyT"] },
+  { id: "photo.removeTags", group: "organize", scope: "library", defaults: ["Shift+KeyT"] },
   { id: "photo.edit", group: "organize", scope: "library", defaults: ["KeyE"] },
   { id: "photo.compare", group: "organize", scope: "gallery", defaults: ["KeyC"] },
   { id: "photo.reveal", group: "organize", scope: "library", defaults: ["Mod+Enter"] },

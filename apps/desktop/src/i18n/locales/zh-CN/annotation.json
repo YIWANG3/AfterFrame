@@ -57,7 +57,8 @@
     "failedMsg": "标注失败",
     "addTagFailed": "无法添加标签",
     "removeTagFailed": "无法移除标签",
-    "failedFallback": "失败"
+    "failedFallback": "失败",
+    "tagEditFailed": "无法修改标签"
   },
   "batch": {
     "title_one": "给 {{count}} 张照片添加标签",
@@ -67,7 +68,16 @@
     "existing": "图库中的标签",
     "removeTag": "移除 {{tag}}",
     "cancel": "取消",
-    "apply": "添加"
+    "apply": "添加",
+    "mode": {
+      "add": "添加",
+      "remove": "移除"
+    },
+    "removeTitle_one": "从 {{count}} 张照片移除标签",
+    "removeTitle_other": "从 {{count}} 张照片移除标签",
+    "removeApply_one": "移除 {{count}} 个",
+    "removeApply_other": "移除 {{count}} 个",
+    "nothingToRemove": "这些照片没有标签。"
   },
   "noTags": "还没有标签",
   "analyzedWith": "{{model}} · {{date}}",
@@ -80,5 +90,17 @@
     "placeholder": "描述一下这张照片…",
     "keys": "回车保存 · Shift+回车换行 · Esc 取消",
     "useAi": "改用 AI 的描述"
+  },
+  "group": {
+    "auto": "自动"
+  },
+  "chip": {
+    "filter": "按这个标签筛选",
+    "moveTo": "移到分组",
+    "ungrouped": "未分组",
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "rename": "重命名…",
+    "remove": "从这张照片移除"
   }
 }

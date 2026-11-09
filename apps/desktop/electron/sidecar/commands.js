@@ -199,10 +199,12 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["camera-makes"]).then((rows) => rows || []);
     },
 
-    searchFacet({ field, q = "", limit, ...view } = {}) {
+    // `group`: tags only — one tag group id, or "ungrouped".
+    searchFacet({ field, q = "", limit, group, ...view } = {}) {
       const argv = ["search-facet", "--field", String(field)];
       if (q) argv.push("--q", String(q));
       if (limit) argv.push("--limit", String(limit));
+      if (group) argv.push("--group", String(group));
       argv.push(...facetViewArgv(view));
       return callJson(argv).then((rows) => rows || []);
     },
@@ -369,15 +371,34 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(argv);
     },
 
-    addAssetTags(assetIds, tags) {
+    // `group`: where a tag NEW to the library goes; an existing tag keeps its group.
+    addAssetTags(assetIds, tags, group) {
       const argv = ["add-asset-tags"];
+      for (const id of assetIds) argv.push("--asset-id", String(id));
+      for (const tag of tags) argv.push("--tag", String(tag));
+      if (group) argv.push("--group", String(group));
+      return callJson(argv);
+    },
+
+    addAssetTag(assetId, tag, group) {
+      const argv = ["add-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)];
+      if (group) argv.push("--group", String(group));
+      return callJson(argv);
+    },
+
+    // Several photos, several tags off, one write (the batch "Remove Tags…").
+    removeAssetTags(assetIds, tags) {
+      const argv = ["remove-asset-tags"];
       for (const id of assetIds) argv.push("--asset-id", String(id));
       for (const tag of tags) argv.push("--tag", String(tag));
       return callJson(argv);
     },
 
-    addAssetTag(assetId, tag) {
-      return callJson(["add-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
+    // The tags on a set of photos with how many carry each: { tags: [{tag, count, group_id}] }.
+    listSelectionTags(assetIds) {
+      const argv = ["list-selection-tags"];
+      for (const id of assetIds) argv.push("--asset-id", String(id));
+      return callJson(argv).then((result) => result?.tags || []);
     },
 
     getAssetTags(assetId) {
@@ -388,10 +409,58 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["remove-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
     },
 
-    listTags(limit) {
+    // The library's tags by group with use counts (db/tags.py list_tags_grouped):
+    // { count, groups: [{group_id, name, kind, ai_fill, tags: [{tag, count, pinned, aliases}]}], ungrouped: [...] }.
+    // `limit` caps each group's list; `query` narrows; `group` is one id or "ungrouped".
+    listTags({ limit, query, group } = {}) {
       const argv = ["list-tags"];
       if (limit) argv.push("--limit", String(limit));
-      return callJson(argv).then((rows) => rows || []);
+      if (query) argv.push("--query", String(query));
+      if (group) argv.push("--group", String(group));
+      return callJson(argv).then((result) => result || { count: 0, groups: [], ungrouped: [] });
+    },
+
+    listTagGroups() {
+      return callJson(["list-tag-groups"]).then((result) => result?.groups || []);
+    },
+
+    // action: create (name, aiFill) | rename (group, name) | delete (group) | ai-fill (group, aiFill).
+    manageTagGroups({ action, group, name, aiFill } = {}) {
+      const argv = ["manage-tag-groups", "--action", String(action)];
+      if (group) argv.push("--group", String(group));
+      if (name != null) argv.push("--name", String(name));
+      if (aiFill != null) argv.push("--ai-fill", aiFill ? "1" : "0");
+      return callJson(argv);
+    },
+
+    // Library-level tag edits; every photo carrying the tag follows.
+    setTagGroup(tags, group) {
+      const argv = ["set-tag-group"];
+      for (const tag of tags) argv.push("--tag", String(tag));
+      if (group) argv.push("--group", String(group));
+      return callJson(argv);
+    },
+
+    renameTag(tag, to) {
+      return callJson(["rename-tag", "--tag", String(tag), "--to", String(to)]);
+    },
+
+    mergeTags(tags, into) {
+      const argv = ["merge-tags", "--into", String(into)];
+      for (const tag of tags) argv.push("--tag", String(tag));
+      return callJson(argv);
+    },
+
+    deleteTag(tag) {
+      return callJson(["delete-tag", "--tag", String(tag)]);
+    },
+
+    pinTag(tag, pinned) {
+      return callJson(["pin-tag", "--tag", String(tag), "--pinned", pinned ? "1" : "0"]);
+    },
+
+    regroupTags() {
+      return callJson(["regroup-tags"]);
     },
 
     getAnnotation(assetId) {

@@ -1,6 +1,6 @@
 # Catalog schema version. This is the only authoritative version declaration;
 # migration code and the public db package both import it from here.
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 
 SCHEMA_STATEMENTS = [
@@ -409,6 +409,40 @@ SCHEMA_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_asset_visual_group ON asset_visual(dup_group)",
+    # Tags as entities (db/tags.py): groups, one row per distinct tag, other
+    # spellings. asset_tags keeps naming tags by string; no FK from it here.
+    """
+    CREATE TABLE IF NOT EXISTS tag_groups (
+        group_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('builtin', 'custom')),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        ai_fill INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS tag_groups_deleted (
+        group_id TEXT PRIMARY KEY
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS tags (
+        tag TEXT PRIMARY KEY,
+        group_id TEXT REFERENCES tag_groups(group_id) ON DELETE SET NULL,
+        pinned INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id)",
+    """
+    CREATE TABLE IF NOT EXISTS tag_aliases (
+        alias TEXT PRIMARY KEY,
+        tag TEXT NOT NULL REFERENCES tags(tag) ON UPDATE CASCADE ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_tag_aliases_tag ON tag_aliases(tag)",
     """
     CREATE VIRTUAL TABLE IF NOT EXISTS asset_location_rtree USING rtree(
         location_id,

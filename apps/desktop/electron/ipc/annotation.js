@@ -155,8 +155,9 @@ function register({
     });
   }));
 
-  ipcMain.handle("workspace:add-asset-tag", guarded(catalogRequired(), (_event, assetId, tag) =>
-    (assetId && tag ? commands.addAssetTag(assetId, tag) : null)));
+  // `group`: where a tag new to the library goes (the Inspector's picker).
+  ipcMain.handle("workspace:add-asset-tag", guarded(catalogRequired(), (_event, assetId, tag, group) =>
+    (assetId && tag ? commands.addAssetTag(assetId, tag, group || undefined) : null)));
 
   // A photo's tags, hand-added and AI alike: { asset_id, tags }.
   ipcMain.handle("workspace:get-asset-tags", async (_event, assetId) => {
@@ -166,15 +167,47 @@ function register({
   });
 
   // Several photos, several tags, one write (the gallery's "Add Tags…").
-  ipcMain.handle("workspace:add-asset-tags", guarded(catalogRequired(), (_event, assetIds, tags) => {
+  ipcMain.handle("workspace:add-asset-tags", guarded(catalogRequired(), (_event, assetIds, tags, group) => {
     const ids = [...new Set((assetIds || []).filter(Boolean))];
     const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
     if (!ids.length || !clean.length) return null;
-    return commands.addAssetTags(ids, clean);
+    return commands.addAssetTags(ids, clean, group || undefined);
   }));
 
   ipcMain.handle("workspace:remove-asset-tag", guarded(catalogRequired(), (_event, assetId, tag) =>
     (assetId && tag ? commands.removeAssetTag(assetId, tag) : null)));
+
+  // Several photos, several tags off, one write (the batch "Remove Tags…"),
+  // and its candidates: the tags the selection carries.
+  ipcMain.handle("workspace:remove-asset-tags", guarded(catalogRequired(), (_event, assetIds, tags) => {
+    const ids = [...new Set((assetIds || []).filter(Boolean))];
+    const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
+    if (!ids.length || !clean.length) return null;
+    return commands.removeAssetTags(ids, clean);
+  }));
+  ipcMain.handle("workspace:list-selection-tags", guarded([], (_event, assetIds) => {
+    const ids = [...new Set((assetIds || []).filter(Boolean))];
+    return ids.length ? commands.listSelectionTags(ids) : [];
+  }));
+
+  // ── Tags as entities: groups, aliases, pins (db/tags.py) ─────────────────
+  // Library-level edits; the renderer refetches its tag caches after each.
+  ipcMain.handle("workspace:list-tags", guarded({ count: 0, groups: [], ungrouped: [] }, (_event, options) =>
+    commands.listTags(options || {})));
+  ipcMain.handle("workspace:list-tag-groups", guarded([], () => commands.listTagGroups()));
+  ipcMain.handle("workspace:manage-tag-groups", guarded(catalogRequired(), (_event, options) =>
+    commands.manageTagGroups(options || {})));
+  ipcMain.handle("workspace:set-tag-group", guarded(catalogRequired(), (_event, tags, group) =>
+    commands.setTagGroup([...new Set((tags || []).filter(Boolean))], group || undefined)));
+  ipcMain.handle("workspace:rename-tag", guarded(catalogRequired(), (_event, tag, to) =>
+    (tag && to ? commands.renameTag(tag, to) : null)));
+  ipcMain.handle("workspace:merge-tags", guarded(catalogRequired(), (_event, tags, into) =>
+    (into ? commands.mergeTags([...new Set((tags || []).filter(Boolean))], into) : null)));
+  ipcMain.handle("workspace:delete-tag", guarded(catalogRequired(), (_event, tag) =>
+    (tag ? commands.deleteTag(tag) : null)));
+  ipcMain.handle("workspace:pin-tag", guarded(catalogRequired(), (_event, tag, pinned) =>
+    (tag ? commands.pinTag(tag, !!pinned) : null)));
+  ipcMain.handle("workspace:regroup-tags", guarded(catalogRequired(), () => commands.regroupTags()));
 
   // User veto of a wrong AI location guess — nulls the annotation's
   // location and drops the resolved map point in one step.

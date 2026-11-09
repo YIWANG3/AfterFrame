@@ -166,6 +166,7 @@
     "snapshotToFolder": "把当前照片复制到一个文件夹",
     "smartUnreadable": "由更新版本的 AfterFrame 保存",
     "editSmartRules": "编辑条件",
+    "tags": "标签",
     "newSubfolder": "新建子文件夹",
     "expand": "展开",
     "collapse": "折叠",
@@ -267,7 +268,8 @@
     "pickedMore": "{{first}} +{{count}}",
     "match": {
       "any": "含任意一个",
-      "all": "同时含全部"
+      "all": "同时含全部",
+      "byGroup": "按组"
     },
     "locationSource": {
       "label": "位置",
@@ -332,7 +334,12 @@
       "landscape": "横图",
       "portrait": "竖图",
       "square": "方图"
-    }
+    },
+    "tagGroupPick": "有{{group}}标签",
+    "tagMore_one": "还有 {{count}} 个",
+    "tagMore_other": "还有 {{count}} 个",
+    "ungrouped": "未分组",
+    "anyInGroup": "有这组里任意一个标签"
   },
   "activity": {
     "title": "后台活动",
@@ -419,7 +426,9 @@
       "copyName": "复制名称",
       "openWith": "打开方式",
       "flag": "旗标",
-      "addTags": "添加标签…"
+      "addTags": "添加标签…",
+      "removeTags_one": "移除标签…",
+      "removeTags_other": "移除标签…"
     }
   },
   "map": {
@@ -439,5 +448,61 @@
     "reject": "排除",
     "none": "取消旗标",
     "unflagged": "无旗标"
+  },
+  "tagGroups": {
+    "weather": "天气",
+    "season": "季节",
+    "time": "时段",
+    "light": "光线",
+    "subject": "画面元素",
+    "place": "地点类型",
+    "event": "场合",
+    "gear": "器材",
+    "technique": "构图手法",
+    "style": "风格",
+    "color": "色彩",
+    "mood": "情绪",
+    "workflow": "用途"
+  },
+  "tags": {
+    "title": "标签",
+    "search": "搜索标签",
+    "sort": {
+      "usage": "按用量",
+      "name": "按名称"
+    },
+    "newGroup": "新建分组",
+    "groupNamePlaceholder": "分组名称",
+    "ungrouped": "未分组",
+    "emptyGroup": "还没有标签",
+    "empty": "还没有标签。AI 标注和检查器里添加的标签会出现在这里。",
+    "photos_one": "{{count}} 张",
+    "photos_other": "{{count}} 张",
+    "open": "查看照片",
+    "openHint": "查看带这个标签的照片",
+    "moveTo": "移到…",
+    "rename": "重命名",
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "delete": "删除",
+    "cancel": "取消",
+    "mergeInto": "合并到…",
+    "mergePlaceholder": "保留的标签名",
+    "selected_one": "{{count}} 个标签",
+    "selected_other": "{{count}} 个标签",
+    "clearSelection": "取消选择",
+    "renameGroup": "重命名分组",
+    "deleteGroup": "删除分组",
+    "aiFill": "让 AI 填这个组",
+    "aiOff": "AI 标注不会往这个组里填标签",
+    "aiOffShort": "手动",
+    "regroup": "按词表归组",
+    "deleteConfirmOne": "删除标签「{{tag}}」？",
+    "deleteConfirmMany": "删除 {{count}} 个标签？",
+    "deleteConfirmMessage": "会从 {{count}} 张照片上移除，无法撤销。",
+    "deleteGroupConfirm": "删除分组「{{name}}」？",
+    "deleteGroupMessage": "组里的 {{count}} 个标签会变成未分组，照片上的标签不会丢。",
+    "loadFailed": "无法加载标签",
+    "editFailed": "无法修改标签"
   }
 }

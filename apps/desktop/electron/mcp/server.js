@@ -27,6 +27,7 @@ Domain model:
 - RESOURCE SET (version stack): a family of versions of the same photo — original, crops, text overlays, AI repaints. crop_assets/add_text add versions; originals are never modified.
 - COLLECTION: a folder is a manual album. A SMART collection is a saved filter (the same conditions search_assets takes) that fills itself and stays current; create and edit them with manage_collections. Photos cannot be added to a smart collection by hand.
 - PERSON: a face group produced by the offline face recognizer (list_people). person_id filters search_assets; update_person renames/merges/hides groups.
+- TAG: a short label on a photo, written by hand or by AI annotation. Every tag belongs to one TAG GROUP (weather, time, subject, place, gear, mood, … or a custom group) or is ungrouped; a tag may have aliases (its Chinese or English spelling, a merged-away name) that resolve to it. list_tags shows them by group; update_assets adds/removes tags on photos; manage_tags moves, renames, merges, deletes and pins tags and edits groups; search_assets filters by tag (tag_match: any | all | by_group) and by tag_group.
 - LOCATION: one effective location per asset, priority manual > EXIF GPS > AI-resolved place guess. browse_map lists points; search_assets geo filters by area; set_asset_location pins manually.
 - JOB: long-running background work (import / annotation / previews / people indexing). Jobs appear in the app's JobDock where the user can watch, pause and cancel them.
 

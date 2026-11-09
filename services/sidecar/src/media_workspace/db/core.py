@@ -201,6 +201,12 @@ def _apply_latest_schema(connection: sqlite3.Connection) -> None:
         _ensure_column(connection, table_name, column_name, column_spec)
     _backfill_asset_files(connection)
     _drop_hand_tag_stand_ins(connection)
+    # Tags as entities (db/tags.py): the built-in groups, and a row for every
+    # tag a photo carries, however it got there.
+    from .tags import ensure_builtin_groups, ensure_tag_rows
+
+    ensure_builtin_groups(connection)
+    ensure_tag_rows(connection)
     for name, sql_type, json_path in _FACET_COLUMNS:
         _ensure_column(
             connection,

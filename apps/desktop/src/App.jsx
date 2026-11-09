@@ -52,6 +52,7 @@ import ToastStack, { useToasts } from "./components/Toast";
 import DevStaleNotice from "./components/DevStaleNotice";
 import { ConfirmHost, confirm, choose } from "./components/confirm";
 import TagBatchDialog from "./components/TagBatchDialog";
+import TagsView from "./components/TagsView";
 import { isBinding, loadShortcuts, matchShortcut, shortcutLabel } from "./shortcuts/store";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
@@ -98,7 +99,7 @@ export default function App() {
   // null opens the tab it was left on.
   const [settingsTab, setSettingsTab] = useState(null);
   // The photos "Add Tags…" is open for (null when it's closed).
-  const [tagDialogIds, setTagDialogIds] = useState(null);
+  const [tagDialog, setTagDialog] = useState(null); // { ids, mode: "add" | "remove" }
   const [sampleBusy, setSampleBusy] = useState(false);
   const [proofMode, setProofMode] = useState(false);
   const [layoutItems, setLayoutItems] = useState([]);
@@ -857,23 +858,24 @@ export default function App() {
     setSettingsOpen(true);
   }
 
-  function openTagDialog(ids) {
+  function openTagDialog(ids, mode = "add") {
     const list = (ids?.length ? ids : targetAssetIds()).filter(Boolean);
-    if (list.length) setTagDialogIds(list);
+    if (list.length) setTagDialog({ ids: list, mode });
   }
 
-  async function applyBatchTags(tags) {
-    const ids = tagDialogIds || [];
+  async function applyBatchTags(tags, mode = "add") {
+    const ids = tagDialog?.ids || [];
+    const removing = mode === "remove";
     try {
-      const result = await workspace.addTagsToAssets(ids, tags);
-      setTagDialogIds(null);
+      const result = removing ? await workspace.removeTagsFromAssets(ids, tags) : await workspace.addTagsToAssets(ids, tags);
+      setTagDialog(null);
       pushToast({
-        title: t("batchTags.added", { count: result?.asset_ids?.length ?? ids.length }),
+        title: t(removing ? "batchTags.removed" : "batchTags.added", { count: result?.asset_ids?.length ?? ids.length }),
         message: tags.join(t("batchTags.separator")),
         ttl: 3500,
       });
     } catch (error) {
-      pushToast({ title: t("batchTags.failed"), message: String(error?.message || error), tone: "error", ttl: 6000 });
+      pushToast({ title: t(removing ? "batchTags.removeFailed" : "batchTags.failed"), message: String(error?.message || error), tone: "error", ttl: 6000 });
     }
   }
 
@@ -1040,6 +1042,10 @@ export default function App() {
         if (!hasTarget) return false;
         openTagDialog();
         return true;
+      case "photo.removeTags":
+        if (!hasTarget) return false;
+        openTagDialog(null, "remove");
+        return true;
       case "photo.edit":
         if (!lightboxOpen && !workspace.selectedAssetId) return false;
         openEditor();
@@ -1120,7 +1126,7 @@ export default function App() {
     }
     // The rest belong to the grid and the lightbox: not while the editor,
     // a compare, a collage or a dialog is over them.
-    if (editorItem || viewMode === "people" || compareState || collageItems || tagDialogIds) return;
+    if (editorItem || viewMode === "people" || compareState || collageItems || tagDialog) return;
     if (event.defaultPrevented || typing) return;
 
     if (featureView) {
@@ -1227,6 +1233,8 @@ export default function App() {
           peopleMode={viewMode === "people"}
           discoverMode={viewMode === "discover"}
           foldersMode={viewMode === "folders"}
+          tagsMode={viewMode === "tags"}
+          onOpenTags={() => openView("tags")}
           onOpenDiscover={() => openView("discover")}
           onOpenView={(id) => {
             openView(id);
@@ -1279,6 +1287,17 @@ export default function App() {
                 onOpenFolders={() => openView("folders")}
               />
             </>
+          ) : viewMode === "tags" ? (
+            <TagsView
+              catalogRevision={workspace.catalogRevision}
+              onOpenTag={(tag) => {
+                goToGallery();
+                clearPeopleGroupFilter();
+                workspace.setFilters({ ...(workspace.filters || {}), tag });
+                setShowFilters(true);
+              }}
+              pushToast={pushToast}
+            />
           ) : viewMode === "folders" ? (
             <FoldersView
               collections={workspace.collections}
@@ -1304,6 +1323,11 @@ export default function App() {
                       : peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : tNav(`browse.${workspace.status}`, filterTitle(workspace.status))))}
                 query={workspace.query}
                 setQuery={workspace.setQuery}
+                onPickTag={(tag) => {
+                  workspace.setQuery("");
+                  workspace.setFilters({ ...(workspace.filters || {}), tag });
+                  setShowFilters(true);
+                }}
                 sort={workspace.sort}
                 inFolder={!!workspace.activeCollectionId}
                 hasSubfolders={!!workspace.activeCollectionId && descendantIds(workspace.collections, workspace.activeCollectionId).length > 0}
@@ -1465,6 +1489,7 @@ export default function App() {
                   onAnnotate={(ids, opts) => runAnnotation(ids, opts)}
                   onFlag={(flag, ids) => applyFlag(flag, { ids })}
                   onAddTags={openTagDialog}
+                  onRemoveTags={(ids) => openTagDialog(ids, "remove")}
                   onFindSimilar={api.has("findSimilar") ? findSimilar : undefined}
                   onShowInAllAssets={workspace.narrowed ? showInAllAssets : undefined}
                 />
@@ -1494,7 +1519,7 @@ export default function App() {
         ) : (
           <Inspector
             // The folder page has no photo selection; the pane shows its empty state.
-            detail={viewMode === "folders" ? null : workspace.detail}
+            detail={viewMode === "folders" || viewMode === "tags" ? null : workspace.detail}
             onRatingChange={applyRating}
             onFlagChange={(flag) => applyFlag(flag)}
             onDescriptionChange={(text) => workspace.setAssetDescription([workspace.detail?.asset_id], text)}
@@ -1565,11 +1590,13 @@ export default function App() {
         summary={workspace.summary}
         onSwitchCatalog={workspace.switchCatalog}
       />
-      {tagDialogIds && (
+      {tagDialog && (
         <TagBatchDialog
-          count={tagDialogIds.length}
+          assetIds={tagDialog.ids}
+          count={tagDialog.ids.length}
+          mode={tagDialog.mode}
           onApply={applyBatchTags}
-          onClose={() => setTagDialogIds(null)}
+          onClose={() => setTagDialog(null)}
         />
       )}
       <ConfirmHost />

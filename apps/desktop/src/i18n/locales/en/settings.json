@@ -377,6 +377,7 @@
       },
       "photo": {
         "addTags": "Add Tags…",
+        "removeTags": "Remove Tags…",
         "edit": "Edit",
         "compare": "Compare Two Photos",
         "reveal": "Show in Finder",

@@ -111,12 +111,27 @@ export default function useAssetMutations(bridgeRef) {
     const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
     if (!targetIds.length || !clean.length) return null;
     const result = await api.addAssetTags(targetIds, clean);
+    afterTagWrite(bridge, targetIds);
+    return result;
+  }
+
+  // The gallery's "Remove Tags…": every tag off every photo, in one write.
+  async function removeTagsFromAssets(assetIds, tags) {
+    const bridge = bridgeRef.current;
+    const targetIds = uniqueIds(assetIds);
+    const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
+    if (!targetIds.length || !clean.length) return null;
+    const result = await api.removeAssetTags(targetIds, clean);
+    afterTagWrite(bridge, targetIds);
+    return result;
+  }
+
+  function afterTagWrite(bridge, targetIds) {
     invalidateTags(targetIds);
     bridge.loadFacetValues();
     if (bridge.hasSmartCollections()) void bridge.loadCollections();
     if (scopeSelectsByTag(bridge.scopeRef.current) && !bridge.revealRef.current) void bridge.refreshBrowse();
     bridge.bumpCatalogRevision();
-    return result;
   }
 
   // The rows just left the list the server pages through (deleted, or taken
@@ -169,6 +184,7 @@ export default function useAssetMutations(bridgeRef) {
     setAssetFlag,
     setAssetDescription,
     addTagsToAssets,
+    removeTagsFromAssets,
     dropLoadedItems,
     deleteImageAssets,
     deleteImageAssetsFromDisk,

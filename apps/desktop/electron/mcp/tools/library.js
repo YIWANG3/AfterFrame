@@ -30,8 +30,8 @@ module.exports = (ctx) => {
           rules: {
             type: "object",
             description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
-              "search_assets (camera, lens, tag, extension, country and city take one value or a list meaning any of them; tag_match: 'all' requires every tag): query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
-              "date_from, date_to, date_within_days, rating_min, rating_max (0 = unrated), flag (pick | reject | none), orientation, tag, asset_type, extension, people, person_id, annotated, location_source, country, city, color, color_tolerance, caption_contains, ocr_contains, path_contains, " +
+              "search_assets (camera, lens, tag, tag_group, extension, country and city take one value or a list meaning any of them; tag_match: 'all' requires every tag, 'by_group' makes same-group tags alternatives): query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
+              "date_from, date_to, date_within_days, rating_min, rating_max (0 = unrated), flag (pick | reject | none), orientation, tag, tag_match, tag_group, asset_type, extension, people, person_id, annotated, location_source, country, city, color, color_tolerance, caption_contains, ocr_contains, path_contains, " +
               "collection_id ('only photos in that folder'; add include_descendants: true for the folders under it too); " +
               "exclude (a list of those condition names to turn into their opposite: exclude ['collection_id'] = not in that folder); " +
               "any_of (a list of groups of the same conditions, at least one of which must hold: OR).",

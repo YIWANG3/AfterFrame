@@ -89,7 +89,7 @@ function SubMenuItem({ icon: Icon, label, shortcut, onClick, ...rest }) {
   );
 }
 
-export default function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, targetFolderId = null, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onFindSimilar, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopy, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onClose }) {
+export default function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, targetFolderId = null, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onFindSimilar, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopy, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onRemoveTags, onClose }) {
   const { t, i18n } = useTranslation("nav");
   const ref = useRef(null);
   useDismiss(ref, onClose);
@@ -129,6 +129,9 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
       )}
       {onAddTags && (
         <MenuItem icon={Tag} label={t("gallery.menu.addTags", { count: assetIds?.length || 1 })} shortcut={shortcutLabel("photo.addTags")} onClick={() => { onAddTags(); onClose(); }} />
+      )}
+      {onRemoveTags && (
+        <MenuItem icon={Tag} label={t("gallery.menu.removeTags", { count: assetIds?.length || 1 })} shortcut={shortcutLabel("photo.removeTags")} onClick={() => { onRemoveTags(); onClose(); }} />
       )}
       {onShowInAllAssets && (
         <MenuItem icon={LocateFixed} label={t("gallery.menu.showInAllAssets")} onClick={() => { onShowInAllAssets(item.asset_id); onClose(); }} />
