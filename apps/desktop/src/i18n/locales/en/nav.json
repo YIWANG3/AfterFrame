@@ -249,6 +249,11 @@
     "annotated": "AI annotated",
     "notAnnotated": "Not annotated",
     "annotatedHint": "Filter by AI annotation presence — click to cycle with / without / off",
+    "hasRaw": {
+      "label": "RAW",
+      "true": "With RAW",
+      "false": "No RAW"
+    },
     "iso": "ISO",
     "aperture": "Aperture",
     "focal": "Focal",

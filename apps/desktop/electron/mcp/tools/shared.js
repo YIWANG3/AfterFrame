@@ -71,7 +71,7 @@ const ONE_OR_MANY = { anyOf: [{ type: "string" }, { type: "array", items: { type
 const FACET_ARG_KEYS = [
   "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
   "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "rating_max", "flag", "orientation", "tag", "tag_match", "tag_group",
-  "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
+  "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated", "has_raw",
   "location_source", "country", "city", "color", "color_tolerance", "caption_contains", "ocr_contains", "path_contains",
 ];
 // The conditions an agent may flip with `exclude`, by the names it sends them

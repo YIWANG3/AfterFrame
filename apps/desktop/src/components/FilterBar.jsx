@@ -50,6 +50,8 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
   const tags = facetValues?.tags || [];
   const extensions = facetValues?.extensions || [];
   const locationSources = facetValues?.location_sources || [];
+  // With / without a bound RAW file; empty until the catalog has any pairing.
+  const rawOptions = facetValues?.has_raw || [];
   const countries = facetValues?.countries || [];
   const cities = facetValues?.cities || [];
   // Places are stored by their canonical value (ISO code, English city name)
@@ -120,7 +122,7 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
   const slotLabel = (id) => ({
     camera: t("filter.camera"), lens: t("filter.lens"), tag: t("filter.tag"), extension: t("filter.format"),
     location_source: t("filter.locationSource.label"), country: t("filter.country"), city: t("filter.city"),
-    text: t("filter.textContains"), color: t("filter.color"), people: t("filter.people"), annotated: t("filter.annotated"),
+    text: t("filter.textContains"), color: t("filter.color"), people: t("filter.people"), annotated: t("filter.annotated"), has_raw: t("filter.hasRaw.label"),
     person_group: t("filter.person"), in_collection: t("filter.folder"), iso: t("filter.iso"), aperture: t("filter.aperture"),
     focal: t("filter.focal"), date: t("filter.date"), rating: t("filter.rating"), flag: t("filter.flag"), orientation: t("filter.orientation.label"),
   })[id];
@@ -289,6 +291,16 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
           <Sparkles className="h-3 w-3" />
           {f.annotated === "without" ? t("filter.notAnnotated") : t("filter.annotated")}
         </button>
+      )}
+
+      {shows("has_raw") && (rawOptions.length > 0 || toList(f.has_raw).length > 0) && (
+        <ListPopover
+          label={t("filter.hasRaw.label")}
+          value={f.has_raw}
+          options={rawOptions}
+          labelOf={(value) => t(`filter.hasRaw.${value}`, { defaultValue: String(value) })}
+          onSelect={(v) => onChange(setFacet("has_raw", "has_raw", v))}
+        />
       )}
 
       {shows("person_group") && api.can("people") && (

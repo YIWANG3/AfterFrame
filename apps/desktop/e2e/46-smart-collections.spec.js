@@ -367,11 +367,91 @@ test("demoting a photo below a view's rating condition takes it out of the grid 
   await rate(second, "5");
 });
 
+// The sidebar's two sections share its height. Open, the smart collections
+// take at most two fifths of it and scroll inside; the folders keep the rest.
+test("with many smart collections the folders keep their room", async () => {
+  const tool = (name, args) => mcpCall(mcpPort, "tools/call", { name, arguments: args })
+    .then((result) => JSON.parse(result.content[0].text));
+  const made = [];
+  for (let i = 0; i < 24; i += 1) {
+    made.push((await tool("manage_collections", { action: "create", name: `Bulk ${String(i).padStart(2, "0")}`, rules: { rating_min: 1 } })).collection_id);
+  }
+  await expect(smartRow("Bulk 23")).toBeAttached();
+  const section = window.locator("[data-smart-collections]");
+  const nav = await window.locator("aside nav").boundingBox();
+  const sectionBox = await section.boundingBox();
+  expect(sectionBox.height).toBeLessThanOrEqual(nav.height * 0.4 + 1);
+  // The rows overflow the section and scroll inside it.
+  const list = section.locator("[data-smart-collections-list]");
+  expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  // The folders still have a usable list: the snapshot folder is on screen.
+  const folderScroll = async () => (await window.getByTestId("sidebar-folder-scroll").boundingBox()).height;
+  expect(await folderScroll()).toBeGreaterThan(120);
+  await expect(window.locator("[data-collection-id]").filter({ hasText: "Five stars (snapshot)" })).toBeVisible();
+  // A short window (the CI runner's screen) squeezes the smart collections
+  // first: the folders keep their rows, the collections still show some.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 560));
+  await expect.poll(folderScroll).toBeGreaterThan(120);
+  expect((await section.boundingBox()).height).toBeGreaterThan(80);
+  expect(await list.evaluate((el) => el.clientHeight > 0 && el.scrollHeight > el.clientHeight)).toBe(true);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760));
+  await expect.poll(async () => (await section.boundingBox()).height).toBeLessThanOrEqual(nav.height * 0.4 + 1);
+  for (const id of made) await tool("manage_collections", { action: "delete", collection_id: id });
+  await expect(smartRow("Bulk 00")).toHaveCount(0);
+});
+
+test("each section folds to its heading, and a folded section marks what is showing", async () => {
+  const smart = window.locator("[data-smart-collections]");
+  const folders = window.locator("[data-sidebar-folders]");
+  const smartToggle = window.locator("[data-sidebar-section-toggle='smart']");
+  const foldersToggle = window.locator("[data-sidebar-section-toggle='folders']");
+
+  // Inside a smart collection, folding its section leaves a dot by the heading.
+  await smartRow("Five stars").click();
+  await smartToggle.click();
+  await expect(smart).toHaveAttribute("data-open", "false");
+  await expect(window.locator("[data-smart-collection]")).toHaveCount(0);
+  await expect(smartToggle.locator("[data-section-active]")).toBeVisible();
+  // Leaving it takes the dot away; the section stays folded.
+  await window.getByRole("button", { name: "All Assets" }).click();
+  await expect(smartToggle.locator("[data-section-active]")).toHaveCount(0);
+  await expect(smart).toHaveAttribute("data-open", "false");
+  // Folded, the folders give the smart collections the whole height.
+  await smartToggle.click();
+  await expect(smart).toHaveAttribute("data-open", "true");
+  await expect(smartRow("Five stars")).toBeVisible();
+
+  const snapshot = window.locator("[data-collection-id]").filter({ hasText: "Five stars (snapshot)" });
+  await snapshot.click();
+  await expect(snapshot).toHaveClass(/bg-selected/);
+  await foldersToggle.click();
+  await expect(folders).toHaveAttribute("data-open", "false");
+  await expect(window.locator("[data-collection-id]")).toHaveCount(0);
+  await expect(window.getByTestId("sidebar-folder-scroll")).toHaveCount(0);
+  await expect(foldersToggle.locator("[data-section-active]")).toBeVisible();
+  // The folder tools stay on the folded heading; "new folder" unfolds it to show the field.
+  await window.getByTitle("New folder").click();
+  await expect(folders).toHaveAttribute("data-open", "true");
+  await expect(window.getByTestId("sidebar-folder-scroll").locator("input")).toBeVisible();
+  await window.keyboard.press("Escape");
+
+  // Leave both folded: the restart below must find them so.
+  await foldersToggle.click();
+  await smartToggle.click();
+  await expect(folders).toHaveAttribute("data-open", "false");
+  await expect(smart).toHaveAttribute("data-open", "false");
+});
+
 test("smart collections survive a restart, and photos cannot be added to one by hand", async () => {
   await collectCoverage(app); // the restart path bypasses closeApp
   await app.close();
   ({ app, window } = await launchApp({ testName: "smart-collections", reuseUserDataDir: userDataDir, keepCatalog: true }));
-  await expect(smartRow("Five stars")).toBeVisible({ timeout: 15_000 });
+  // The folds are remembered.
+  await expect(window.locator("[data-smart-collections]")).toHaveAttribute("data-open", "false", { timeout: 15_000 });
+  await expect(window.locator("[data-sidebar-folders]")).toHaveAttribute("data-open", "false");
+  await window.locator("[data-sidebar-section-toggle='smart']").click();
+  await window.locator("[data-sidebar-section-toggle='folders']").click();
+  await expect(smartRow("Five stars")).toBeVisible();
   await expect(smartRow("This month")).toBeVisible();
 
   const error = await window.evaluate(async () => {
