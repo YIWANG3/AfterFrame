@@ -298,7 +298,11 @@ test("a choice changed where nothing announced it (a settings import) shows on t
   await openFrameToolOn(OTHER_CANON);
   await expect(brandRow()).toHaveAttribute("data-camera-logo-choice", round.id);
   await window.evaluate(() => window.mediaWorkspace.setBrandLogo("canon", null));
+  // Leave the tool and come back. The two switches are separate renders only
+  // once the first has shown: back to back on a slow machine React folds them
+  // into one, the tool never goes away, and there is no "next visit".
   await window.evaluate(() => window.__afterframeTest.setTool("text"));
+  await expect.poll(() => window.evaluate(() => window.__afterframeTest.getTool())).toBe("text");
   await window.evaluate(() => window.__afterframeTest.setTool("frame"));
   await expect(brandRow()).toHaveAttribute("data-camera-logo-choice", "");
   await window.evaluate((id) => window.mediaWorkspace.setBrandLogo("canon", id), round.id);
