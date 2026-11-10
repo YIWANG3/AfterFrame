@@ -53,7 +53,8 @@
     },
     "displayMode": "Layout",
     "withSubfolders": "Showing subfolders too",
-    "thisFolderOnly": "Showing this folder only"
+    "thisFolderOnly": "Showing this folder only",
+    "findList": "Find by List…"
   },
   "discover": {
     "recentTitle": "Recently Added",
@@ -355,7 +356,8 @@
     "tagMore_one": "{{count}} more",
     "tagMore_other": "{{count}} more",
     "ungrouped": "Ungrouped",
-    "anyInGroup": "Any tag of this group"
+    "anyInGroup": "Any tag of this group",
+    "clearFileNames": "Remove this list"
   },
   "activity": {
     "title": "Background Activity",
@@ -520,5 +522,27 @@
     "deleteGroupMessage": "Its {{count}} tags become ungrouped; no photo loses a tag.",
     "loadFailed": "Could not load tags",
     "editFailed": "Could not change tags"
+  },
+  "findList": {
+    "title": "Find by List",
+    "placeholder": "Paste the numbers or file names a client sent\n1723, 1746 1754",
+    "none": "Not found",
+    "broad": "Matches {{count}} photos: too broad, left out",
+    "found_one": "{{count}} photo found",
+    "found_other": "{{count}} photos found",
+    "missing_one": "{{count}} not found",
+    "missing_other": "{{count}} not found",
+    "tooBroad_one": "{{count}} too broad",
+    "tooBroad_other": "{{count}} too broad",
+    "destination": "Add to",
+    "newFolder": "New Folder",
+    "defaultFolder": "Untitled",
+    "cancel": "Cancel",
+    "apply_one": "Add {{count}} Photo",
+    "apply_other": "Add {{count}} Photos",
+    "added_one": "Added {{count}} photo to “{{name}}”",
+    "added_other": "Added {{count}} photos to “{{name}}”",
+    "failed": "Couldn't add to the folder",
+    "filter": "Filter"
   }
 }

@@ -52,6 +52,18 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(argv).then((rows) => rows || []);
     },
 
+    // Find by list: each keyword looked up by file name inside one place (a
+    // status, a smart collection's `base`, or a folder); db/browse.py
+    // find_by_keywords. One JSON argument: a client's list runs to hundreds.
+    findByKeywords({ keywords = [], status = "all", collectionId, includeDescendants, base } = {}) {
+      const argv = ["find-by-keywords", "--keywords", JSON.stringify(keywords.map(String))];
+      if (collectionId) argv.push("--collection-id", String(collectionId));
+      else argv.push("--status", String(status));
+      if (collectionId && includeDescendants) argv.push("--include-descendants");
+      if (base && !collectionId) argv.push("--base", JSON.stringify(base));
+      return callJson(argv);
+    },
+
     // Lightweight location points for the map. Mirrors the gallery scope
     // (status/collection/search/facets); the sidecar ignores filters.geo so
     // the map keeps showing clusters outside the current viewport.

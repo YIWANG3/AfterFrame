@@ -12,6 +12,7 @@ import {
   Plus,
   RotateCw,
   Search,
+  ListChecks,
   LayoutGrid,
   Grid2x2,
   LayoutDashboard,
@@ -178,6 +179,8 @@ export default function Toolbar({
   title,
   query,
   setQuery,
+  // Opens "Find by List…" (FindByListDialog): a client's list of picks.
+  onFindByList,
   sort,
   setSort,
   inFolder = false,
@@ -328,8 +331,24 @@ export default function Toolbar({
           // ⌘F (src/shortcuts) focuses this box.
           data-toolbar-search="true"
           placeholder={t("toolbar.search")}
-          className="h-8 w-full rounded-md border border-border/70 bg-app py-0 pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
+          className={cx(
+            "h-8 w-full rounded-md border border-border/70 bg-app py-0 pl-7 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50",
+            onFindByList ? "pr-7" : "pr-2",
+          )}
         />
+        {/* A whole list of names at once, where one name is typed. */}
+        {onFindByList && (
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); onFindByList(); }}
+            title={t("toolbar.findList")}
+            aria-label={t("toolbar.findList")}
+            data-testid="find-list-open"
+            className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted2 transition-colors hover:bg-hover hover:text-text"
+          >
+            <ListChecks className="h-3.5 w-3.5 stroke-[1.6]" />
+          </button>
+        )}
         {/* The tags the text matches: one click turns the word into a tag filter. */}
         {onPickTag && searchFocused && tagHits.length > 0 && (
           <div data-testid="search-tag-suggestions" className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border/60 bg-chrome py-1 shadow-overlay">

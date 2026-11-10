@@ -454,6 +454,34 @@ def _contains_facet(name: str, expr: str) -> Facet:
     return Facet(name, (name,), clauses)
 
 
+# A client's picks, as "Find by List…" reads them: more keywords than this is
+# not a list of picks, and each one costs two LIKEs a row.
+NAME_KEYWORD_LIMIT = 500
+
+
+def _name_contains(filters: dict) -> list[Clause]:
+    """Photos whose file name holds any of these keywords: the photo's own
+    name, or its RAW's ("1723" finds B0001723.3FR and the JPEG paired with
+    it). The name only — not the folders on disk, as path_contains reads.
+    The same match browse.find_by_keywords counts per keyword."""
+    seen: dict[str, str] = {}
+    for value in _values(filters.get("name_contains")):
+        text = str(value).strip()
+        if text:
+            seen.setdefault(text.casefold(), text)
+    keywords = list(seen.values())[:NAME_KEYWORD_LIMIT]
+    if not keywords:
+        return []
+    patterns = ["%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%" for text in keywords]
+    own = " OR ".join("assets.stem LIKE ? ESCAPE '\\'" for _ in patterns)
+    raw = " OR ".join("raw.stem LIKE ? ESCAPE '\\'" for _ in patterns)
+    return [(
+        f"(({own}) OR EXISTS (SELECT 1 FROM image_lookup_registry reg JOIN assets raw ON raw.asset_id = reg.raw_asset_id "
+        f"WHERE reg.image_asset_id = assets.asset_id AND ({raw})))",
+        [*patterns, *patterns],
+    )]
+
+
 def _geo(filters: dict) -> list[Clause]:
     clause = _geo_filter_clause(filters.get("geo"))
     return [clause] if clause is not None else []
@@ -486,6 +514,7 @@ FACETS: tuple[Facet, ...] = (
     _contains_facet("caption_contains", "CASE WHEN assets.user_description IS NOT NULL THEN assets.user_description ELSE (SELECT ann.caption FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id) END"),
     _contains_facet("ocr_contains", "(SELECT ann.detected_text FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
     _contains_facet("path_contains", "(SELECT reg.image_path FROM image_lookup_registry reg WHERE reg.image_asset_id = assets.asset_id LIMIT 1)"),
+    Facet("name_contains", ("name_contains",), _name_contains),
     Facet("geo", ("geo",), _geo),
     Facet("in_collection", ("in_collection", "in_collection_descendants"), _in_collection, modifiers=("in_collection_descendants",)),
 )

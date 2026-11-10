@@ -161,6 +161,33 @@ export const catalogMethods = {
     return { index: index < 0 ? null : index };
   },
   browseImages,
+  // Find by list: each keyword against the file names in one place, as the
+  // sidecar's find-by-keywords answers (50 is its FIND_MATCH_LIMIT).
+  findByKeywords: async ({ keywords = [], status = "all", collectionId, includeDescendants, base } = {}) => {
+    let list = assets;
+    if (collectionId) {
+      const member = new Set(folderAssetIds(collectionId, includeDescendants));
+      list = list.filter((a) => member.has(a.asset_id));
+    } else if (base) list = list.filter((a) => matchesRules(a, base));
+    else if (status === "rated") list = list.filter((a) => a.app_rating > 0);
+    else if (status === "matched") list = [];
+    const limit = 50;
+    const seen = new Set();
+    const found = [];
+    for (const keyword of keywords) {
+      const text = String(keyword || "").trim();
+      const folded = text.toLowerCase();
+      if (!folded || seen.has(folded)) continue;
+      seen.add(folded);
+      const hits = list.filter((a) => String(a.stem || a.file_name || "").toLowerCase().includes(folded));
+      found.push({
+        keyword: text,
+        count: hits.length,
+        matches: hits.slice(0, limit).map((a) => ({ asset_id: a.asset_id, file_name: a.file_name || a.stem })),
+      });
+    }
+    return { limit, keywords: found };
+  },
   // The web catalog has no gazetteer; the Discover page falls back to
   // month groups when both lists are empty.
   discoverCollections: async () => ({ places: [], memories: [] }),

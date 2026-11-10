@@ -40,6 +40,7 @@ from .browse import (
     browse_collection,
     camera_makes,
     description_fields,
+    find_by_keywords,
     get_facet_values,
     get_image_asset_detail,
     get_image_asset_detail_by_path,

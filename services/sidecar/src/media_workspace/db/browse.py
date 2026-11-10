@@ -5,6 +5,8 @@ Split from the monolithic db.py (review P3-5); one module per domain.
 from __future__ import annotations
 
 import json
+import os
+import re
 import sqlite3
 
 # The facet filters (what the filter bar sends) live in facets.py: one registry
@@ -315,6 +317,92 @@ def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
         ) WHERE asset_id = ?
     """, [*params, asset_id]).fetchone()
     return row[0] if row else None
+
+
+# ── find by list ────────────────────────────────────────────────────────────
+# A client picks from the JPEGs they were sent and answers with numbers:
+# "1723, 1746, 1754" for B0001723.3FR and its neighbours. Each keyword is
+# looked up on its own, so the dialog can say which one found nothing (a typo)
+# and which found several.
+#
+# How many photos one keyword may name. Past this it is not a pick but a
+# stray number ("12" out of "12 photos in total"): the count still comes back,
+# with the first matches, and the dialog leaves that keyword out.
+FIND_MATCH_LIMIT = 50
+FIND_KEYWORD_LIMIT = 500
+
+
+def find_by_keywords(
+    connection: sqlite3.Connection,
+    keywords: list[str],
+    *,
+    status: str = "all",
+    collection_id: str | None = None,
+    include_descendants: bool = False,
+    base: dict | None = None,
+) -> dict:
+    """Per keyword, the photos whose file name contains it, inside one place:
+    a status view, a smart collection (`base`) or a folder. The place only —
+    the search box and the filter bar do not narrow it. A keyword matches the
+    photo's own file name or its RAW's, case-insensitively, as the search box
+    matches a name; nothing else (a caption or a folder on disk holding the
+    same digits is not what the client meant)."""
+    needles: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for keyword in keywords:
+        text = str(keyword or "").strip()
+        folded = text.casefold()
+        if not folded or folded in seen:
+            continue
+        seen.add(folded)
+        needles.append((text, folded))
+    needles = needles[:FIND_KEYWORD_LIMIT]
+    found: list[dict] = [{"keyword": text, "count": 0, "matches": []} for text, _ in needles]
+    if not needles:
+        return {"limit": FIND_MATCH_LIMIT, "keywords": found}
+
+    if collection_id:
+        members_sql, params = members_join(scope_collection_ids(connection, collection_id, include_descendants))
+        source = f"""
+            FROM assets
+            {members_sql}
+            JOIN image_lookup_registry AS registry ON registry.image_asset_id = assets.asset_id
+            LEFT JOIN assets AS raw_assets ON raw_assets.asset_id = registry.raw_asset_id
+            WHERE assets.asset_type IN ('image', 'video', 'raw')"""
+    else:
+        where, params = _view_where(status, None, None, base)
+        source = f"""
+            FROM image_lookup_registry AS registry
+            JOIN assets ON assets.asset_id = registry.image_asset_id
+            LEFT JOIN assets AS raw_assets ON raw_assets.asset_id = registry.raw_asset_id
+            LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id
+            WHERE {where}"""
+    rows = connection.execute(
+        f"""
+        SELECT assets.asset_id, assets.stem, registry.image_path, raw_assets.stem AS raw_stem
+        {source}
+        ORDER BY assets.stem, assets.asset_id
+        """,
+        params,
+    ).fetchall()
+
+    # One pass over the place's names. Most hold none of the keywords, and the
+    # alternation says so without asking each keyword in turn.
+    any_keyword = re.compile("|".join(re.escape(folded) for _, folded in needles))
+    for row in rows:
+        names = f"{row['stem'] or ''}\n{row['raw_stem'] or ''}".casefold()
+        if not any_keyword.search(names):
+            continue
+        for entry, (_, folded) in zip(found, needles, strict=True):
+            if folded not in names:
+                continue
+            entry["count"] += 1
+            if len(entry["matches"]) < FIND_MATCH_LIMIT:
+                entry["matches"].append({
+                    "asset_id": row["asset_id"],
+                    "file_name": os.path.basename(row["image_path"] or "") or row["stem"],
+                })
+    return {"limit": FIND_MATCH_LIMIT, "keywords": found}
 
 
 # ── facet options (the filter bar's dropdowns and sliders) ──────────────────

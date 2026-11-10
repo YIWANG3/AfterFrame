@@ -74,6 +74,7 @@ module.exports = (ctx) => {
           caption_contains: { type: "string", description: "Text the AI description must contain (that field only, unlike query)" },
           ocr_contains: { type: "string", description: "Text that must appear IN the picture (signs, labels), as read by AI annotation" },
           path_contains: { type: "string", description: "Text the file's folder or name must contain" },
+          name_contains: { ...ONE_OR_MANY, description: "Text the file NAME must contain (the photo's, or its paired RAW's; not its folders): '1723' finds B0001723.3FR. A list means any of them, which is how a client's list of picks (file numbers) is looked up." },
           tag_match: { type: "string", enum: ["any", "all", "by_group"], description: "With several tags: any of them (default), all of them, or by_group: tags of the same group are alternatives while groups stack ((sunny OR cloudy) AND street)" },
           asset_type: { type: "string", enum: ["image", "video", "raw"], description: "Only photos, only videos, or only RAW files" },
           extension: { ...ONE_OR_MANY, description: "File format, as a family ('jpeg' = .jpg/.jpeg/.jfif…, 'heif' = .heic/.heif/.hif, 'tiff', 'png', 'mp4', 'cr3', 'arw'; the values get_facet_values lists) or one extension ('jpg', 'hif'). A list means any of them." },

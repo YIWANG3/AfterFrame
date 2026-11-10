@@ -53,7 +53,8 @@
     },
     "displayMode": "布局",
     "withSubfolders": "正在显示子文件夹的照片",
-    "thisFolderOnly": "只显示本层的照片"
+    "thisFolderOnly": "只显示本层的照片",
+    "findList": "按清单找图…"
   },
   "discover": {
     "recentTitle": "最近添加",
@@ -344,7 +345,8 @@
     "tagMore_one": "还有 {{count}} 个",
     "tagMore_other": "还有 {{count}} 个",
     "ungrouped": "未分组",
-    "anyInGroup": "有这组里任意一个标签"
+    "anyInGroup": "有这组里任意一个标签",
+    "clearFileNames": "移除这份清单"
   },
   "activity": {
     "title": "后台活动",
@@ -509,5 +511,22 @@
     "deleteGroupMessage": "组里的 {{count}} 个标签会变成未分组，照片上的标签不会丢。",
     "loadFailed": "无法加载标签",
     "editFailed": "无法修改标签"
+  },
+  "findList": {
+    "title": "按清单找图",
+    "placeholder": "粘贴客户发来的编号或文件名\n1723、1746 1754",
+    "none": "没有找到",
+    "broad": "匹配了 {{count}} 张，太宽泛，不会加入",
+    "found_other": "找到 {{count}} 张",
+    "missing_other": "{{count}} 个没找到",
+    "tooBroad_other": "{{count}} 个太宽泛",
+    "destination": "加入到",
+    "newFolder": "新建文件夹",
+    "defaultFolder": "未命名",
+    "cancel": "取消",
+    "apply_other": "加入 {{count}} 张",
+    "added_other": "已把 {{count}} 张照片加入「{{name}}」",
+    "failed": "加入文件夹失败",
+    "filter": "筛选"
   }
 }

@@ -23,6 +23,7 @@ from .db import (
     delete_collection,
     delete_image_asset_from_catalog,
     description_fields,
+    find_by_keywords,
     get_asset_location,
     get_job,
     get_latest_job,
@@ -236,6 +237,16 @@ def build_parser() -> argparse.ArgumentParser:
     locate.add_argument("--sort", default=None)
     locate.add_argument("--filters", default=None)
     locate.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
+
+    # Find by list: a client's picks ("1723, 1746") looked up by file name,
+    # each keyword on its own, inside one place (a status, a smart
+    # collection's --base, or a folder).
+    find_kw = subparsers.add_parser("find-by-keywords", parents=[common])
+    find_kw.add_argument("--keywords", required=True, help="JSON array of keywords")
+    find_kw.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes"], default="all")
+    find_kw.add_argument("--collection-id", default=None)
+    find_kw.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
+    find_kw.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed")
 
     # Lightweight location points for the map. Mirrors the gallery scope
     # (status/collection/search/facets) but ignores filters.geo — the map needs
@@ -1575,6 +1586,19 @@ def _live_source_state(row) -> tuple[bool, bool]:
     return True, source_changed
 
 
+def _cmd_find_by_keywords(args, connection, catalog, parser):
+    keywords = json.loads(args.keywords)
+    if not isinstance(keywords, list):
+        parser.error("--keywords must be a JSON array")
+    print(json.dumps(find_by_keywords(
+        connection, [str(keyword) for keyword in keywords],
+        status=args.status, collection_id=args.collection_id,
+        include_descendants=bool(args.include_descendants),
+        base=json.loads(args.base) if args.base else None,
+    ), ensure_ascii=False))
+    return 0
+
+
 def _cmd_locate_image_asset(args, connection, catalog, parser):
     position = locate_image_asset(connection, args.asset_id, status=args.status,
                                   search=args.search, sort=args.sort,
@@ -2099,6 +2123,7 @@ COMMAND_HANDLERS = {
     "camera-makes": _cmd_camera_makes,
     "browse-images": _cmd_browse_images,
     "locate-image-asset": _cmd_locate_image_asset,
+    "find-by-keywords": _cmd_find_by_keywords,
     "browse-map-points": _cmd_browse_map_points,
     "resolve-ai-locations": _cmd_resolve_ai_locations,
     "discover-collections": _cmd_discover_collections,
