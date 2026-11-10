@@ -787,11 +787,15 @@ export default function App() {
     if (paths.length) workspace.addImagesFromPaths(paths);
   }
 
+  // The Folders and Tags pages have no photo to select, so the Inspector would
+  // only ever show its empty state: the pane is left out and the page takes
+  // its width.
+  const inspectorHidden = viewMode === "folders" || viewMode === "tags";
   const layoutStyle = {
     gridTemplateColumns: [
       `${workspace.sidebarWidth}px`,
       "minmax(0, 1fr)",
-      `${workspace.inspectorWidth}px`,
+      ...(inspectorHidden ? [] : [`${workspace.inspectorWidth}px`]),
     ].join(" "),
     gridTemplateRows: "minmax(0, 1fr)",
   };
@@ -1507,7 +1511,7 @@ export default function App() {
           )}
         </section>
 
-        {featureView ? (
+        {inspectorHidden ? null : featureView ? (
           <featureView.Inspector view={featureViewState} />
         ) : viewMode === "people" ? (
           <PeopleInspector
@@ -1518,8 +1522,7 @@ export default function App() {
           />
         ) : (
           <Inspector
-            // The folder page has no photo selection; the pane shows its empty state.
-            detail={viewMode === "folders" || viewMode === "tags" ? null : workspace.detail}
+            detail={workspace.detail}
             onRatingChange={applyRating}
             onFlagChange={(flag) => applyFlag(flag)}
             onDescriptionChange={(text) => workspace.setAssetDescription([workspace.detail?.asset_id], text)}
@@ -1551,12 +1554,14 @@ export default function App() {
           style={{ left: `${workspace.sidebarWidth}px` }}
         />
 
-        <div
-          data-value={-workspace.inspectorWidth}
-          onMouseDown={resizeInspector}
-          className="pane-resize-handle absolute inset-y-0 z-20 w-3 translate-x-1/2 cursor-col-resize"
-          style={{ right: `${workspace.inspectorWidth}px` }}
-        />
+        {!inspectorHidden && (
+          <div
+            data-value={-workspace.inspectorWidth}
+            onMouseDown={resizeInspector}
+            className="pane-resize-handle absolute inset-y-0 z-20 w-3 translate-x-1/2 cursor-col-resize"
+            style={{ right: `${workspace.inspectorWidth}px` }}
+          />
+        )}
       </div>
 
       {/* Single bottom-right surface: running-job cards stacked above

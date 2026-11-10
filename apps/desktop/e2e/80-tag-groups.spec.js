@@ -170,9 +170,13 @@ test("Shift+T takes tags off every selected photo", async () => {
 });
 
 test("the Tags page makes a group and moves, merges, renames and pins tags", async () => {
+  // The Tags page has no photo to select: the Inspector pane is left out.
+  const panes = ctx.window.locator(".grid > aside");
+  await expect(panes).toHaveCount(2);
   await ctx.window.getByTestId("sidebar-tags").click();
   const page = ctx.window.getByTestId("tags-view");
   await expect(page).toBeVisible();
+  await expect(panes).toHaveCount(1);
   await expect(page.locator("[data-tags-group='weather'] [data-tag-row='sunny']")).toBeVisible();
 
   // The toolbar shows the New Group label whole, clear of the sort dropdown
