@@ -180,6 +180,8 @@ export default function Sidebar({
   // instead of walking off the right edge. (A percentage in padding is of the
   // list's width, so the share follows a resized sidebar.)
   const deepest = treeRows.reduce((max, row) => Math.max(max, row.depth), 0);
+  // Is any folder on screen inside another, or holding one?
+  const nested = treeRows.some((row) => row.hasChildren || row.depth > 0);
   const indentShare = folderView === "covers" ? 24 : 28;
   const indentStep = deepest > 0 ? `max(3px, min(14px, ${(indentShare / deepest).toFixed(3)}%))` : "14px";
   const indentOf = (depth, extra = 0) => `calc(${10 + extra}px + ${depth} * ${indentStep})`;
@@ -613,7 +615,10 @@ export default function Sidebar({
                   />
                 </div>
               ) : null;
-              // Folders with folders inside open and close; the others keep the space.
+              // Folders with folders inside open and close; the others keep the
+              // space, so the covers of a level line up. A list with no folder
+              // inside another has nothing to open: no space is kept, and its
+              // rows start where the smart collections' do.
               const toggle = hasChildren ? (
                 <button
                   type="button"
@@ -625,9 +630,9 @@ export default function Sidebar({
                 >
                   {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </button>
-              ) : (
+              ) : nested ? (
                 <span className="-ml-1 h-4 w-4 shrink-0" aria-hidden="true" />
-              );
+              ) : null;
               // A closed folder counts everything under it; open, only its own.
               const count = hasChildren && !expanded ? (col.subtree_count ?? col.item_count ?? 0) : (col.item_count || 0);
               const meta = pathLabel

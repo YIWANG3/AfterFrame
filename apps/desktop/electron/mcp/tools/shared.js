@@ -72,7 +72,7 @@ const FACET_ARG_KEYS = [
   "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
   "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "rating_max", "flag", "orientation", "tag", "tag_match", "tag_group",
   "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated", "has_raw",
-  "location_source", "country", "city", "color", "color_tolerance", "caption_contains", "ocr_contains", "path_contains",
+  "location_source", "country", "city", "color", "color_tolerance", "caption_contains", "ocr_contains", "path_contains", "name_contains",
 ];
 // The conditions an agent may flip with `exclude`, by the names it sends them
 // under → the sidecar's facet names (db/facets.py).
@@ -80,7 +80,7 @@ const EXCLUDABLE_ARGS = {
   camera: "camera", lens: "lens", tag: "tag", tag_group: "tag_group", extension: "extension", orientation: "orientation", flag: "flag",
   asset_type: "asset_type", location_source: "location_source", country: "country", city: "city",
   color: "color", person_id: "person_group", collection_id: "in_collection",
-  caption_contains: "caption_contains", ocr_contains: "ocr_contains", path_contains: "path_contains",
+  caption_contains: "caption_contains", ocr_contains: "ocr_contains", path_contains: "path_contains", name_contains: "name_contains",
 };
 const oneOrMany = (value) => (Array.isArray(value) ? value : value == null || value === "" ? [] : [value]);
 

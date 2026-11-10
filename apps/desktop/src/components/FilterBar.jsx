@@ -2,7 +2,7 @@ import { formatLabel } from "../../shared/formats.mjs";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
-import { X, ScanFace, Sparkles, Map as MapIcon, Split } from "lucide-react";
+import { X, ScanFace, Sparkles, Map as MapIcon, Split, ListChecks } from "lucide-react";
 import { activeFilterCount, isEmptyValue } from "../hooks/workspaceLogic";
 import { usePref } from "../hooks/usePref";
 import { ACTION_CHIP } from "./filters/Popover";
@@ -42,7 +42,7 @@ const checkHiddenFacets = (value) => (Array.isArray(value) ? value.filter((id) =
 // `embedded`: one group inside the condition-groups dialog. It starts with
 // only its active facets showing ("Add condition" reveals the rest), keeps no
 // preferences, and has no actions, map chip or groups of its own.
-export default function FilterBar({ facetValues, facetsReady = true, filters, onChange, personGroup, onPersonGroup, facetScope, smart, folders = [], onEditGroups, embedded = false }) {
+export default function FilterBar({ facetValues, facetsReady = true, filters, onChange, personGroup, onPersonGroup, facetScope, smart, folders = [], onEditGroups, onEditNames, embedded = false }) {
   const { t, i18n } = useTranslation("nav");
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
@@ -83,6 +83,8 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
     return folder?.path || folder?.name || String(value);
   };
   const activeCount = activeFilterCount(f);
+  // A client's list of picks, applied from "Find by List…" (FindByListDialog).
+  const names = toList(f.name_contains);
 
   const slotActive = (id) => FACET_SLOTS.find((slot) => slot.id === id).keys.some((key) => !isEmptyValue(f[key]));
   // The main bar's hidden facets are remembered; a group's dialog (embedded)
@@ -176,6 +178,40 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
           el.scrollLeft += event.deltaY;
         }}
       >
+      {/* A client's list of picks, on the bar only while it narrows the grid
+          and first in the row, where it cannot scroll out of sight: the list
+          is made in "Find by List…", which the chip opens again; the cross
+          takes it off. */}
+      {names.length > 0 && (
+        <span
+          className="flex h-6 shrink-0 items-center rounded-md border border-accent/50 bg-accent/10 text-[11px] text-text"
+          data-testid="name-filter-chip"
+          data-excluded={excludedFacets.includes("name_contains") ? "true" : undefined}
+        >
+          <button
+            type="button"
+            onClick={onEditNames}
+            disabled={!onEditNames}
+            title={names.join(", ")}
+            className="flex h-full items-center gap-1 pl-2 pr-1 disabled:cursor-default"
+          >
+            <ListChecks className="h-3 w-3 shrink-0" />
+            <span className="max-w-[160px] truncate tabular-nums">
+              {names.length > 1 ? t("filter.pickedMore", { first: names[0], count: names.length - 1 }) : names[0]}
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-label={t("filter.clearFileNames")}
+            title={t("filter.clearFileNames")}
+            onClick={() => onChange(setFacet("name_contains", "name_contains", undefined))}
+            className="flex h-full items-center pl-0.5 pr-1.5 text-muted2 hover:text-text"
+            data-testid="name-filter-clear"
+          >
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </span>
+      )}
       {/* A facet with nothing to offer is hidden — unless it is filtering: counts
           follow the other filters, so its options can run out while its own
           pick is still in force, and that pick must stay reachable. */}

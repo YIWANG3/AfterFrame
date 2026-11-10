@@ -38,6 +38,7 @@ export const CORE_IPC_METHODS = [
   // ── browse & assets ──
   ["browseImages", "workspace:browse", 1],
   ["locateImageAsset", "workspace:locate-image-asset", 1],
+  ["findByKeywords", "workspace:find-by-keywords", 1],
   ["browseMapPoints", "workspace:browse-map-points", 1],
   ["resolveAiLocations", "workspace:resolve-ai-locations", 0],
   ["discoverCollections", "workspace:discover-collections", 0],

@@ -61,7 +61,7 @@ export const FACET_OWN_KEYS = {
   orientation: ["orientation"], asset_type: ["asset_type"], tag: ["tag", "tag_match"], tag_group: ["tag_group"], extension: ["extension"],
   people: ["people"], annotated: ["annotated"], has_raw: ["has_raw"], person_group: ["person_group"], location_source: ["location_source"],
   country: ["country"], city: ["city"], color: ["color", "color_tolerance"], caption_contains: ["caption_contains"],
-  ocr_contains: ["ocr_contains"], path_contains: ["path_contains"], geo: ["geo"], in_collection: ["in_collection"],
+  ocr_contains: ["ocr_contains"], path_contains: ["path_contains"], name_contains: ["name_contains"], geo: ["geo"], in_collection: ["in_collection"],
 };
 const FILTER_MODIFIERS = new Set(["tag_match", "color_tolerance", "exclude"]);
 const holdsCondition = (filters) => Object.entries(filters).some(([key, value]) => key !== "any_of" && !FILTER_MODIFIERS.has(key) && facetValues(value).length > 0);
@@ -155,6 +155,9 @@ function matchesFacetConditions(asset, filters) {
   if (String(filters.caption_contains || "").trim() && !contains(asset.description, filters.caption_contains)) return false;
   if (String(filters.ocr_contains || "").trim() && !contains(asset.annotation?.detected_text, filters.ocr_contains)) return false;
   if (String(filters.path_contains || "").trim() && !contains(asset.image_path || asset.file_name, filters.path_contains)) return false;
+  // A list of picks: any of the keywords in the file's name (not its folders).
+  const names = facetValues(filters.name_contains).map((v) => String(v).trim()).filter(Boolean);
+  if (names.length && !names.some((name) => contains(asset.stem || asset.file_name, name))) return false;
   const folders = facetValues(filters.in_collection);
   const withDescendants = filters.in_collection_descendants === true;
   if (folders.length && !folders.some((id) => folderAssetIds(id, withDescendants).includes(asset.asset_id))) return false;
