@@ -174,6 +174,15 @@ export default function Sidebar({
     if (closed.length) expand(closed);
   }, [activeCollectionId, collections, expandedIds]); // eslint-disable-line react-hooks/exhaustive-deps
   const treeRows = visibleTreeRows(collections, { sort: folderSort, query: folderQuery, expanded: expandedIds, locale: i18n.language });
+  // A level indents 14px while the tree is shallow. Once the deepest row on
+  // screen would indent past a share of the sidebar's width, every level's
+  // step shrinks to fit that share, so a deep tree keeps its names readable
+  // instead of walking off the right edge. (A percentage in padding is of the
+  // list's width, so the share follows a resized sidebar.)
+  const deepest = treeRows.reduce((max, row) => Math.max(max, row.depth), 0);
+  const indentShare = folderView === "covers" ? 24 : 28;
+  const indentStep = deepest > 0 ? `max(3px, min(14px, ${(indentShare / deepest).toFixed(3)}%))` : "14px";
+  const indentOf = (depth, extra = 0) => `calc(${10 + extra}px + ${depth} * ${indentStep})`;
   // Dragging to reorder sets the custom order, so it needs that order on
   // screen, whole. Dragging INTO a folder works under any order.
   const reorderable = canReorderFolders({ sort: folderSort, query: folderQuery }) && !reorderingCollections;
@@ -589,10 +598,10 @@ export default function Sidebar({
             {treeRows.map((row) => {
               const { folder: col, depth, hasChildren, expanded, pathLabel } = row;
               const active = activeCollectionId === col.collection_id;
-              const indent = { paddingLeft: `${10 + depth * 14}px` };
+              const indent = { paddingLeft: indentOf(depth) };
               // The field for a folder made inside this one, right under it.
               const subfolderField = creatingUnder === col.collection_id ? (
-                <div key={`${col.collection_id}:new`} className="py-0.5 pr-2.5" style={{ paddingLeft: `${10 + (depth + 1) * 14 + 18}px` }} data-testid="sidebar-new-subfolder">
+                <div key={`${col.collection_id}:new`} className="py-0.5 pr-2.5" style={{ paddingLeft: indentOf(depth + 1, 18) }} data-testid="sidebar-new-subfolder">
                   <InlineEdit
                     initial=""
                     onConfirm={async (name) => {
@@ -662,7 +671,7 @@ export default function Sidebar({
                 }
                 return (
                   <Fragment key={col.collection_id}>
-                    <div className="py-0.5 pr-2.5" style={{ paddingLeft: `${10 + depth * 14 + 18}px` }}>
+                    <div className="py-0.5 pr-2.5" style={{ paddingLeft: indentOf(depth, 18) }}>
                       {editor}
                     </div>
                     {subfolderField}
@@ -774,7 +783,10 @@ export default function Sidebar({
                   ].join(" ")}
                 >
                   {folderView === "covers" ? (
-                    <span className="flex min-w-0 items-center gap-2.5">
+                    // Clipped (the padding keeps the toggle's negative margin inside):
+                    // in a row too narrow for everything, the hover tools cover
+                    // nothing, the cover and name just end where they start.
+                    <span className="-ml-1 flex min-w-0 items-center gap-2.5 overflow-hidden pl-1">
                       {toggle}
                       {coverOf(col) ? (
                         <img
@@ -795,7 +807,7 @@ export default function Sidebar({
                       </span>
                     </span>
                   ) : (
-                    <span className="flex min-w-0 items-center gap-2.5">
+                    <span className="-ml-1 flex min-w-0 items-center gap-2.5 overflow-hidden pl-1">
                       {toggle}
                       <Folder className={`h-4 w-4 shrink-0 stroke-[1.6] ${active ? "text-accent" : ""}`} />
                       <span className="min-w-0">

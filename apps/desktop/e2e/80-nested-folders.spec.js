@@ -279,3 +279,30 @@ test("deleting a folder takes the folders under it; the photos stay", async () =
   await w().getByRole("button", { name: "Delete folder", exact: true }).click();
   await expect.poll(async () => Object.keys(await folders()).sort(), { timeout: 10_000 }).toEqual(["Europe"]);
 });
+
+// A level indents 14px while the tree is shallow; ten levels at that step
+// would push the names out of the sidebar. The step shrinks so the deepest
+// row on screen indents no more than a share of the list's width.
+test("a deep tree keeps its names on screen: the indent step shrinks to fit", async () => {
+  let parent = null;
+  for (let i = 0; i < 10; i += 1) {
+    const made = await callTool("manage_collections", { action: "create", name: `Deep level ${i}`, ...(parent ? { parent_id: parent } : {}) });
+    parent = made.collection_id;
+  }
+  await expect(row("Deep level 0")).toBeVisible({ timeout: 15_000 });
+  for (let i = 0; i < 9; i += 1) {
+    await row(`Deep level ${i}`).locator("[data-folder-toggle='closed']").click();
+    await expect(row(`Deep level ${i + 1}`)).toBeVisible();
+  }
+  const deepest = row("Deep level 9");
+  await expect(deepest).toHaveAttribute("data-folder-depth", "9");
+  const indentOf = (name) => row(name).evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft));
+  const listWidth = (await scroll().boundingBox()).width;
+  const indent = await indentOf("Deep level 9");
+  expect(indent).toBeLessThanOrEqual(10 + listWidth * 0.28 + 1);
+  // Every level still steps in from the one above it.
+  expect(indent).toBeGreaterThan(await indentOf("Deep level 8"));
+  expect(await indentOf("Deep level 1")).toBeGreaterThan(await indentOf("Deep level 0"));
+  // And the deepest name has room to be read.
+  expect((await deepest.locator("span.truncate").first().boundingBox()).width).toBeGreaterThan(40);
+});
