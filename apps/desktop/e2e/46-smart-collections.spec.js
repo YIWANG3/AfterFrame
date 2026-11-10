@@ -429,6 +429,12 @@ test("each section folds to its heading, and a folded section marks what is show
   await expect(window.locator("[data-collection-id]")).toHaveCount(0);
   await expect(window.getByTestId("sidebar-folder-scroll")).toHaveCount(0);
   await expect(foldersToggle.locator("[data-section-active]")).toBeVisible();
+  // The folded folders sit right under the last smart collection, not at the
+  // foot of the sidebar: the open section is as tall as its rows, no taller.
+  const smartBox = await smart.boundingBox();
+  const foldersBox = await folders.boundingBox();
+  // (28px apart: the section's own bottom margin plus the sidebar's gap.)
+  expect(foldersBox.y - (smartBox.y + smartBox.height)).toBeLessThanOrEqual(32);
   // The folder tools stay on the folded heading; "new folder" unfolds it to show the field.
   await window.getByTitle("New folder").click();
   await expect(folders).toHaveAttribute("data-open", "true");

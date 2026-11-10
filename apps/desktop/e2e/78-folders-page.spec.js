@@ -56,7 +56,14 @@ test("the rows carry the page's columns", async () => {
 });
 
 test("the page lists every folder, newest addition first, with cover and count", async () => {
+  // The gallery has the Inspector beside it; the Folders page, where no photo
+  // can be selected, leaves the pane out and runs to the window's edge.
+  const panes = w().locator(".grid > aside");
+  await expect(panes).toHaveCount(2);
   await openFoldersPage();
+  await expect(panes).toHaveCount(1);
+  const page = await w().locator(".grid > section").boundingBox();
+  expect((await w().evaluate(() => window.innerWidth)) - (page.x + page.width)).toBeLessThanOrEqual(9);
   await expect(w().getByTestId("folders-count")).toHaveText("· 3");
   await expect(cards()).toHaveCount(3);
   // Kyoto got its photo last; Scratch never got one and sinks to the end.

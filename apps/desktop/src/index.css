@@ -356,7 +356,8 @@ select {
 /* 面板不能用 clip-path 裁圆角:带 clip-path 时,里面顶部模糊带的 backdrop-filter 多数时候采样不到滚动区内容,
    照片和文件名滚到工具栏下面仍然清晰(0.5.8 实测,方角也没裁掉)。合成层的圆角交给 split 和模糊带自己,见下文滚动边缘效果 */
 .noise-overlay > .grid > section.bg-app { margin: 8px; border-radius: 18px; background: var(--pane); }
-/* 检查器同样包一层圆角面板(含"未选中"空态 aside,它没有 border-l),右 / 上 / 下留 8px;不做隐藏折叠 */
+/* 检查器同样包一层圆角面板(含"未选中"空态 aside,它没有 border-l),右 / 上 / 下留 8px;不做隐藏折叠。
+   例外:文件夹页 / 标签页没有照片可选,检查器整栏不渲染(App.jsx inspectorHidden),内容区自带的 8px 右边距直接贴窗口边 */
 .noise-overlay > .grid > aside:not(.border-r) {
   height: auto; align-self: stretch; min-width: 0;
   margin: 8px 8px 8px 0; border-radius: 18px;

@@ -177,10 +177,15 @@ export default function TagsView({ catalogRevision, onOpenTag, pushToast }) {
         searchPlaceholder={t("tags.search")}
         actions={(
           <>
-            <Button variant="ghost" size="sm" data-testid="tags-new-group" onClick={() => setCreating(true)} className="shrink-0 gap-1 whitespace-nowrap">
-              <Plus className="h-3.5 w-3.5" />
-              {t("tags.newGroup")}
-            </Button>
+            {/* In its own capsule, like the People page's scan button: a bare
+                button in the toolbar is styled as a 34px round icon button
+                (index.css, `.app-toolbar > button`) and would clip the label. */}
+            <div className="relative shrink-0">
+              <Button variant="ghost" size="sm" data-testid="tags-new-group" onClick={() => setCreating(true)} className="shrink-0 gap-1 whitespace-nowrap">
+                <Plus className="h-3.5 w-3.5" />
+                {t("tags.newGroup")}
+              </Button>
+            </div>
             <SortDropdown sort={sort} setSort={setSort} />
           </>
         )}

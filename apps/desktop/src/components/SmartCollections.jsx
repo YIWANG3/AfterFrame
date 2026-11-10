@@ -10,7 +10,8 @@ import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
 
 // `view` is the sidebar's list / covers switch, shared with the folders below.
-// `grow`: the folders below are folded, so this section may take their room.
+// `grow`: the folders below are folded, so this section may run past its cap,
+// as tall as its rows; the folders' heading follows right under the last one.
 export default function SmartCollections({ collections, activeId, view = "list", grow = false, onOpen, onEditRules, onRename, onDelete, onSnapshot }) {
   const { t } = useTranslation("nav");
   const [editingId, setEditingId] = useState(null);
@@ -52,7 +53,7 @@ export default function SmartCollections({ collections, activeId, view = "list",
     // inside that, so the folders below always keep their room; in a short
     // window it shrinks further, down to its heading and a couple of rows.
     <div
-      className={!open ? "mb-3 shrink-0" : grow ? "mb-3 flex min-h-0 flex-1 flex-col" : "mb-3 flex min-h-[96px] max-h-[40%] shrink flex-col"}
+      className={!open ? "mb-3 shrink-0" : grow ? "mb-3 flex min-h-0 shrink flex-col" : "mb-3 flex min-h-[96px] max-h-[40%] shrink flex-col"}
       data-smart-collections="true"
       data-open={open ? "true" : "false"}
     >
