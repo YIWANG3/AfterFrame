@@ -175,8 +175,16 @@ test("the Tags page makes a group and moves, merges, renames and pins tags", asy
   await expect(page).toBeVisible();
   await expect(page.locator("[data-tags-group='weather'] [data-tag-row='sunny']")).toBeVisible();
 
+  // The toolbar shows the New Group label whole, clear of the sort dropdown
+  // (a bare button in the toolbar is styled as a round icon button and clips it).
+  const newGroup = ctx.window.getByTestId("tags-new-group");
+  expect(await newGroup.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  const newGroupBox = await newGroup.boundingBox();
+  const sortBox = await ctx.window.getByTestId("tags-sort").boundingBox();
+  expect(newGroupBox.x + newGroupBox.width).toBeLessThanOrEqual(sortBox.x);
+
   // A new group, and trip moved into it from the row's menu.
-  await ctx.window.getByTestId("tags-new-group").click();
+  await newGroup.click();
   const nameBox = ctx.window.getByTestId("tags-new-group-input").locator("input");
   await nameBox.fill("Pets");
   await nameBox.press("Enter");
