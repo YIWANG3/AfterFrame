@@ -174,7 +174,7 @@ export function formatISO(value) {
 }
 
 export function filterTitle(status) {
-  if (status === "matched") return "With Raw";
+  if (status === "matched") return "Has Paired RAW";
   if (status === "recent") return "Recently Added";
   if (status === "rated") return "Rated";
   if (status === "lookalikes") return "Look-alikes";
