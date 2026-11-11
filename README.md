@@ -64,6 +64,8 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Sort by imported time, captured time, rating, or name
 - Smart collections (a saved filter with a live count: exclude any filter, ratings below a value or unrated, either-or condition groups) and manual folders
 - Folder list you can sort (custom order, name, newest, most photos) and search by name; new folders go on top
+- **Folders nest**, any depth: the sidebar is a tree, dragging a folder onto another nests it, and a parent shows its own photos plus everything under it (a toolbar switch turns that to this folder only)
+- The sidebar's Smart Collections and Folders sections each fold down to their heading
 - **Target folder**: the folder you last made or last added to is marked with a `B` in the sidebar, and **B** adds the selected photos to it (Shift+B adds one and moves on), like Lightroom's target collection
 - **A page for your folders** shows every folder at once, with a mosaic of its newest photos, its count and the span of capture dates. Sort by last added or capture date too, filter by status, count or dates, switch to a sortable table, and select several to annotate or delete
 - **Look-alikes**: every photo gets a perceptual hash and, on the Mac, Apple Vision's feature print, so another export, a re-encode or a crop of one picture is found. A Look-alikes view in the sidebar, **Find Similar** on any photo, and a Similar strip in the inspector
@@ -72,6 +74,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Star rating system (imports Lightroom XMP ratings, from the file or its `.xmp` sidecar, and follows them until you rate here)
 - Pick and reject flags as in Lightroom (**P** / **X** / **U**, with **Shift** to move on to the next photo), and **Delete Rejected Photos…** to take the rejects out of the library or move them to the Trash
 - **Add Tags…** (**T**) tags every selected photo at once. Your tags and the AI's share one list, and a description you write wins over the AI's caption
+- **Tags by group**: every tag sits in a group (weather, season, time of day, light, subject, place, occasion, gear, composition, style, color, mood, use, or your own), and a tag can have aliases, so `sunset` and `日落` are one tag. A **Tags page** renames, merges, moves, pins and deletes them; **Remove Tags…** (**Shift+T**) takes tags off the selection
 - Virtual-scroll gallery that handles 10,000+ images smoothly
 
 ![Lightbox](docs/assets/en/lightbox.webp)
@@ -80,7 +83,9 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Full-text search across filename, camera/lens, and AI annotations (caption, detected text/OCR, tags) — find photos by what's actually in them
 - Faceted filter bar: camera and lens, ISO / aperture / focal-length ranges, capture-date range, star rating, flag, orientation (landscape / portrait / square, as the photo shows), colour (any colour, matched against each photo's dominant colours), country and city, location source, and description / text in the picture / path — combined live. Tick several values of one facet, and choose which facets sit on the bar
 - Filters refine where you are: inside a folder, the filter bar and search cover that folder, with counts to match
-- Tag filtering: click any tag in the inspector, or pick from a searchable tag list (server-side search, scales to thousands of tags)
+- Tag filtering: click any tag in the inspector, or pick from a list grouped the way your tags are, searchable across groups and aliases, matching any tag, one per group, all, or none
+- **Find by List**: paste a list of numbers or file names (`1723, 1746 1754`, in whatever shape it arrives) and each one is looked up by file name, a photo's own or its RAW's. The list then filters the grid or goes into a folder
+- A **Has RAW** filter for photos with, or without, a paired RAW file
 
 ### People
 - On-device face detection and ArcFace grouping — photos and face embeddings stay inside the local catalog
@@ -162,7 +167,7 @@ AfterFrame embeds an [MCP](https://modelcontextprotocol.io) server, so any AI ag
 
 > "Import the photos on my Desktop" · "Find the vertical shots from last month and show them to me" · "Crop these to 4:3 for Xiaohongshu" · "Tag everything that has no tags yet" · "Export this collection at 2048px JPEG"
 
-- **37 tools**: search (full-text + EXIF facets), thumbnails the agent can actually see, look-alikes and similar photos, import, crop, export, tags/ratings, collections and smart collections, people, the map and locations, AI annotation & repaint jobs, collages, frames and text rendered by the app's own pipeline, library maintenance, deletion — plus job control
+- **38 tools**: search (full-text + EXIF facets), thumbnails the agent can actually see, look-alikes and similar photos, import, crop, export, tags/ratings, collections and smart collections, people, the map and locations, AI annotation & repaint jobs, collages, frames and text rendered by the app's own pipeline, library maintenance, deletion — plus job control
 - **Two-way selection bridge** — select photos in the app and say "these"; the agent's picks get highlighted and scrolled into view right in your gallery (`show_in_app`)
 - **Visible & cancellable** — agent-started work appears in the same background-activity dock as your own, with live progress and a Cancel button
 - **Local-only** — the server listens on `127.0.0.1:41706` while the app runs; same BYOK privacy stance as everything else
