@@ -514,7 +514,7 @@
   },
   "findList": {
     "title": "按清单找图",
-    "placeholder": "粘贴客户发来的编号或文件名\n1723、1746 1754",
+    "placeholder": "粘贴一组编号或文件名\n1723、1746 1754",
     "none": "没有找到",
     "broad": "匹配了 {{count}} 张，太宽泛，不会加入",
     "found_other": "找到 {{count}} 张",

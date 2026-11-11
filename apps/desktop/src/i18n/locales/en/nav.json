@@ -525,7 +525,7 @@
   },
   "findList": {
     "title": "Find by List",
-    "placeholder": "Paste the numbers or file names a client sent\n1723, 1746 1754",
+    "placeholder": "Paste a list of numbers or file names\n1723, 1746 1754",
     "none": "Not found",
     "broad": "Matches {{count}} photos: too broad, left out",
     "found_one": "{{count}} photo found",
