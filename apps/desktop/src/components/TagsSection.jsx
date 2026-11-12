@@ -359,7 +359,7 @@ export default function TagsSection({ assetId, onTagClick, pushToast }) {
       <div className="flex flex-col gap-1" data-testid="inspector-tags" data-count={known ? tags.length : undefined}>
         {buckets.map(({ group, items }) => (
           <div key={group?.group_id ?? "ungrouped"} data-tag-group={group?.group_id ?? ""} className="flex flex-wrap items-center gap-1">
-            {group && buckets.length > 1 && (
+            {group && (
               <span className="mr-0.5 text-[9px] uppercase tracking-[0.1em] text-muted2">{groupLabelOf(group)}</span>
             )}
             {items.map(chip)}
