@@ -142,9 +142,11 @@ if (!reportOnly) {
   }
 
   const env = { ...process.env, AFTERFRAME_COVERAGE: "1" };
-  // The instrumented build carries istanbul counters plus the sourcemaps the
-  // plugin turns on, and Vite's chunk rendering ran out of Node's default
-  // 2 GB heap on the CI runner (nightly 2026-09-18). Give this one build more.
+  // The instrumented build carries istanbul counters and the source maps of
+  // every transform, and ran out of Node's default 2 GB heap on the CI runner
+  // (nightly 2026-09-18). Give this one build more. It needs about 2.5 GB now
+  // that it writes no maps for the chunks (vite.config.js); with them it had
+  // outgrown this limit too (nightly 2026-11-10).
   const buildEnv = { ...env, NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --max-old-space-size=4096`.trim() };
   console.log("[coverage] building instrumented renderer");
   if (run("npx", ["vite", "build"], { env: buildEnv }) !== 0) process.exit(1);
