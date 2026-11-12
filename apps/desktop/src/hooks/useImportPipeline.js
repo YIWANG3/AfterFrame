@@ -44,6 +44,31 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
     return queued;
   };
 
+  // Imports that also file what they bring in: a Finder folder dropped on
+  // the sidebar goes into a folder here ([{ collectionId, paths, finishes }]).
+  // The import is a job that this hook only starts, so the photos are filed
+  // by their paths as they land: once at the drop (what the catalog already
+  // held), with every live refresh, and when the import ends. `finishes`
+  // counts the imports still to end before a filing is done with: its own,
+  // and the one it had to wait behind. It must not outlive them, or a photo
+  // taken out of the folder by hand would be put back by the next import.
+  const filingsRef = useRef([]);
+  const filingRef = useRef(false);
+  async function fileArrivals() {
+    if (filingRef.current || !filingsRef.current.length) return;
+    filingRef.current = true;
+    let added = 0;
+    try {
+      for (const filing of [...filingsRef.current]) {
+        const result = await Promise.resolve(api.collectionAddPaths(filing.collectionId, filing.paths)).catch(() => null);
+        added += result?.added || 0;
+      }
+    } finally {
+      filingRef.current = false;
+    }
+    if (added) await bridgeRef.current.filed?.();
+  }
+
   // The legacy per-type task states (import card & friends) the job poller
   // and refreshAll mirror into.
   function mirrorTask(type, task) {
@@ -58,6 +83,7 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
     setPreviewTask(null);
     setEnrichmentTask(null);
     setImportQueue(NO_QUEUED_IMPORT);
+    filingsRef.current = [];
   }
 
   // Queued-changes note for the import card in the unified JobDock.
@@ -156,9 +182,16 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
   // `auto` marks background imports (watched dirs live + catch-up). They honor
   // delete-tombstones so a removed-but-on-disk file isn't resurrected; manual
   // imports (default) clear tombstones instead — see startIncrementalImport.
-  async function addImagesFromPaths(selected, { auto = false } = {}) {
+  // `fileInto`: [{ collectionId, paths }], the folders these go into as well.
+  async function addImagesFromPaths(selected, { auto = false, fileInto = [] } = {}) {
     if (!selected || !selected.length) return;
     if (!requireCatalog()) return;
+    if (fileInto.length) {
+      const waits = bridgeRef.current.importRunning() ? 2 : 1;
+      filingsRef.current = [...filingsRef.current, ...fileInto.map((filing) => ({ ...filing, finishes: waits }))];
+      // What the catalog already holds of them is filed now.
+      void fileArrivals();
+    }
     if (!auto) void maybePromptWatch(selected);
     await api.registerRoots("image", selected);
     const bridge = bridgeRef.current;
@@ -225,6 +258,7 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
     liveImportRefreshRef.current = true;
     const bridge = bridgeRef.current;
     try {
+      await fileArrivals();
       await Promise.all([
         bridge.refreshBrowse(),
         api.getSummary().then(bridge.setSummary).catch(() => {}),
@@ -238,6 +272,22 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
     const timer = setInterval(() => void refreshDuringImport(), LIVE_IMPORT_REFRESH_MS);
     return () => clearInterval(timer);
   }, [importTask?.running, importTask?.jobId]);
+
+  // An import ended (finished or cancelled): file what it brought in, and
+  // let go of the filings that were waiting on it.
+  const lastFiledImportRef = useRef(null);
+  const fileFinishedImport = useEffectEvent(async () => {
+    await fileArrivals();
+    filingsRef.current = filingsRef.current
+      .map((filing) => ({ ...filing, finishes: filing.finishes - 1 }))
+      .filter((filing) => filing.finishes > 0);
+  });
+  useEffect(() => {
+    if (!lastFinishedJob || lastFinishedJob.jobType !== "import") return;
+    if (lastFiledImportRef.current === lastFinishedJob.finishedAtMs) return;
+    lastFiledImportRef.current = lastFinishedJob.finishedAtMs;
+    if (filingsRef.current.length) void fileFinishedImport();
+  }, [lastFinishedJob]);
 
   // Re-import reminder: when an import finishes, tell the user how many of the
   // selected files were already in the catalog (re-importing the same folder).

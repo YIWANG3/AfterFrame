@@ -16,9 +16,8 @@ import { Button, cx, Z } from "../ui";
 import useDismiss from "../ui/useDismiss";
 import { localFileUrl } from "../utils/format";
 import FaceMenu from "./FaceMenu";
-import { canDropInto, descendantIds, flattenForPicker, parentIdOf, parentPathOf } from "./folderTree";
+import { canDropInto, flattenForPicker, parentIdOf, parentPathOf } from "./folderTree";
 import InlineEdit from "./InlineEdit";
-import { confirm } from "./confirm";
 import Popover, { ACTION_CHIP } from "./filters/Popover";
 import RangePopover from "./filters/RangePopover";
 import DateRangePopover, { RELATIVE_DAY_PRESETS } from "./filters/DateRangePopover";
@@ -195,7 +194,8 @@ export default function FoldersView({
   // (collectionId, parentId): into that folder, or to the top level with null.
   onMoveFolder,
   onRenameFolder,
-  onDeleteFolder,
+  // (ids) → asks, deletes, and resolves true when they are gone (App.jsx deleteFolders).
+  onDeleteFolders,
   onAnnotateFolder,
   pushToast,
 }) {
@@ -268,25 +268,7 @@ export default function FoldersView({
   const clearSelection = () => { setSelectedIds(new Set()); anchorRef.current = null; };
 
   async function deleteFolders(ids) {
-    const folders = ids.map((id) => byId.get(id)).filter(Boolean);
-    if (!folders.length) return;
-    const many = folders.length > 1;
-    // A folder with folders inside takes them along.
-    const withChildren = folders.some((folder) => descendantIds(collections, folder.collection_id).length > 0);
-    const approved = await confirm({
-      title: many ? t("folders.deleteConfirmTitleMany", { count: folders.length }) : t("folders.deleteConfirmTitleOne", { name: folders[0].name }),
-      message: withChildren ? t("folders.deleteConfirmMessageTree") : many ? t("folders.deleteConfirmMessageMany") : t("folders.deleteConfirmMessageOne"),
-      confirmLabel: many ? t("folders.deleteConfirmActionMany", { count: folders.length }) : t("folders.deleteConfirmActionOne"),
-      cancelLabel: t("folders.deleteCancel"),
-      danger: true,
-    });
-    if (!approved) return;
-    try {
-      for (const folder of folders) await onDeleteFolder?.(folder.collection_id);
-      clearSelection();
-    } catch (error) {
-      pushToast?.({ title: t("folders.deleteFailed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
-    }
+    if (await onDeleteFolders?.(ids)) clearSelection();
   }
 
   function annotateFolders(ids) {

@@ -255,12 +255,13 @@ test("the tree, what is open and the switch survive a restart", async () => {
 
 test("deleting a folder takes the folders under it; the photos stay", async () => {
   const before = (await callTool("get_catalog_info", {})).asset_count ?? null;
-  // The sidebar asks first when there are folders inside.
+  // The sidebar asks first when there are folders inside, and, as these hold
+  // photos no other folder does, what becomes of them (e2e/83 takes the other answers).
   await row("Japan").hover();
   await row("Japan").getByTitle("Delete", { exact: true }).click();
   await expect(w().getByText("Delete “Japan”?")).toBeVisible();
   await expect(w().getByText(/Its 1 subfolder goes with it/)).toBeVisible();
-  await w().getByRole("button", { name: "Delete folder", exact: true }).click();
+  await w().getByRole("button", { name: "Delete Folder Only", exact: true }).click();
   await expect.poll(rowNames, { timeout: 10_000 }).toEqual(["0:Trips", "0:Europe"]);
   const tree = await folders();
   expect(Object.keys(tree).sort()).toEqual(["Europe", "Trips"]);

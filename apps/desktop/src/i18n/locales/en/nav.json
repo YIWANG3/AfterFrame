@@ -128,7 +128,24 @@
     "newSubfolder": "New subfolder",
     "moveTo": "Move to…",
     "topLevel": "Top level",
-    "deleteConfirmMessageTree": "Their subfolders go with them. The photos stay in the library."
+    "deleteConfirmMessageTree": "Their subfolders go with them. The photos stay in the library.",
+    "deleteHolds_one": "It holds {{count}} photo.",
+    "deleteHolds_other": "It holds {{count}} photos.",
+    "deleteShared_one": "{{count}} of them is in another folder too and stays in the library.",
+    "deleteShared_other": "{{count}} of them are in another folder too and stay in the library.",
+    "deleteSubfolders_one": "Its {{count}} subfolder goes with it.",
+    "deleteSubfolders_other": "Its {{count}} subfolders go with it.",
+    "deleteOnlyFolder": "Delete Folder Only",
+    "deleteOnlyFolders": "Delete Folders Only",
+    "deleteFromLibrary_one": "Also Remove {{count}} Photo from Library",
+    "deleteFromLibrary_other": "Also Remove {{count}} Photos from Library",
+    "deleteToTrash_one": "Also Move {{count}} File to Trash",
+    "deleteToTrash_other": "Also Move {{count}} Files to Trash",
+    "deletedFromLibrary_one": "Folder deleted, {{count}} photo removed from the library",
+    "deletedFromLibrary_other": "Folder deleted, {{count}} photos removed from the library",
+    "deletedToTrash_one": "Folder deleted, {{count}} file moved to the Trash",
+    "deletedToTrash_other": "Folder deleted, {{count}} files moved to the Trash",
+    "importFolderFailed": "Couldn't make a folder for the import"
   },
   "sidebar": {
     "reorderHint": "Drag to reorder · Option/Alt + ↑/↓",
@@ -174,11 +191,6 @@
     "expand": "Expand",
     "collapse": "Collapse",
     "moveToRoot": "Drop here to move to the top level",
-    "deleteWithChildrenTitle": "Delete “{{name}}”?",
-    "deleteWithChildren_one": "Its {{count}} subfolder goes with it. The photos stay in the library.",
-    "deleteWithChildren_other": "Its {{count}} subfolders go with it. The photos stay in the library.",
-    "deleteWithChildrenAction": "Delete folder",
-    "deleteCancel": "Cancel",
     "folderPath": "{{path}}"
   },
   "people": {
