@@ -21,7 +21,7 @@ const TAG_CHIP = "inline-flex items-center rounded-md border border-transparent 
 const AVAILABLE_TAG = "bg-app text-muted hover:border-border hover:text-text";
 const TAG_PIN = "ml-0.5 h-2.5 w-2.5 shrink-0";
 
-function TagPicker({ id, panelRef, index, groups, existing, query, pending, labelOf, groupLabelOf, onPick }) {
+function TagPicker({ id, panelRef, index, groups, existing, query, pending, labelOf, groupLabelOf, onToggle }) {
   const { t } = useTranslation("annotation");
   const sections = useMemo(() => {
     const matches = [];
@@ -40,7 +40,7 @@ function TagPicker({ id, panelRef, index, groups, existing, query, pending, labe
       role="region"
       aria-label={t("batch.existing")}
       data-testid="tag-picker"
-      className="popover-scroll absolute inset-x-0 bottom-full mb-1 space-y-2 overflow-y-auto overscroll-contain rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay"
+      className="popover-scroll absolute inset-x-0 bottom-full mb-1 space-y-2 overflow-y-auto overscroll-contain rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay [overflow-anchor:none]"
       style={{ zIndex: Z.dropdown }}
     >
       {sections.length ? sections.map(({ group, items }) => (
@@ -50,21 +50,21 @@ function TagPicker({ id, panelRef, index, groups, existing, query, pending, labe
           </h3>
           <div className="flex flex-wrap gap-1">
             {items.map(({ tag, pinned }) => {
-              const added = selected.has(tag);
+              const isSelected = selected.has(tag);
               const label = labelOf(tag);
               return (
                 <button
                   key={tag}
                   type="button"
-                  disabled={added || pending}
-                  aria-pressed={added}
+                  disabled={pending}
+                  aria-pressed={isSelected}
                   data-tag-suggestion={tag}
                   title={label}
-                  onClick={() => onPick(tag)}
-                  className={cx(TAG_CHIP, "max-w-full", added ? "bg-accent/15 text-accent" : AVAILABLE_TAG)}
+                  onClick={() => onToggle(tag, isSelected)}
+                  className={cx(TAG_CHIP, "max-w-full", isSelected ? "bg-accent/15 text-accent" : AVAILABLE_TAG)}
                 >
                   <span className="truncate">{label}</span>
-                  {pinned && <Pin className={cx(TAG_PIN, !added && "text-muted2")} />}
+                  {pinned && <Pin className={cx(TAG_PIN, !isSelected && "text-muted2")} />}
                 </button>
               );
             })}
@@ -79,7 +79,7 @@ function TagPicker({ id, panelRef, index, groups, existing, query, pending, labe
   );
 }
 
-function TagAdder({ onAdd, existing, empty, groups, index, labelOf, groupLabelOf }) {
+function TagAdder({ onAdd, onRemove, existing, empty, groups, index, labelOf, groupLabelOf }) {
   const { t } = useTranslation("annotation");
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -110,25 +110,13 @@ function TagAdder({ onAdd, existing, empty, groups, index, labelOf, groupLabelOf
       const bounds = anchor.getBoundingClientRect();
       const viewport = scroller.getBoundingClientRect();
       const room = bounds.top - viewport.top - 12;
-      panel.style.visibility = room > 0 && bounds.bottom <= viewport.bottom ? "visible" : "hidden";
+      panel.style.visibility = room > 0 && bounds.top < viewport.bottom ? "visible" : "hidden";
       panel.style.maxHeight = `${Math.max(0, Math.min(320, room))}px`;
     }
 
-    function keepAnchorVisible() {
-      const overflow = anchor.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom;
-      if (overflow > 0) scroller.scrollTop += overflow;
-    }
-
-    // Make room when the field is near the top of the inspector on open.
-    const room = anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-    if (room < 172) scroller.scrollTop -= 172 - room;
-    keepAnchorVisible();
+    inputRef.current.focus({ preventScroll: true });
     place();
-    const observer = new ResizeObserver(() => {
-      // A newly added chip can push the input below the scroll area.
-      if (panel.style.visibility === "visible") keepAnchorVisible();
-      place();
-    });
+    const observer = new ResizeObserver(place);
     observer.observe(anchor.parentElement);
     observer.observe(scroller);
     scroller.addEventListener("scroll", place, { passive: true });
@@ -138,27 +126,26 @@ function TagAdder({ onAdd, existing, empty, groups, index, labelOf, groupLabelOf
     };
   }, [open]);
 
-  async function add(tag, groupId) {
+  async function updateTag(run) {
     setPending(true);
     try {
-      await onAdd(tag, groupId);
+      await run();
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <div ref={anchorRef} className="relative flex min-w-0 items-center gap-1">
+    <div ref={anchorRef} className="relative flex h-[22px] min-w-0 items-center gap-1">
       {open ? (
         <>
           <input
             ref={inputRef}
-            autoFocus
             value={q}
             onChange={(e) => { setQ(e.target.value); panelRef.current.scrollTop = 0; }}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing || e.key !== "Enter" || pending) return;
-              if (q.trim()) void add(q.trim(), group || undefined);
+              if (q.trim()) void updateTag(() => onAdd(q.trim(), group || undefined));
               close();
               toggleRef.current?.focus({ preventScroll: true });
             }}
@@ -166,7 +153,7 @@ function TagAdder({ onAdd, existing, empty, groups, index, labelOf, groupLabelOf
             aria-controls={pickerId}
             placeholder={t("addTag")}
             data-testid="tag-add-input"
-            className="h-[22px] min-w-0 flex-1 rounded-md border border-accent/50 bg-app px-2 text-[10px] leading-none text-text outline-none placeholder:text-muted2"
+            className="h-full min-w-0 flex-1 rounded-md border border-accent/50 bg-app px-2 text-[10px] leading-none text-text outline-none placeholder:text-muted2"
           />
           {/* The group picker applies to typed tags. */}
           <select
@@ -174,7 +161,7 @@ function TagAdder({ onAdd, existing, empty, groups, index, labelOf, groupLabelOf
             onChange={(e) => setGroup(e.target.value)}
             aria-label={t("chip.moveTo")}
             data-testid="tag-add-group"
-            className="h-[22px] max-w-[88px] rounded-md border border-border/60 bg-app px-1 text-[10px] leading-none text-muted outline-none"
+            className="h-full max-w-[88px] rounded-md border border-border/60 bg-app px-1 text-[10px] leading-none text-muted outline-none"
           >
             <option value={AUTO}>{t("group.auto")}</option>
             {groups.map((g) => <option key={g.group_id} value={g.group_id}>{groupLabelOf(g)}</option>)}
@@ -190,9 +177,9 @@ function TagAdder({ onAdd, existing, empty, groups, index, labelOf, groupLabelOf
         aria-label={open ? t("tagPicker.close") : undefined}
         title={open ? t("tagPicker.close") : undefined}
         data-testid="tag-add"
-        className={open
-          ? "inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-muted2 hover:bg-hover hover:text-text"
-          : "inline-flex items-center gap-0.5 rounded border border-dashed border-border/60 px-2 py-[2px] text-[10px] text-muted2 transition-colors hover:border-border hover:text-text"}
+        className={cx("inline-flex h-full shrink-0 items-center text-muted2 hover:text-text", open
+          ? "w-[22px] justify-center rounded-md hover:bg-hover"
+          : "gap-0.5 rounded border border-dashed border-border/60 px-2 text-[10px] hover:border-border")}
       >
         {open ? <X className="h-3 w-3" /> : <><Plus className="h-2.5 w-2.5" /> {t("add")}</>}
       </button>
@@ -207,9 +194,9 @@ function TagAdder({ onAdd, existing, empty, groups, index, labelOf, groupLabelOf
           pending={pending}
           labelOf={labelOf}
           groupLabelOf={groupLabelOf}
-          onPick={(tag) => {
+          onToggle={(tag, isSelected) => {
             inputRef.current.focus({ preventScroll: true });
-            void add(tag);
+            void updateTag(() => isSelected ? onRemove(tag) : onAdd(tag));
           }}
         />
       )}
@@ -307,7 +294,7 @@ export default function TagsSection({ assetId, onTagClick, pushToast }) {
     if (!assetId || !tag) return;
     try {
       const updated = await api.removeAssetTag(assetId, tag);
-      setCachedTags(assetId, updated?.tags || []);
+      setCachedTags(assetId, updated?.tags || [], { invalidateIndex: false });
     } catch (e) {
       fail("toast.removeTagFailed", e);
     }
@@ -359,7 +346,17 @@ export default function TagsSection({ assetId, onTagClick, pushToast }) {
             {items.map(chip)}
           </div>
         ))}
-        <TagAdder key={assetId} onAdd={addTag} existing={tags} empty={known && !tags.length} groups={groups} index={index} labelOf={labelOf} groupLabelOf={groupLabelOf} />
+        <TagAdder
+          key={assetId}
+          onAdd={addTag}
+          onRemove={removeTag}
+          existing={tags}
+          empty={known && !tags.length}
+          groups={groups}
+          index={index}
+          labelOf={labelOf}
+          groupLabelOf={groupLabelOf}
+        />
       </div>
       {menu && (
         <ChipMenu
