@@ -393,6 +393,7 @@
       },
       "lightbox": {
         "toggle": "Open / Close Lightbox",
+        "info": "Show / Hide Info",
         "proof": "Proof Mode"
       },
       "view": {

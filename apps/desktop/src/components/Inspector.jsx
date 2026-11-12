@@ -157,7 +157,12 @@ function SimilarStrip({ assetId, onSelect }) {
   );
 }
 
-export default function Inspector({ detail, onRatingChange, onFlagChange, onDescriptionChange, onAnnotated, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
+// `variant`: "lightbox" is the pane beside the photo in the lightbox. The
+// photo itself is on screen there, so the preview and what is read off it
+// (palette, faces) are left out, as are the strips that lead to another photo
+// and the blocks about the file's place in the catalog; what was shot, and
+// when, comes before what was written about it.
+export default function Inspector({ variant = "panel", detail, onRatingChange, onFlagChange, onDescriptionChange, onAnnotated, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
   const { t } = useTranslation("inspector");
   const [relinking, setRelinking] = useState(false);
   const [hoveredFaceId, setHoveredFaceId] = useState(null);
@@ -221,7 +226,10 @@ export default function Inspector({ detail, onRatingChange, onFlagChange, onDesc
     }
   }
 
+  const lightbox = variant === "lightbox";
+
   if (!detail) {
+    if (lightbox) return <aside className="h-full" data-inspector-variant="lightbox" />;
     return (
       <aside className="flex h-full items-center justify-center overflow-y-auto bg-chrome px-4">
         <div className="text-center">
@@ -270,40 +278,255 @@ export default function Inspector({ detail, onRatingChange, onFlagChange, onDesc
   const videoFps = imageMeta.fps ? `${Math.round(Number(imageMeta.fps))} fps` : null;
   const videoCodec = imageMeta.codec ? String(imageMeta.codec).toUpperCase() : null;
 
-  return (
-    <aside className="flex h-full flex-col overflow-hidden border-l border-border/40 bg-chrome">
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <div className="relative mb-4 flex h-[200px] items-center justify-center overflow-hidden">
-          {previewPath ? (
-            <div className="relative max-h-full max-w-full">
-              <img src={localFileUrl(previewPath)} alt={detail.stem} className="max-h-[200px] max-w-full object-contain" draggable={false} />
-              {/* The img box hugs the rendered image (auto size + max constraints),
-                  so normalized face boxes map straight to percentages. */}
-              {(detail.people?.faces || []).map((face) => {
-                const box = face.bounding_box;
-                if (!Array.isArray(box) || box.length !== 4 || face.face_id !== hoveredFaceId) return null;
-                return (
-                  <div
-                    key={face.face_id}
-                    className="pointer-events-none absolute rounded-[3px] border-[1.5px] border-accent shadow-[0_0_0_1px_rgba(0,0,0,0.55)]"
-                    style={{
-                      left: `${box[0] * 100}%`,
-                      top: `${box[1] * 100}%`,
-                      width: `${box[2] * 100}%`,
-                      height: `${box[3] * 100}%`,
-                    }}
-                  />
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center text-[12px] text-muted">{t("noPreview")}</div>
-          )}
-          <span className="absolute left-2 top-2 rounded-full bg-black/45 px-1.5 py-0.5 text-[10px] font-medium text-white">
-            {formatValue}
+  const peopleSection = detail.people?.has_face ? (
+    <Section title={t("sections.people")}>
+      <div className="space-y-1 py-1" onMouseLeave={() => setHoveredFaceId(null)}>
+        {detail.people.faces.map((face) => {
+          const named = !!face.name?.trim();
+          const grouped = !!face.group_id;
+          return (
+            <button
+              key={face.face_id}
+              type="button"
+              disabled={!grouped}
+              onMouseEnter={() => setHoveredFaceId(face.face_id)}
+              onClick={(e) => {
+                if (!grouped) return;
+                if (named) onOpenPersonGroup?.({ group_id: face.group_id, name: face.name });
+                else void openFaceNaming(face, e.currentTarget.getBoundingClientRect());
+              }}
+              onContextMenu={(e) => {
+                if (!grouped) return;
+                e.preventDefault();
+                setFaceMenu({ face, x: e.clientX, y: e.clientY, anchorRect: e.currentTarget.getBoundingClientRect() });
+              }}
+              title={named ? t("people.openPerson", { name: face.name }) : (grouped ? t("people.addName") : undefined)}
+              className={[
+                "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] transition",
+                grouped ? "hover:bg-hover" : "opacity-55",
+              ].join(" ")}
+            >
+              <FaceCrop
+                src={previewPath ? localFileUrl(previewPath) : null}
+                bbox={face.bounding_box}
+                size={26}
+                className="shrink-0 rounded-full border border-border/50"
+              />
+              <span className={`min-w-0 flex-1 truncate ${named ? "text-text" : "text-muted"}`}>
+                {named ? face.name : (grouped ? t("people.addName") : t("people.unrecognized"))}
+              </span>
+              {face.quality === "low" && (
+                <span className="shrink-0 text-[10px] text-muted2">{t("people.lowQuality")}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </Section>
+  ) : null;
+
+  const propertiesSection = (
+    <Section title={t("sections.properties")}>
+      <DetailRow label={t("rows.rating")}>
+        <StarRating
+          value={rating}
+          onChange={(next) => onRatingChange?.(next)}
+        />
+      </DetailRow>
+      <DetailRow label={t("rows.flag")}>
+        <FlagControl value={detail.app_flag} onChange={(next) => onFlagChange?.(next)} />
+      </DetailRow>
+      <DetailRow label={t("rows.dimensions")}>{dimensions}</DetailRow>
+      {isVideo && videoDuration ? <DetailRow label={t("rows.duration")}>{videoDuration}</DetailRow> : null}
+      <DetailRow label={t("rows.size")}>{fileSize}</DetailRow>
+      <DetailRow label={t("rows.type")}>{formatValue}</DetailRow>
+      {isVideo && videoCodec ? (
+        <DetailRow label={t("rows.codec")}>{videoCodec}{videoFps ? ` · ${videoFps}` : ""}</DetailRow>
+      ) : null}
+    </Section>
+  );
+
+  const descriptionSection = (
+    <DescriptionSection
+      assetId={detail.asset_id}
+      description={detail.description}
+      source={detail.description_source}
+      aiCaption={detail.ai_caption}
+      onSave={(text) => onDescriptionChange?.(text)}
+    />
+  );
+
+  const tagsSection = (
+    <TagsSection assetId={detail.asset_id} onTagClick={onTagFilter} pushToast={pushToast} />
+  );
+
+  const annotationsSection = (
+    <AnnotationsSection
+      assetId={detail.asset_id}
+      imagePath={detail.image_path || detail.image_preview_path || detail.raw_preview_path}
+      onJumpToLocation={onJumpToLocation}
+      onLocationChanged={onLocationChanged}
+      onAnnotated={onAnnotated}
+      pushToast={pushToast}
+    />
+  );
+
+  const sourceSection = api.can("fileSystem") ? (
+    <Section title={t("sections.source")}>
+      <DetailRow label={t("rows.asset")}>
+        {missing ? (
+          <span className="flex min-w-0 items-center justify-end gap-1.5">
+            <span className="shrink-0 rounded border border-[rgba(239,159,39,0.42)] px-1 text-[10px] text-[#EF9F27]">{t("missing.badge")}</span>
+            <span className="truncate text-muted2 line-through" data-testid="inspector-source-path" data-path={detail.image_path} data-missing="true">{escapePathLabel(detail.image_path)}</span>
           </span>
-        </div>
-        <PaletteStrip colors={detail.colors} onPick={onColorFilter} />
+        ) : (
+          <button
+            type="button"
+            className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+            onClick={() => void api.revealPath(detail.image_path)}
+            title={t("reveal")}
+            data-testid="inspector-source-path"
+            data-path={detail.image_path}
+            data-missing="false"
+          >
+            {escapePathLabel(detail.image_path)}
+          </button>
+        )}
+      </DetailRow>
+      <DetailRow label={t("rows.rawSource")}>
+        {detail.raw_path ? (
+          <span className="inline-flex max-w-full items-start justify-end gap-1.5">
+            <button
+              type="button"
+              className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+              onClick={() => void api.revealPath(detail.raw_path)}
+              title={t("reveal")}
+              data-testid="inspector-raw-source"
+            >
+              {escapePathLabel(detail.raw_path)}
+            </button>
+            {detail.raw_in_library && detail.raw_asset_id ? (
+              <button
+                type="button"
+                className="mt-px shrink-0 rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                onClick={() => onSelectAsset?.(detail.raw_asset_id)}
+                title={t("rows.showRaw")}
+                aria-label={t("rows.showRaw")}
+                data-testid="inspector-show-raw"
+              >
+                <Images className="h-3 w-3" />
+              </button>
+            ) : null}
+          </span>
+        ) : t("notLinked")}
+      </DetailRow>
+      {imageMeta.software ? <DetailRow label={t("rows.lastEditedBy")}>{imageMeta.software}</DetailRow> : null}
+    </Section>
+  ) : null;
+
+  const cameraSection = !isVideo ? (
+    <Section title={t("sections.camera")}>
+      <DetailRow label={t("rows.camera")}>{rawMeta.camera_model || imageMeta.camera_model || "—"}</DetailRow>
+      <DetailRow label={t("rows.lens")}>{rawMeta.lens_model || imageMeta.lens_model || "—"}</DetailRow>
+    </Section>
+  ) : null;
+
+  const exposureSection = hasExposure ? (
+    <Section title={t("sections.exposure")}>
+      {focal ? <DetailRow label={t("rows.focalLength")}>{focal}</DetailRow> : null}
+      {aperture ? <DetailRow label={t("rows.aperture")}>{aperture}</DetailRow> : null}
+      {shutter ? <DetailRow label={t("rows.shutter")}>{shutter}</DetailRow> : null}
+      {iso ? <DetailRow label={t("rows.iso")}>{iso}</DetailRow> : null}
+    </Section>
+  ) : null;
+
+  const datesSection = (
+    <Section title={t("sections.dates")}>
+      <DetailRow label={t("rows.imported")}><span data-testid="inspector-imported">{formatTimestamp(detail.imported_at || imageMeta.imported_at, { zoneless: "utc" })}</span></DetailRow>
+      <DetailRow label={t("rows.captured")}><span data-testid="inspector-captured">{formatTimestamp(rawMeta.capture_time || imageMeta.capture_time)}</span></DetailRow>
+      <DetailRow label={t("rows.modified")}><span data-testid="inspector-modified">{formatTimestamp(imageMeta.modified_time || detail.updated_at, { zoneless: "utc" })}</span></DetailRow>
+    </Section>
+  );
+
+  const locationSection = gps ? (
+    <Section title={t("sections.location")}>
+      <DetailRow label={t("rows.gps")}>
+        <button
+          type="button"
+          onClick={() => onJumpToLocation?.(detail.asset_id)}
+          title={t("rows.gpsJump")}
+          className="cursor-pointer text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:decoration-accent/60"
+        >
+          {gps}
+        </button>
+      </DetailRow>
+      <DetailRow label={t("rows.locationSource")}>{t("locationSource.exif")}</DetailRow>
+    </Section>
+  ) : null;
+
+  const duplicatesSection = detail.duplicates?.length > 0 ? (
+    <Section title={t("sections.duplicates")}>
+      <div className="mt-1 space-y-1.5">
+        {detail.duplicates.map((dup) => (
+          <button
+            key={dup.asset_id}
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover"
+            onClick={() => void api.revealPath(dup.image_path)}
+            title={t("reveal")}
+          >
+            <Copy className="h-3 w-3 shrink-0 text-muted2" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[12px] text-text">{dup.stem}</div>
+              <div className="truncate text-[10px] text-muted">{escapePathLabel(dup.image_path)}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </Section>
+  ) : null;
+
+  return (
+    <aside
+      className={`flex h-full flex-col overflow-hidden border-l ${lightbox ? "border-transparent" : "border-border/40 bg-chrome"}`}
+      data-inspector-variant={variant}
+    >
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        {lightbox ? null : (
+          <>
+            <div className="relative mb-4 flex h-[200px] items-center justify-center overflow-hidden">
+              {previewPath ? (
+                <div className="relative max-h-full max-w-full">
+                  <img src={localFileUrl(previewPath)} alt={detail.stem} className="max-h-[200px] max-w-full object-contain" draggable={false} />
+                  {/* The img box hugs the rendered image (auto size + max constraints),
+                      so normalized face boxes map straight to percentages. */}
+                  {(detail.people?.faces || []).map((face) => {
+                    const box = face.bounding_box;
+                    if (!Array.isArray(box) || box.length !== 4 || face.face_id !== hoveredFaceId) return null;
+                    return (
+                      <div
+                        key={face.face_id}
+                        className="pointer-events-none absolute rounded-[3px] border-[1.5px] border-accent shadow-[0_0_0_1px_rgba(0,0,0,0.55)]"
+                        style={{
+                          left: `${box[0] * 100}%`,
+                          top: `${box[1] * 100}%`,
+                          width: `${box[2] * 100}%`,
+                          height: `${box[3] * 100}%`,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center text-[12px] text-muted">{t("noPreview")}</div>
+              )}
+              <span className="absolute left-2 top-2 rounded-full bg-black/45 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                {formatValue}
+              </span>
+            </div>
+            <PaletteStrip colors={detail.colors} onPick={onColorFilter} />
+          </>
+        )}
 
         <div className="px-0.5">
           <h2 className="text-[13px] font-medium leading-tight text-text" data-testid="inspector-asset-title">{imageName || detail.stem}</h2>
@@ -329,217 +552,47 @@ export default function Inspector({ detail, onRatingChange, onFlagChange, onDesc
             </div>
           ) : null}
 
-          {detail.collage_sources?.length > 0 ? (
-            <div className="mt-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.sourceImages")}</div>
-              <ThumbnailStrip items={detail.collage_sources} onSelect={onSelectAsset} testId="collage-source" />
-            </div>
-          ) : null}
+          {lightbox ? (
+            <>
+              {propertiesSection}
+              {cameraSection}
+              {exposureSection}
+              {datesSection}
+              {locationSection}
+              {descriptionSection}
+              {tagsSection}
+            </>
+          ) : (
+            <>
+              {detail.collage_sources?.length > 0 ? (
+                <div className="mt-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.sourceImages")}</div>
+                  <ThumbnailStrip items={detail.collage_sources} onSelect={onSelectAsset} testId="collage-source" />
+                </div>
+              ) : null}
 
-          {detail.version_siblings?.length > 0 ? (
-            <div className="mt-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.otherVersions")}</div>
-              <ThumbnailStrip items={detail.version_siblings} onSelect={onSelectAsset} testId="version-sibling" />
-            </div>
-          ) : null}
+              {detail.version_siblings?.length > 0 ? (
+                <div className="mt-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.otherVersions")}</div>
+                  <ThumbnailStrip items={detail.version_siblings} onSelect={onSelectAsset} testId="version-sibling" />
+                </div>
+              ) : null}
 
-          <SimilarStrip assetId={detail.asset_id} onSelect={onSelectAsset} />
+              <SimilarStrip assetId={detail.asset_id} onSelect={onSelectAsset} />
 
-          {detail.people?.has_face ? (
-            <Section title={t("sections.people")}>
-              <div className="space-y-1 py-1" onMouseLeave={() => setHoveredFaceId(null)}>
-                {detail.people.faces.map((face) => {
-                  const named = !!face.name?.trim();
-                  const grouped = !!face.group_id;
-                  return (
-                    <button
-                      key={face.face_id}
-                      type="button"
-                      disabled={!grouped}
-                      onMouseEnter={() => setHoveredFaceId(face.face_id)}
-                      onClick={(e) => {
-                        if (!grouped) return;
-                        if (named) onOpenPersonGroup?.({ group_id: face.group_id, name: face.name });
-                        else void openFaceNaming(face, e.currentTarget.getBoundingClientRect());
-                      }}
-                      onContextMenu={(e) => {
-                        if (!grouped) return;
-                        e.preventDefault();
-                        setFaceMenu({ face, x: e.clientX, y: e.clientY, anchorRect: e.currentTarget.getBoundingClientRect() });
-                      }}
-                      title={named ? t("people.openPerson", { name: face.name }) : (grouped ? t("people.addName") : undefined)}
-                      className={[
-                        "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] transition",
-                        grouped ? "hover:bg-hover" : "opacity-55",
-                      ].join(" ")}
-                    >
-                      <FaceCrop
-                        src={previewPath ? localFileUrl(previewPath) : null}
-                        bbox={face.bounding_box}
-                        size={26}
-                        className="shrink-0 rounded-full border border-border/50"
-                      />
-                      <span className={`min-w-0 flex-1 truncate ${named ? "text-text" : "text-muted"}`}>
-                        {named ? face.name : (grouped ? t("people.addName") : t("people.unrecognized"))}
-                      </span>
-                      {face.quality === "low" && (
-                        <span className="shrink-0 text-[10px] text-muted2">{t("people.lowQuality")}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </Section>
-          ) : null}
-
-          <Section title={t("sections.properties")}>
-            <DetailRow label={t("rows.rating")}>
-              <StarRating
-                value={rating}
-                onChange={(next) => onRatingChange?.(next)}
-              />
-            </DetailRow>
-            <DetailRow label={t("rows.flag")}>
-              <FlagControl value={detail.app_flag} onChange={(next) => onFlagChange?.(next)} />
-            </DetailRow>
-            <DetailRow label={t("rows.dimensions")}>{dimensions}</DetailRow>
-            {isVideo && videoDuration ? <DetailRow label={t("rows.duration")}>{videoDuration}</DetailRow> : null}
-            <DetailRow label={t("rows.size")}>{fileSize}</DetailRow>
-            <DetailRow label={t("rows.type")}>{formatValue}</DetailRow>
-            {isVideo && videoCodec ? (
-              <DetailRow label={t("rows.codec")}>{videoCodec}{videoFps ? ` · ${videoFps}` : ""}</DetailRow>
-            ) : null}
-          </Section>
-
-          <DescriptionSection
-            assetId={detail.asset_id}
-            description={detail.description}
-            source={detail.description_source}
-            aiCaption={detail.ai_caption}
-            onSave={(text) => onDescriptionChange?.(text)}
-          />
-
-          <TagsSection assetId={detail.asset_id} onTagClick={onTagFilter} pushToast={pushToast} />
-
-          <AnnotationsSection
-            assetId={detail.asset_id}
-            imagePath={detail.image_path || detail.image_preview_path || detail.raw_preview_path}
-            onJumpToLocation={onJumpToLocation}
-            onLocationChanged={onLocationChanged}
-            onAnnotated={onAnnotated}
-            pushToast={pushToast}
-          />
-
-          {api.can("fileSystem") && <Section title={t("sections.source")}>
-            <DetailRow label={t("rows.asset")}>
-              {missing ? (
-                <span className="flex min-w-0 items-center justify-end gap-1.5">
-                  <span className="shrink-0 rounded border border-[rgba(239,159,39,0.42)] px-1 text-[10px] text-[#EF9F27]">{t("missing.badge")}</span>
-                  <span className="truncate text-muted2 line-through" data-testid="inspector-source-path" data-path={detail.image_path} data-missing="true">{escapePathLabel(detail.image_path)}</span>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
-                  onClick={() => void api.revealPath(detail.image_path)}
-                  title={t("reveal")}
-                  data-testid="inspector-source-path"
-                  data-path={detail.image_path}
-                  data-missing="false"
-                >
-                  {escapePathLabel(detail.image_path)}
-                </button>
-              )}
-            </DetailRow>
-            <DetailRow label={t("rows.rawSource")}>
-              {detail.raw_path ? (
-                <span className="inline-flex max-w-full items-start justify-end gap-1.5">
-                  <button
-                    type="button"
-                    className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
-                    onClick={() => void api.revealPath(detail.raw_path)}
-                    title={t("reveal")}
-                    data-testid="inspector-raw-source"
-                  >
-                    {escapePathLabel(detail.raw_path)}
-                  </button>
-                  {detail.raw_in_library && detail.raw_asset_id ? (
-                    <button
-                      type="button"
-                      className="mt-px shrink-0 rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
-                      onClick={() => onSelectAsset?.(detail.raw_asset_id)}
-                      title={t("rows.showRaw")}
-                      aria-label={t("rows.showRaw")}
-                      data-testid="inspector-show-raw"
-                    >
-                      <Images className="h-3 w-3" />
-                    </button>
-                  ) : null}
-                </span>
-              ) : t("notLinked")}
-            </DetailRow>
-            {imageMeta.software ? <DetailRow label={t("rows.lastEditedBy")}>{imageMeta.software}</DetailRow> : null}
-          </Section>}
-
-          {!isVideo ? (
-            <Section title={t("sections.camera")}>
-              <DetailRow label={t("rows.camera")}>{rawMeta.camera_model || imageMeta.camera_model || "—"}</DetailRow>
-              <DetailRow label={t("rows.lens")}>{rawMeta.lens_model || imageMeta.lens_model || "—"}</DetailRow>
-            </Section>
-          ) : null}
-
-          {hasExposure ? (
-            <Section title={t("sections.exposure")}>
-              {focal ? <DetailRow label={t("rows.focalLength")}>{focal}</DetailRow> : null}
-              {aperture ? <DetailRow label={t("rows.aperture")}>{aperture}</DetailRow> : null}
-              {shutter ? <DetailRow label={t("rows.shutter")}>{shutter}</DetailRow> : null}
-              {iso ? <DetailRow label={t("rows.iso")}>{iso}</DetailRow> : null}
-            </Section>
-          ) : null}
-
-          <Section title={t("sections.dates")}>
-            <DetailRow label={t("rows.imported")}><span data-testid="inspector-imported">{formatTimestamp(detail.imported_at || imageMeta.imported_at, { zoneless: "utc" })}</span></DetailRow>
-            <DetailRow label={t("rows.captured")}><span data-testid="inspector-captured">{formatTimestamp(rawMeta.capture_time || imageMeta.capture_time)}</span></DetailRow>
-            <DetailRow label={t("rows.modified")}><span data-testid="inspector-modified">{formatTimestamp(imageMeta.modified_time || detail.updated_at, { zoneless: "utc" })}</span></DetailRow>
-          </Section>
-
-          {gps ? (
-            <Section title={t("sections.location")}>
-              <DetailRow label={t("rows.gps")}>
-                <button
-                  type="button"
-                  onClick={() => onJumpToLocation?.(detail.asset_id)}
-                  title={t("rows.gpsJump")}
-                  className="cursor-pointer text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:decoration-accent/60"
-                >
-                  {gps}
-                </button>
-              </DetailRow>
-              <DetailRow label={t("rows.locationSource")}>{t("locationSource.exif")}</DetailRow>
-            </Section>
-          ) : null}
-
-          {detail.duplicates?.length > 0 ? (
-            <Section title={t("sections.duplicates")}>
-              <div className="mt-1 space-y-1.5">
-                {detail.duplicates.map((dup) => (
-                  <button
-                    key={dup.asset_id}
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover"
-                    onClick={() => void api.revealPath(dup.image_path)}
-                    title={t("reveal")}
-                  >
-                    <Copy className="h-3 w-3 shrink-0 text-muted2" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[12px] text-text">{dup.stem}</div>
-                      <div className="truncate text-[10px] text-muted">{escapePathLabel(dup.image_path)}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </Section>
-          ) : null}
+              {peopleSection}
+              {propertiesSection}
+              {descriptionSection}
+              {tagsSection}
+              {annotationsSection}
+              {sourceSection}
+              {cameraSection}
+              {exposureSection}
+              {datesSection}
+              {locationSection}
+              {duplicatesSection}
+            </>
+          )}
 
         </div>
       </div>

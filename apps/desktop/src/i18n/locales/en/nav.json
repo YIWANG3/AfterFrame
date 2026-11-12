@@ -419,6 +419,7 @@
   },
   "lightbox": {
     "edit": "Edit",
+    "info": "Info",
     "proof": "Proof",
     "zoomLevel": "Zoom level",
     "resetToFit": "Reset to fit",

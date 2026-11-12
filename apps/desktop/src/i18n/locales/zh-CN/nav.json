@@ -402,6 +402,7 @@
   },
   "lightbox": {
     "edit": "编辑",
+    "info": "详情",
     "proof": "校样",
     "zoomLevel": "缩放级别",
     "resetToFit": "重置到适应",

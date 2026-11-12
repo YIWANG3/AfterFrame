@@ -13,7 +13,7 @@ import { registerRenderBridge } from "./agent/renderBridge";
 import i18n from "./i18n";
 import usePaneResize from "./hooks/usePaneResize";
 import { usePref } from "./hooks/usePref";
-import { intIn, oneOf } from "./utils/prefs";
+import { bool, intIn, oneOf } from "./utils/prefs";
 import useSelection from "./hooks/useSelection";
 import useAgentBridge from "./hooks/useAgentBridge";
 import useAssetActions from "./hooks/useAssetActions";
@@ -104,6 +104,8 @@ export default function App() {
   const [findListOpen, setFindListOpen] = useState(false);
   const [sampleBusy, setSampleBusy] = useState(false);
   const [proofMode, setProofMode] = useState(false);
+  // The lightbox's details pane: left as it was, in or out.
+  const [lightboxInfo, setLightboxInfo] = usePref("lightbox.info", false, bool);
   const [layoutItems, setLayoutItems] = useState([]);
   const [compareState, setCompareState] = useState(null);
   const [collageItems, setCollageItems] = useState(null);
@@ -1223,6 +1225,9 @@ export default function App() {
       case "lightbox.proof":
         setProofMode((current) => !current);
         return true;
+      case "lightbox.info":
+        setLightboxInfo((current) => !current);
+        return true;
       case "view.search":
         focusSearch();
         return true;
@@ -1321,6 +1326,36 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  const closeLightbox = () => {
+    setProofMode(false);
+    setLightboxOpen(false);
+  };
+  // The selected photo's details: the grid's right pane, and the lightbox's.
+  const inspectorProps = {
+    detail: workspace.detail,
+    onRatingChange: applyRating,
+    onFlagChange: (flag) => applyFlag(flag),
+    onDescriptionChange: (text) => workspace.setAssetDescription([workspace.detail?.asset_id], text),
+    onAnnotated: () => workspace.reloadDetail?.(),
+    onSelectAsset: selectRelatedAsset,
+    onRelinked: () => workspace.refreshAll(),
+    onOpenPersonGroup: openPersonGroup,
+    onPeopleChanged: () => workspace.reloadDetail?.(),
+    onJumpToLocation: mapDrawer.jumpToAssetLocation,
+    onLocationChanged: () => workspace.bumpCatalogRevision(),
+    pushToast,
+    onTagFilter: (tag) => {
+      if (!tag) return;
+      workspace.setFilters({ ...(workspace.filters || {}), tag });
+      setShowFilters(true);
+    },
+    onColorFilter: (hex) => {
+      if (!hex) return;
+      workspace.setFilters({ ...(workspace.filters || {}), color: hex });
+      setShowFilters(true);
+    },
+  };
 
   return (
     <div className="noise-overlay h-full overflow-hidden bg-app text-text">
@@ -1660,30 +1695,7 @@ export default function App() {
             pushToast={pushToast}
           />
         ) : (
-          <Inspector
-            detail={workspace.detail}
-            onRatingChange={applyRating}
-            onFlagChange={(flag) => applyFlag(flag)}
-            onDescriptionChange={(text) => workspace.setAssetDescription([workspace.detail?.asset_id], text)}
-            onAnnotated={() => workspace.reloadDetail?.()}
-            onSelectAsset={selectRelatedAsset}
-            onRelinked={() => workspace.refreshAll()}
-            onOpenPersonGroup={openPersonGroup}
-            onPeopleChanged={() => workspace.reloadDetail?.()}
-            onJumpToLocation={mapDrawer.jumpToAssetLocation}
-            onLocationChanged={() => workspace.bumpCatalogRevision()}
-            pushToast={pushToast}
-            onTagFilter={(tag) => {
-              if (!tag) return;
-              workspace.setFilters({ ...(workspace.filters || {}), tag });
-              setShowFilters(true);
-            }}
-            onColorFilter={(hex) => {
-              if (!hex) return;
-              workspace.setFilters({ ...(workspace.filters || {}), color: hex });
-              setShowFilters(true);
-            }}
-          />
+          <Inspector {...inspectorProps} />
         )}
 
         <div
@@ -1718,11 +1730,20 @@ export default function App() {
         proofMode={featureView ? false : proofMode}
         onToggleProof={featureView ? undefined : (() => setProofMode((current) => !current))}
         onEdit={featureView ? undefined : openEditor}
-        onClose={() => {
-          setProofMode(false);
-          setLightboxOpen(false);
-        }}
+        onClose={closeLightbox}
         onIndexChange={featureView ? featureViewState.onLightboxIndexChange : selectByIndex}
+        // A feature view (stickers, discover) has a pane of its own kind.
+        // What leads out of the lightbox (a tag's photos, the map) closes it.
+        info={featureView ? null : (
+          <Inspector
+            {...inspectorProps}
+            variant="lightbox"
+            onTagFilter={(tag) => { closeLightbox(); inspectorProps.onTagFilter(tag); }}
+            onJumpToLocation={(assetId) => { closeLightbox(); mapDrawer.jumpToAssetLocation(assetId); }}
+          />
+        )}
+        infoOpen={lightboxInfo}
+        onToggleInfo={() => setLightboxInfo((current) => !current)}
       />
       <SettingsOverlay
         open={settingsOpen}

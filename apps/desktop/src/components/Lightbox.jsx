@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Flag, FlagOff, ImageOff, Minus, Pencil, Plus, Star, SwatchBook, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flag, FlagOff, ImageOff, Info, Minus, Pencil, Plus, Star, SwatchBook, X } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clamp, fileName, localFileUrl, httpMediaUrl } from "../utils/format";
@@ -39,7 +39,7 @@ function ActionPill({ icon: Icon, label, shortcut, active = false, className = "
       className={[
         "inline-flex h-9 items-center gap-2 rounded-full border px-3 text-[12px] font-medium transition-colors",
         active
-          ? "border-white/22 bg-white/18 text-white"
+          ? "border-white/30 bg-white/20 text-white"
           : "border-white/12 bg-black/26 text-white/80 hover:border-white/18 hover:bg-black/36 hover:text-white",
         className,
       ].join(" ")}
@@ -129,6 +129,13 @@ export default function Lightbox({
   onEdit,
   onClose,
   onIndexChange,
+  // The photo's details, docked on the right: the pane (a node the caller
+  // builds), whether it is out, and the toggle. Without a pane there is no
+  // button. It takes its width off the stage rather than covering the photo
+  // (index.css reads --lightbox-info), so the fit follows it in and out.
+  info = null,
+  infoOpen = false,
+  onToggleInfo,
 }) {
   const { t } = useTranslation("nav");
   // The pills show the keys, which the user may have rebound.
@@ -224,6 +231,7 @@ export default function Lightbox({
 
   const metaWidth = Number(currentItem?.image_metadata?.width || 0);
   const metaHeight = Number(currentItem?.image_metadata?.height || 0);
+  const showInfo = Boolean(infoOpen && info && !proofMode);
   const canGoPrev = clampedIndex > 0;
   const canGoNext = clampedIndex < (items?.length || 0) - 1;
 
@@ -623,7 +631,7 @@ export default function Lightbox({
 
   return (
     <div
-      style={{ zIndex: Z.lightbox }}
+      style={{ zIndex: Z.lightbox, "--lightbox-info": showInfo ? "var(--inspector-width)" : "0px" }}
       data-layer="lightbox"
       className={[
         "fixed inset-0 flex flex-col",
@@ -684,6 +692,17 @@ export default function Lightbox({
               onClick={onToggleProof}
             />
           )}
+          {info && onToggleInfo ? (
+            <ActionPill
+              icon={Info}
+              label={t("lightbox.info")}
+              shortcut={shortcutLabel("lightbox.info")}
+              active={showInfo}
+              aria-pressed={showInfo}
+              data-testid="lightbox-info-toggle"
+              onClick={onToggleInfo}
+            />
+          ) : null}
           <OverlayButton onClick={onClose}>
             <X className="h-4 w-4" />
           </OverlayButton>
@@ -709,7 +728,8 @@ export default function Lightbox({
             event.stopPropagation();
             onIndexChange(clampedIndex + 1);
           }}
-          className="pointer-events-auto absolute right-6 top-1/2 z-10 -translate-y-1/2"
+          className="pointer-events-auto absolute top-1/2 z-10 -translate-y-1/2"
+          style={{ right: "calc(var(--lightbox-info, 0px) + 1.5rem)" }}
         >
           <ChevronRight className="h-5 w-5" />
         </OverlayButton>
@@ -851,6 +871,21 @@ export default function Lightbox({
         </div>
       )}
       <Filmstrip items={items || []} index={clampedIndex} onPick={(i) => onIndexChange?.(i)} hidden={!!proofMode} />
+
+      {/* Dark whatever the app's theme: the lightbox always is. The same
+          rounded pane, the same width and the same 8px off the window's edge
+          as the grid's inspector, so the details stay where they were. */}
+      {showInfo ? (
+        <div
+          data-testid="lightbox-info"
+          className="theme-dark absolute bottom-2 right-2 top-2 z-30 overflow-hidden rounded-[18px] bg-[var(--pane)] text-text"
+          style={{ width: "calc(var(--inspector-width) - 8px)" }}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          {info}
+        </div>
+      ) : null}
     </div>
   );
 }
