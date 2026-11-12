@@ -10,8 +10,7 @@ import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { FOLDER_SORTS, canReorderFolders } from "./folderList";
-import { ancestorIds, canDropInto, descendantIds, parentIdOf, siblingIds, visibleTreeRows } from "./folderTree";
-import { confirm } from "./confirm";
+import { ancestorIds, canDropInto, parentIdOf, siblingIds, visibleTreeRows } from "./folderTree";
 import { Z } from "../ui";
 // The feature modules' library views (manifest `sidebarView`), listed below the browse rows.
 import { sidebarViews } from "../../features/index.js";
@@ -100,6 +99,9 @@ export default function Sidebar({
   onDeleteCollection,
   onAnnotateCollection,
   onAddToCollection,
+  // ({ paths, parentId }) → files and folders dragged in from Finder: imported,
+  // each folder on disk as a folder here (inside `parentId`, or at the top level).
+  onImportInto,
   // The folder the B key adds to (hooks/targetFolder.js): marked with its key.
   targetFolderId = null,
   onOpenView,
@@ -285,22 +287,19 @@ export default function Sidebar({
     if (sourceId && parentIdOf(collections, sourceId) !== null) void onMoveCollection?.(sourceId, null);
   }
 
-  // A folder with folders inside asks first: they go with it.
+  // The app asks what it must (App.jsx deleteFolders): about the folders
+  // inside, which go with it, and about the photos only this folder holds.
   async function deleteFolder(col) {
-    const under = descendantIds(collections, col.collection_id).length;
-    if (under) {
-      const approved = await confirm({
-        title: t("sidebar.deleteWithChildrenTitle", { name: col.name }),
-        message: t("sidebar.deleteWithChildren", { count: under }),
-        confirmLabel: t("sidebar.deleteWithChildrenAction"),
-        cancelLabel: t("sidebar.deleteCancel"),
-        danger: true,
-      });
-      if (!approved) return;
-    }
     await onDeleteCollection?.(col.collection_id);
   }
 
+
+  // Files or folders dragged in from Finder (not this app's own photos on
+  // their way out and back: those carry asset ids, and are read first).
+  const filesDragged = (event) => !!onImportInto && !readDraggedAssetIds(event).length
+    && !!event.dataTransfer?.types?.includes?.("Files");
+  const droppedPaths = (event) => [...(event.dataTransfer?.files || [])]
+    .map((file) => api.getPathForFile?.(file) || file.path).filter(Boolean);
 
   function readDraggedAssetIds(event) {
     const raw = event.dataTransfer.getData("application/x-media-workspace-asset");
@@ -466,7 +465,29 @@ export default function Sidebar({
 
         {/* Open, the folders keep at least a few rows however short the window:
             the smart collections above give way first (they may shrink). */}
-        <div className={foldersOpen ? "flex min-h-[180px] flex-1 flex-col" : "shrink-0"} data-sidebar-folders="true" data-open={foldersOpen ? "true" : "false"}>
+        <div
+          className={foldersOpen ? "flex min-h-[180px] flex-1 flex-col" : "shrink-0"}
+          data-sidebar-folders="true"
+          data-open={foldersOpen ? "true" : "false"}
+          // A folder dragged in from Finder becomes a folder here. On a row it
+          // goes inside that folder (the row takes the event first); anywhere
+          // else in the section, to the top level.
+          data-import-drop={rootDrop && !draggingFolderId ? "true" : undefined}
+          onDragOver={(event) => {
+            if (event.defaultPrevented || draggingFolderId || !filesDragged(event)) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+            setRootDrop(true);
+          }}
+          onDragLeave={(event) => { if (!draggingFolderId && !event.currentTarget.contains(event.relatedTarget)) setRootDrop(false); }}
+          onDrop={(event) => {
+            if (draggingFolderId || !filesDragged(event)) return;
+            event.preventDefault();
+            setRootDrop(false);
+            const paths = droppedPaths(event);
+            if (paths.length) void onImportInto?.({ paths, parentId: null });
+          }}
+        >
           <SectionHeading
             id="folders"
             label={t("sidebar.folders")}
@@ -736,9 +757,10 @@ export default function Sidebar({
                       setFolderInsertion(destination);
                       return;
                     }
-                    if (!readDraggedAssetIds(event).length) return;
+                    if (!readDraggedAssetIds(event).length && !filesDragged(event)) return;
                     event.preventDefault();
                     event.dataTransfer.dropEffect = "copy";
+                    setRootDrop(false);
                     armHoverExpand(row);
                     if (dropTargetId !== col.collection_id) {
                       setDropTargetId(col.collection_id);
@@ -746,7 +768,7 @@ export default function Sidebar({
                   }}
                   onDragEnter={(event) => {
                     if (draggingFolderId) { event.preventDefault(); return; }
-                    if (!readDraggedAssetIds(event).length) return;
+                    if (!readDraggedAssetIds(event).length && !filesDragged(event)) return;
                     event.preventDefault();
                     setDropTargetId(col.collection_id);
                   }}
@@ -768,9 +790,17 @@ export default function Sidebar({
                       return;
                     }
                     const assetIds = readDraggedAssetIds(event);
+                    // From Finder: imported, and filed inside this folder.
+                    const paths = assetIds.length ? [] : droppedPaths(event);
                     event.preventDefault();
+                    event.stopPropagation();
                     clearHoverExpand();
                     setDropTargetId(null);
+                    if (paths.length) {
+                      expand([col.collection_id]);
+                      await onImportInto?.({ paths, parentId: col.collection_id });
+                      return;
+                    }
                     window.__mediaWorkspaceDraggingAssetId = null;
                     window.__mediaWorkspaceDraggingAssetIds = null;
                     if (!assetIds.length) return;

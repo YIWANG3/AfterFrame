@@ -176,6 +176,12 @@ export default function useWorkspace({ pushToast } = {}) {
     refreshAll: (opts) => refreshAll(opts),
     refreshBrowse: () => refreshBrowse(),
     setSummary,
+    // Imported photos went into a folder: its count, and its grid if it is open.
+    filed: async () => {
+      bumpCatalogRevision();
+      await loadCollections();
+      if (scopeRef.current.collectionId) await refreshBrowse();
+    },
   };
   collectionsBridgeRef.current = {
     t, pushToast, scopeRef, updateScope,

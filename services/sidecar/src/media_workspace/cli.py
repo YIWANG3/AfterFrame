@@ -12,9 +12,11 @@ from .ai_repaint import list_provider_models
 from .catalog import ensure_catalog
 from .db import (
     add_collection_items,
+    add_collection_paths,
     asset_detail,
     assign_faces_to_group,
     browse_collection,
+    collection_contents,
     confirm_match,
     connect,
     create_collection,
@@ -348,6 +350,17 @@ def build_parser() -> argparse.ArgumentParser:
     col_add = subparsers.add_parser("collection-add-items", parents=[common])
     col_add.add_argument("--collection-id", required=True)
     col_add.add_argument("--asset-id", action="append", required=True)
+
+    # A Finder folder dropped on the sidebar: the photos at these paths (a
+    # file, or everything under a folder) go into the folder.
+    col_add_paths = subparsers.add_parser("collection-add-paths", parents=[common])
+    col_add_paths.add_argument("--collection-id", required=True)
+    col_add_paths.add_argument("--paths", required=True, help="JSON array of files and folders on disk")
+
+    # Before deleting folders: the photos only they (and the folders under
+    # them) hold, which the delete may take out of the library or off the disk.
+    col_contents = subparsers.add_parser("collection-contents", parents=[common])
+    col_contents.add_argument("--collection-ids", required=True, help="JSON array of folder ids")
 
     col_remove = subparsers.add_parser("collection-remove-items", parents=[common])
     col_remove.add_argument("--collection-id", required=True)
@@ -2013,6 +2026,23 @@ def _cmd_delete_collection(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_collection_add_paths(args, connection, catalog, parser):
+    paths = json.loads(args.paths)
+    if not isinstance(paths, list):
+        parser.error("--paths must be a JSON array")
+    result = add_collection_paths(connection, args.collection_id, [Path(str(path)) for path in paths])
+    print(json.dumps({"ok": True, "collection_id": args.collection_id, **result}))
+    return 0
+
+
+def _cmd_collection_contents(args, connection, catalog, parser):
+    collection_ids = json.loads(args.collection_ids)
+    if not isinstance(collection_ids, list):
+        parser.error("--collection-ids must be a JSON array")
+    print(json.dumps(collection_contents(connection, [str(value) for value in collection_ids]), ensure_ascii=False))
+    return 0
+
+
 def _cmd_collection_add_items(args, connection, catalog, parser):
     add_collection_items(connection, args.collection_id, args.asset_id)
     print(json.dumps({"ok": True, "collection_id": args.collection_id, "added": args.asset_id}))
@@ -2153,6 +2183,8 @@ COMMAND_HANDLERS = {
     "update-collection": _cmd_update_collection,
     "delete-collection": _cmd_delete_collection,
     "collection-add-items": _cmd_collection_add_items,
+    "collection-add-paths": _cmd_collection_add_paths,
+    "collection-contents": _cmd_collection_contents,
     "collection-remove-items": _cmd_collection_remove_items,
     "set-asset-rating": _cmd_set_asset_rating,
     "set-asset-flag": _cmd_set_asset_flag,

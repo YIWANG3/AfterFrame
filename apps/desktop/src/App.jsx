@@ -44,7 +44,7 @@ import { sidebarViews } from "../features/index.js";
 import { useView as useStickerView } from "../features/sticker/renderer/index.js";
 import PeopleView from "./components/PeopleView";
 import FoldersView from "./components/FoldersView";
-import { descendantIds, flattenForPicker, pathOf } from "./components/folderTree";
+import { ancestorIds, descendantIds, flattenForPicker, pathOf } from "./components/folderTree";
 import PeopleInspector from "./components/PeopleInspector";
 import usePeopleGroups from "./hooks/usePeopleGroups";
 import DesignSystemPanel from "./components/DesignSystemPanel";
@@ -916,6 +916,109 @@ export default function App() {
     }
   }
 
+  // Files and folders dragged from Finder onto the sidebar's folders: an
+  // import like any other (the photos are in the library), that also files
+  // them. Each folder on disk becomes a folder here of the same name, inside
+  // the folder it was dropped on or at the top level; one already there by
+  // that name is used again, so dropping a shoot twice makes one folder.
+  // Loose files go into the folder they were dropped on.
+  async function importIntoFolders({ paths, parentId = null }) {
+    const dropped = [...new Set((paths || []).filter(Boolean))];
+    if (!dropped.length) return;
+    const dirs = new Set((await Promise.resolve(api.statDirs?.(dropped)).catch(() => null)) || []);
+    const fileInto = [];
+    try {
+      for (const dir of dropped.filter((path) => dirs.has(path))) {
+        const name = fileName(dir) || dir;
+        const existing = workspaceRef.current.collections.find((c) => c.kind === "manual"
+          && (c.parent_collection_id || null) === (parentId || null) && c.name === name);
+        const folder = existing || await workspaceRef.current.createCollection(name, parentId || null);
+        if (folder?.collection_id) fileInto.push({ collectionId: folder.collection_id, paths: [dir] });
+      }
+    } catch (error) {
+      pushToast({ title: tNav("folders.importFolderFailed"), message: String(error?.message || error), tone: "error", ttl: 6000 });
+      return;
+    }
+    const files = dropped.filter((path) => !dirs.has(path));
+    if (files.length && parentId) fileInto.push({ collectionId: parentId, paths: files });
+    await workspaceRef.current.addImagesFromPaths(dropped, { fileInto });
+    // One folder made: open it, and watch it fill.
+    const made = fileInto.filter((filing) => filing.collectionId !== parentId);
+    if (made.length === 1) {
+      goToGallery();
+      clearPeopleGroupFilter();
+      workspaceRef.current.selectCollection(made[0].collectionId);
+    }
+  }
+
+  // Deleting folders: the sidebar's row tool (`quiet`: a folder nothing hangs
+  // on goes without a question, as it always has) and the Folders page.
+  // A shoot filed in a folder often has no other reason to be in the library,
+  // so when a folder is the only one holding some photos the question is what
+  // becomes of them: they stay, they leave the library, or their files go to
+  // the Trash, the same two ways a photo is deleted. A photo some other folder
+  // holds too is never taken. Resolves true once the folders are gone.
+  async function deleteFolders(ids, { quiet = false } = {}) {
+    const all = workspace.collections;
+    const picked = [...new Set(ids || [])].map((id) => all.find((c) => c.collection_id === id)).filter(Boolean);
+    if (!picked.length) return false;
+    const pickedIds = new Set(picked.map((c) => c.collection_id));
+    // A folder inside another one being deleted goes with it.
+    const roots = picked.filter((c) => !ancestorIds(all, c.collection_id).some((id) => pickedIds.has(id)));
+    const rootIds = roots.map((c) => c.collection_id);
+    const under = new Set(roots.flatMap((c) => descendantIds(all, c.collection_id))).size;
+    const contents = (await Promise.resolve(api.collectionContents(rootIds)).catch(() => null)) || { total: 0, shared: 0, photos: [] };
+    const own = contents.photos || [];
+    const many = roots.length > 1;
+    const title = many ? tNav("folders.deleteConfirmTitleMany", { count: roots.length }) : tNav("folders.deleteConfirmTitleOne", { name: roots[0].name });
+    const cancelLabel = tNav("folders.deleteCancel");
+    let choice = "folder";
+    if (own.length) {
+      choice = await choose({
+        title,
+        message: tNav("folders.deleteHolds", { count: contents.total }),
+        detail: [
+          contents.shared > 0 ? tNav("folders.deleteShared", { count: contents.shared }) : null,
+          under > 0 ? tNav("folders.deleteSubfolders", { count: under }) : null,
+        ].filter(Boolean).join(" ") || undefined,
+        choices: [
+          { id: "folder", label: tNav(many ? "folders.deleteOnlyFolders" : "folders.deleteOnlyFolder") },
+          { id: "library", label: tNav("folders.deleteFromLibrary", { count: own.length }) },
+          ...(api.can("fileSystem") ? [{ id: "trash", label: tNav("folders.deleteToTrash", { count: own.length }), danger: true }] : []),
+        ],
+        cancelLabel,
+        danger: true,
+      });
+      if (!choice) return false;
+    } else if (!quiet || under > 0 || many) {
+      const approved = await confirm({
+        title,
+        message: under > 0 ? tNav("folders.deleteConfirmMessageTree") : many ? tNav("folders.deleteConfirmMessageMany") : tNav("folders.deleteConfirmMessageOne"),
+        confirmLabel: many ? tNav("folders.deleteConfirmActionMany", { count: roots.length }) : tNav("folders.deleteConfirmActionOne"),
+        cancelLabel,
+        danger: true,
+      });
+      if (!approved) return false;
+    }
+    try {
+      const assetIds = own.map((photo) => photo.asset_id);
+      let failed = 0;
+      if (choice === "library") await workspaceRef.current.deleteImageAssets(assetIds);
+      if (choice === "trash") {
+        const result = await workspaceRef.current.deleteImageAssetsFromDisk(assetIds, own.map((photo) => photo.path).filter(Boolean));
+        failed = result?.failed?.length || 0;
+      }
+      for (const id of rootIds) await workspaceRef.current.deleteCollection(id);
+      if (failed) pushToast({ title: t("diskDeleteFailed", { count: failed }), tone: "error", ttl: 5000 });
+      else if (choice === "library") pushToast({ title: tNav("folders.deletedFromLibrary", { count: assetIds.length }), ttl: 4000 });
+      else if (choice === "trash") pushToast({ title: tNav("folders.deletedToTrash", { count: assetIds.length }), ttl: 4000 });
+      return true;
+    } catch (error) {
+      pushToast({ title: tNav("folders.deleteFailed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
+      return false;
+    }
+  }
+
   // Lightroom's "Delete Rejected Photos…": the rejected photos of the view on
   // screen, out of the library or into the Trash, the user's choice.
   async function deleteRejected() {
@@ -1262,9 +1365,10 @@ export default function App() {
           onReorderCollections={workspace.reorderCollections}
           reorderingCollections={workspace.reorderingCollections}
           onRenameCollection={workspace.renameCollection}
-          onDeleteCollection={workspace.deleteCollection}
+          onDeleteCollection={(id) => deleteFolders([id], { quiet: true })}
           onAnnotateCollection={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
           onAddToCollection={workspace.addToCollection}
+          onImportInto={api.can("fileSystem") ? importIntoFolders : undefined}
           targetFolderId={workspace.targetFolder?.collection_id || null}
           activeView={viewMode}
           peopleMode={viewMode === "people"}
@@ -1346,7 +1450,7 @@ export default function App() {
               onCreateFolder={workspace.createCollection}
               onMoveFolder={workspace.moveCollection}
               onRenameFolder={workspace.renameCollection}
-              onDeleteFolder={workspace.deleteCollection}
+              onDeleteFolders={deleteFolders}
               onAnnotateFolder={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
               pushToast={pushToast}
             />

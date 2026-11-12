@@ -100,6 +100,8 @@ export const CORE_IPC_METHODS = [
   ["deleteCollection", "workspace:delete-collection", 1],
   ["collectionAddItems", "workspace:collection-add-items", 2],
   ["collectionRemoveItems", "workspace:collection-remove-items", 2],
+  ["collectionAddPaths", "workspace:collection-add-paths", 2],
+  ["collectionContents", "workspace:collection-contents", 1],
   ["browseCollection", "workspace:browse-collection", 2],
   // ── jobs ──
   ["getImportStatus", "workspace:import-status", 0],

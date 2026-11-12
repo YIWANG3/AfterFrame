@@ -43,6 +43,19 @@ function register({ ipcMain, commands, catalog: { state: getCatalogState } }) {
     return await commands.collectionAddItems(collectionId, assetIds);
   });
 
+  ipcMain.handle("workspace:collection-add-paths", async (_event, collectionId, paths) => {
+    const list = [...new Set((paths || []).map(String).filter(Boolean))];
+    if (!collectionId || !list.length) return { matched: 0, added: 0 };
+    return await commands.collectionAddPaths(collectionId, list);
+  });
+
+  const NO_CONTENTS = { folders: 0, total: 0, shared: 0, photos: [] };
+  ipcMain.handle("workspace:collection-contents", guarded(NO_CONTENTS, async (_event, collectionIds) => {
+    const ids = [...new Set((collectionIds || []).filter(Boolean))];
+    if (!ids.length) return NO_CONTENTS;
+    return (await commands.collectionContents(ids)) || NO_CONTENTS;
+  }));
+
   ipcMain.handle("workspace:collection-remove-items", async (_event, collectionId, assetIds) => {
     return await commands.collectionRemoveItems(collectionId, assetIds);
   });

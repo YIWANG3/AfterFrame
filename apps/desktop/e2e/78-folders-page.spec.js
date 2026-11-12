@@ -136,7 +136,8 @@ test("a shift-click range deletes after one confirm; the sidebar follows", async
   await expect(bar).toContainText("2 folders selected · 1 photos");
   await w().getByTestId("folders-delete-selected").click();
   await expect(w().getByText("Delete 2 folders?")).toBeVisible();
-  await w().getByRole("button", { name: "Delete 2 folders" }).click();
+  // One of the two holds a photo: the question is also what becomes of it.
+  await w().getByRole("button", { name: "Delete Folders Only", exact: true }).click();
   await expect(cards()).toHaveCount(1);
   await expect.poll(names).toEqual(["Trip Tokyo"]);
   await expect(bar).toHaveCount(0);

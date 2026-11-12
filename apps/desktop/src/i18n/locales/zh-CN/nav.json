@@ -127,7 +127,17 @@
     "newSubfolder": "新建子文件夹",
     "moveTo": "移动到…",
     "topLevel": "顶层",
-    "deleteConfirmMessageTree": "子文件夹会一起删除，照片本身不受影响。"
+    "deleteConfirmMessageTree": "子文件夹会一起删除，照片本身不受影响。",
+    "deleteHolds_other": "里面有 {{count}} 张照片。",
+    "deleteShared_other": "其中 {{count}} 张也在别的文件夹里，会留在图库中。",
+    "deleteSubfolders_other": "{{count}} 个子文件夹会一起删除。",
+    "deleteOnlyFolder": "只删除文件夹",
+    "deleteOnlyFolders": "只删除文件夹",
+    "deleteFromLibrary_other": "同时从图库移除 {{count}} 张照片",
+    "deleteToTrash_other": "同时把 {{count}} 个文件移到废纸篓",
+    "deletedFromLibrary_other": "已删除文件夹，并从图库移除 {{count}} 张照片",
+    "deletedToTrash_other": "已删除文件夹，{{count}} 个文件已移到废纸篓",
+    "importFolderFailed": "无法为导入的文件夹创建文件夹"
   },
   "sidebar": {
     "reorderHint": "拖拽排序 · Option/Alt + ↑/↓",
@@ -172,10 +182,6 @@
     "expand": "展开",
     "collapse": "折叠",
     "moveToRoot": "放到这里移到顶层",
-    "deleteWithChildrenTitle": "删除“{{name}}”？",
-    "deleteWithChildren_other": "其中 {{count}} 个子文件夹会一起删除，照片本身不受影响。",
-    "deleteWithChildrenAction": "删除文件夹",
-    "deleteCancel": "取消",
     "folderPath": "{{path}}"
   },
   "people": {

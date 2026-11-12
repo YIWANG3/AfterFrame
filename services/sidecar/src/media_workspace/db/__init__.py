@@ -52,6 +52,8 @@ from .browse import (
 )
 from .collections import (
     add_collection_items,
+    add_collection_paths,
+    collection_contents,
     create_collection,
     delete_collection,
     list_collections,

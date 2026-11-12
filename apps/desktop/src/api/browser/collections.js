@@ -124,6 +124,18 @@ export const collectionMethods = {
     emitCollectionsChanged();
     return { ok: true, collection_id: collectionId, deleted };
   },
+  // The photos only these folders (and the folders under them) hold.
+  collectionContents: async (collectionIds) => {
+    const doomed = new Set((collectionIds || []).flatMap((id) => subtreeIds(id)));
+    const inside = new Set();
+    const elsewhere = new Set();
+    for (const row of collections) {
+      if (row.kind !== "manual") continue;
+      for (const id of row.asset_ids || []) (doomed.has(row.collection_id) ? inside : elsewhere).add(id);
+    }
+    const photos = [...inside].filter((id) => !elsewhere.has(id)).map((id) => ({ asset_id: id, path: null }));
+    return { folders: doomed.size, total: inside.size, shared: inside.size - photos.length, photos };
+  },
   collectionAddItems: async (collectionId, assetIds) => {
     const row = collections.find((c) => c.collection_id === collectionId);
     if (!row) return { added: 0 };

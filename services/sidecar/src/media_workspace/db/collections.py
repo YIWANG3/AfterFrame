@@ -11,7 +11,9 @@ Split from the monolithic db.py (review P3-5); one module per domain.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+from pathlib import Path
 from uuid import uuid4
 
 from .browse import count_image_assets
@@ -329,6 +331,80 @@ def add_collection_items(
     if commit:
         connection.commit()
     return added
+
+
+def _under_path_clause(column: str, paths: list[Path]) -> tuple[str, list[object]]:
+    """`column` is one of these files, or inside one of these folders."""
+    clauses: list[str] = []
+    params: list[object] = []
+    for path in paths:
+        resolved = str(Path(path).expanduser().resolve())
+        escaped = resolved.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        inside = escaped.rstrip("\\/") + ("\\\\" if os.sep == "\\" else os.sep) + "%"
+        clauses.append(f"({column} = ? OR {column} LIKE ? ESCAPE '\\')")
+        params.extend([resolved, inside])
+    return " OR ".join(clauses), params
+
+
+def add_collection_paths(
+    connection: sqlite3.Connection,
+    collection_id: str,
+    paths: list[Path],
+    commit: bool = True,
+) -> dict[str, int]:
+    """Put the photos at these paths into a folder: a file, or everything
+    under a folder on disk, as far as the catalog holds it. A Finder folder
+    dropped on the sidebar is imported and filed in one go; the import runs
+    as a job, so this is asked again as it lands and adds only what is new
+    (the photos the catalog already had go in on the first call)."""
+    if not paths:
+        return {"matched": 0, "added": 0}
+    where, params = _under_path_clause("registry.image_path", paths)
+    asset_ids = [row[0] for row in connection.execute(
+        f"""
+        SELECT assets.asset_id
+        FROM image_lookup_registry AS registry
+        JOIN assets ON assets.asset_id = registry.image_asset_id
+        WHERE assets.asset_type IN ('image', 'video', 'raw') AND ({where})
+        ORDER BY registry.image_path
+        """,
+        params,
+    ).fetchall()]
+    added = add_collection_items(connection, collection_id, asset_ids, commit=commit)
+    return {"matched": len(asset_ids), "added": added}
+
+
+def collection_contents(connection: sqlite3.Connection, collection_ids: list[str]) -> dict:
+    """What deleting these folders would leave without a folder: the photos
+    in them and in the folders under them, apart from those some other folder
+    also holds. Deleting a folder can take its photos out of the library, or
+    off the disk; a photo filed elsewhere too is not this folder's to take."""
+    doomed: list[str] = []
+    for collection_id in collection_ids:
+        for folder_id in subtree_ids(connection, collection_id):
+            if folder_id not in doomed:
+                doomed.append(folder_id)
+    if not doomed:
+        return {"folders": 0, "total": 0, "shared": 0, "photos": []}
+    marks = ", ".join("?" for _ in doomed)
+    rows = connection.execute(
+        f"""
+        SELECT assets.asset_id, registry.image_path,
+               EXISTS (
+                   SELECT 1 FROM collection_items other
+                   JOIN collections c ON c.collection_id = other.collection_id
+                   WHERE other.asset_id = assets.asset_id AND c.kind = 'manual'
+                     AND other.collection_id NOT IN ({marks})
+               ) AS elsewhere
+        FROM assets
+        JOIN image_lookup_registry AS registry ON registry.image_asset_id = assets.asset_id
+        WHERE assets.asset_id IN (SELECT asset_id FROM collection_items WHERE collection_id IN ({marks}))
+        ORDER BY registry.image_path
+        """,
+        [*doomed, *doomed],
+    ).fetchall()
+    photos = [{"asset_id": row["asset_id"], "path": row["image_path"]} for row in rows if not row["elsewhere"]]
+    return {"folders": len(doomed), "total": len(rows), "shared": len(rows) - len(photos), "photos": photos}
 
 
 def remove_collection_items(
