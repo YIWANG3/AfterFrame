@@ -17,8 +17,9 @@ import { bucketByGroup } from "./tags/tagGroups";
 import { tagMatches } from "./tagsPage";
 
 const AUTO = "";
-const TAG_CHIP = "inline-flex items-center border border-transparent px-2 py-[2px] text-[10px] transition-colors";
+const TAG_CHIP = "inline-flex items-center rounded-md border border-transparent px-2 py-[2px] text-[10px] transition-colors";
 const AVAILABLE_TAG = "bg-app text-muted hover:border-border hover:text-text";
+const TAG_PIN = "ml-0.5 h-2.5 w-2.5 shrink-0";
 
 function TagPicker({ id, panelRef, index, groups, existing, query, pending, labelOf, groupLabelOf, onPick }) {
   const { t } = useTranslation("annotation");
@@ -60,10 +61,10 @@ function TagPicker({ id, panelRef, index, groups, existing, query, pending, labe
                   data-tag-suggestion={tag}
                   title={label}
                   onClick={() => onPick(tag)}
-                  className={cx(TAG_CHIP, "max-w-full gap-0.5 rounded-full", added ? "bg-accent/15 font-medium text-accent" : AVAILABLE_TAG)}
+                  className={cx(TAG_CHIP, "max-w-full", added ? "bg-accent/15 text-accent" : AVAILABLE_TAG)}
                 >
                   <span className="truncate">{label}</span>
-                  {pinned && <Pin className="h-2.5 w-2.5 shrink-0" />}
+                  {pinned && <Pin className={cx(TAG_PIN, !added && "text-muted2")} />}
                 </button>
               );
             })}
@@ -329,13 +330,13 @@ export default function TagsSection({ assetId, onTagClick, pushToast }) {
     <span
       key={tag}
       data-tag={tag}
-      className={cx(TAG_CHIP, AVAILABLE_TAG, "group/tag rounded-md")}
+      className={cx(TAG_CHIP, AVAILABLE_TAG, "group/tag")}
       onContextMenu={(e) => { e.preventDefault(); setMenu({ tag, x: e.clientX, y: e.clientY }); }}
     >
       <button type="button" onClick={() => onTagClick?.(tag)} title={t("filterBy", { tag: labelOf(tag) })} className="hover:text-text">
         {labelOf(tag)}
       </button>
-      {index?.get(tag)?.pinned && <Pin className="ml-0.5 h-2.5 w-2.5 text-muted2" />}
+      {index?.get(tag)?.pinned && <Pin className={cx(TAG_PIN, "text-muted2")} />}
       <button
         type="button"
         onClick={() => removeTag(tag)}
