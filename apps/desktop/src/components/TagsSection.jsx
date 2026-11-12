@@ -170,6 +170,8 @@ function TagAdder({ onAdd, onRemove, existing, empty, groups, index, labelOf, gr
             onChange={(e) => { setQ(e.target.value); panelRef.current.scrollTop = 0; }}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing || e.key !== "Enter" || pending) return;
+              // close() hands focus back to the Add button; without this the same Enter clicks it and reopens the picker.
+              e.preventDefault();
               if (q.trim()) void updateTag(() => onAdd(q.trim(), group || undefined));
               close(e);
             }}
