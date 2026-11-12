@@ -67,14 +67,16 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - **Folders nest**, any depth: the sidebar is a tree, dragging a folder onto another nests it, and a parent shows its own photos plus everything under it (a toolbar switch turns that to this folder only)
 - The sidebar's Smart Collections and Folders sections each fold down to their heading
 - **Target folder**: the folder you last made or last added to is marked with a `B` in the sidebar, and **B** adds the selected photos to it (Shift+B adds one and moves on), like Lightroom's target collection
+- **One shoot, one folder**: drag a folder from Finder onto the sidebar and it is imported and becomes a folder of that name (onto a folder row, a subfolder of it). Deleting a folder can take the photos only it holds out of the library, or move their files to the Trash
 - **A page for your folders** shows every folder at once, with a mosaic of its newest photos, its count and the span of capture dates. Sort by last added or capture date too, filter by status, count or dates, switch to a sortable table, and select several to annotate or delete
 - **Look-alikes**: every photo gets a perceptual hash and, on the Mac, Apple Vision's feature print, so another export, a re-encode or a crop of one picture is found. A Look-alikes view in the sidebar, **Find Similar** on any photo, and a Similar strip in the inspector
 - **Copy** (⌘C) puts the selected photos on the clipboard as files, like Finder: paste them in Finder, WeChat, Notes or anything that takes a file drop
 - Full metadata inspector: EXIF, camera, lens, exposure, dates
+- **Details in the lightbox**: **I** brings the photo's details out beside it (camera, exposure, dates, location, rating, flag, description and tags, editable there), and the photo makes room
 - Star rating system (imports Lightroom XMP ratings, from the file or its `.xmp` sidecar, and follows them until you rate here)
 - Pick and reject flags as in Lightroom (**P** / **X** / **U**, with **Shift** to move on to the next photo), and **Delete Rejected Photos…** to take the rejects out of the library or move them to the Trash
 - **Add Tags…** (**T**) tags every selected photo at once. Your tags and the AI's share one list, and a description you write wins over the AI's caption
-- **Tags by group**: every tag sits in a group (weather, season, time of day, light, subject, place, occasion, gear, composition, style, color, mood, use, or your own), and a tag can have aliases, so `sunset` and `日落` are one tag. A **Tags page** renames, merges, moves, pins and deletes them; **Remove Tags…** (**Shift+T**) takes tags off the selection
+- **Tags by group**: every tag sits in a group (weather, season, time of day, light, subject, place, occasion, gear, composition, style, color, mood, use, or your own), and a tag can have aliases, so `sunset` and `日落` are one tag. The inspector's **Add** opens a picker of every tag in the library, by group, that narrows as you type. A **Tags page** renames, merges, moves, pins and deletes them; **Remove Tags…** (**Shift+T**) takes tags off the selection
 - Virtual-scroll gallery that handles 10,000+ images smoothly
 
 ![Lightbox](docs/assets/en/lightbox.webp)
@@ -85,7 +87,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Filters refine where you are: inside a folder, the filter bar and search cover that folder, with counts to match
 - Tag filtering: click any tag in the inspector, or pick from a list grouped the way your tags are, searchable across groups and aliases, matching any tag, one per group, all, or none
 - **Find by List**: paste a list of numbers or file names (`1723, 1746 1754`, in whatever shape it arrives) and each one is looked up by file name, a photo's own or its RAW's. The list then filters the grid or goes into a folder
-- A **Has RAW** filter for photos with, or without, a paired RAW file
+- A **Paired RAW** filter for photos with, or without, a paired RAW file
 
 ### People
 - On-device face detection and ArcFace grouping — photos and face embeddings stay inside the local catalog
