@@ -78,6 +78,14 @@ module.exports = defineConfig(async () => ({
   base: "./",
   plugins: [react(), maplibreClassicWorker(), ...(await coveragePlugins())],
   resolve: { alias: { "@sidecar-data": SIDECAR_DATA } },
+  // The coverage build writes no source maps. The istanbul plugin turns
+  // build.sourcemap on, and that stays: it is what makes the transforms
+  // before it hand over the map the instrumenter stores in each module's
+  // coverage data, which is all the report reads. The maps Rollup would write
+  // for the finished chunks are read by nothing, and collapsing them for the
+  // instrumented bundle took the build past a 4 GB heap (nightly 2026-11-10;
+  // about 2.5 GB without them, the coverage data byte for byte the same).
+  ...(coverageBuild ? { build: { rollupOptions: { output: { sourcemap: false } } } } : {}),
   // vitest (npm run test:renderer): the renderer's tests, in src/ and in the
   // feature modules' renderer/ trees. Their electron/ tests are node:test
   // files (npm run test:electron), which vitest must not pick up.
