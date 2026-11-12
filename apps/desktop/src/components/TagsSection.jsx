@@ -91,20 +91,27 @@ function TagAdder({ onAdd, onRemove, existing, empty, groups, index, labelOf, gr
   const anchorRef = useRef(null);
   const inputRef = useRef(null);
   const panelRef = useRef(null);
-  const toggleRef = useRef(null);
+  const addButtonRef = useRef(null);
+  const restoreAddFocus = useRef(false);
   const pickerId = useId();
 
   function close(event) {
     if (event?.isComposing) return;
+    restoreAddFocus.current = event?.type === "keydown" || event?.type === "click";
     setQ("");
     setOpen(false);
-    if (event?.key === "Escape") toggleRef.current?.focus({ preventScroll: true });
   }
 
   useDismiss(anchorRef, close, { enabled: open });
 
   useLayoutEffect(() => {
-    if (!open) return undefined;
+    if (!open) {
+      if (restoreAddFocus.current) {
+        restoreAddFocus.current = false;
+        addButtonRef.current.focus({ preventScroll: true });
+      }
+      return undefined;
+    }
     const anchor = anchorRef.current;
     const panel = panelRef.current;
     const scroller = anchor.closest(".overflow-y-auto");
@@ -139,9 +146,24 @@ function TagAdder({ onAdd, onRemove, existing, empty, groups, index, labelOf, gr
   }
 
   return (
-    <div ref={anchorRef} className="relative flex h-[22px] min-w-0 items-center gap-1">
-      {open ? (
-        <>
+    <div ref={anchorRef} className="relative min-w-0">
+      {/* Keep the original row in flow so opening the picker reserves the same space. */}
+      <div className={cx("flex flex-wrap items-center gap-1", open && "invisible")}>
+        {empty && <span className="mr-1 text-[10px] text-muted2">{t("noTags")}</span>}
+        <button
+          ref={addButtonRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-expanded={open}
+          aria-controls={open ? pickerId : undefined}
+          data-testid="tag-add"
+          className="inline-flex items-center gap-0.5 rounded border border-dashed border-border/60 px-2 py-[2px] text-[10px] text-muted2 transition-colors hover:border-border hover:text-text"
+        >
+          <Plus className="h-2.5 w-2.5" /> {t("add")}
+        </button>
+      </div>
+      {open && (
+        <div className="absolute inset-0 flex items-center gap-1">
           <input
             ref={inputRef}
             value={q}
@@ -149,8 +171,7 @@ function TagAdder({ onAdd, onRemove, existing, empty, groups, index, labelOf, gr
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing || e.key !== "Enter" || pending) return;
               if (q.trim()) void updateTag(() => onAdd(q.trim(), group || undefined));
-              close();
-              toggleRef.current?.focus({ preventScroll: true });
+              close(e);
             }}
             aria-label={t("addTag")}
             aria-controls={pickerId}
@@ -169,23 +190,18 @@ function TagAdder({ onAdd, onRemove, existing, empty, groups, index, labelOf, gr
             <option value={AUTO}>{t("group.auto")}</option>
             {groups.map((g) => <option key={g.group_id} value={g.group_id}>{groupLabelOf(g)}</option>)}
           </select>
-        </>
-      ) : empty ? <span className="mr-1 text-[10px] text-muted2">{t("noTags")}</span> : null}
-      <button
-        ref={toggleRef}
-        type="button"
-        onClick={() => { if (open) close(); else setOpen(true); }}
-        aria-expanded={open}
-        aria-controls={open ? pickerId : undefined}
-        aria-label={open ? t("tagPicker.close") : undefined}
-        title={open ? t("tagPicker.close") : undefined}
-        data-testid="tag-add"
-        className={cx("inline-flex h-full shrink-0 items-center text-muted2 hover:text-text", open
-          ? "w-[22px] justify-center rounded-md hover:bg-hover"
-          : "gap-0.5 rounded border border-dashed border-border/60 px-2 text-[10px] hover:border-border")}
-      >
-        {open ? <X className="h-3 w-3" /> : <><Plus className="h-2.5 w-2.5" /> {t("add")}</>}
-      </button>
+          <button
+            type="button"
+            onClick={close}
+            aria-controls={pickerId}
+            aria-label={t("tagPicker.close")}
+            title={t("tagPicker.close")}
+            className="inline-flex h-full w-[22px] shrink-0 items-center justify-center rounded-md text-muted2 hover:bg-hover hover:text-text"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
       {open && (
         <TagPicker
           id={pickerId}
