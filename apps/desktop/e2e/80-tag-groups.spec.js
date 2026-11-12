@@ -93,6 +93,75 @@ test("the Inspector shows tags by group; a concept's other spelling is the same 
   expect((await tagInfo("mochi")).group_id).toBe("event");
 });
 
+test("the picker lists the library's tags by group; a click puts one on the photo and another takes it off; typing narrows it; it closes and stays closed", async () => {
+  const id = photos[1];
+  await card(id).click();
+  const tags = ctx.window.getByTestId("inspector-tags");
+  const add = tags.getByTestId("tag-add");
+  const input = tags.getByTestId("tag-add-input");
+  const picker = ctx.window.getByTestId("tag-picker");
+  const suggestion = (tag) => picker.locator(`[data-tag-suggestion='${tag}']`);
+  const heading = (tag) => picker.locator("section", { has: ctx.window.locator(`[data-tag-suggestion='${tag}']`) }).locator("h3");
+  await expect(tags).toHaveAttribute("data-count", "0");
+
+  // Every tag of the library, under its group's name.
+  await add.click();
+  await expect(input).toBeFocused();
+  await expect(heading("sunset")).toHaveText("Time of day");
+  await expect(heading("city")).toHaveText("Place type");
+  await expect(heading("seeded-tag")).toHaveText("Ungrouped");
+  await expect(suggestion("city")).toHaveAttribute("aria-pressed", "false");
+
+  // A click is the tag on the photo; the picker stays for the next one.
+  await suggestion("city").click();
+  await expect(tags.locator("[data-tag-group='place'] [data-tag='city']")).toBeAttached();
+  await expect(suggestion("city")).toHaveAttribute("aria-pressed", "true");
+  await expect(input).toBeFocused();
+  expect(await tagsOf(id)).toEqual(["city"]);
+  // The second click takes it off.
+  await suggestion("city").click();
+  await expect(suggestion("city")).toHaveAttribute("aria-pressed", "false");
+  await expect(tags).toHaveAttribute("data-count", "0");
+  expect(await tagsOf(id)).toEqual([]);
+
+  // Typing narrows the list, by the other spelling too.
+  await input.fill("日落");
+  await expect(suggestion("sunset")).toBeVisible();
+  await expect(suggestion("city")).toHaveCount(0);
+  await input.fill("no-such-tag");
+  await expect(picker).toHaveText("No matching tags");
+
+  // Its button, Escape and a press elsewhere each close it, and nothing was added.
+  await ctx.window.getByRole("button", { name: "Close tag picker" }).click();
+  await expect(picker).toHaveCount(0);
+  await add.click();
+  await expect(picker).toBeVisible();
+  await ctx.window.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await add.click();
+  await expect(picker).toBeVisible();
+  await card(id).click();
+  await expect(picker).toHaveCount(0);
+  expect(await tagsOf(id)).toEqual([]);
+
+  // Enter adds what was typed and the picker stays closed: focus is back on
+  // Add, which the same keystroke must not press.
+  await add.click();
+  await input.fill("city");
+  await input.press("Enter");
+  await expect(tags.locator("[data-tag='city']")).toBeVisible();
+  await expect(add).toBeFocused();
+  await expect(add).toHaveAttribute("aria-expanded", "false");
+  await expect(picker).toHaveCount(0);
+
+  // The photo is left as it was found.
+  await add.click();
+  await suggestion("city").click();
+  await expect(tags).toHaveAttribute("data-count", "0");
+  await ctx.window.keyboard.press("Escape");
+  expect(await tagsOf(id)).toEqual([]);
+});
+
 test("the Tags facet lists tags by group, matches by group and by 'any tag of the group'", async () => {
   // A: sunny + street, B: cloudy + street, C: sunny, D: street + trip (ungrouped).
   await bridge(async (ids) => {
