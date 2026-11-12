@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { Check, ChevronRight, Pin, PinOff, Plus, X } from "lucide-react";
 import { Section } from "./AnnotationsSection";
 import { cx, Z } from "../ui";
+import { CARD_FRAME } from "../ui/surfaces";
 import useDismiss from "../ui/useDismiss";
 import { groupLabel, invalidateTagGroups, invalidateTags, setCachedTags, tagLabel, useAssetTags, useTagGroups, useTagIndex } from "./annotation/tagStore";
 import { bucketByGroup } from "./tags/tagGroups";
@@ -20,6 +21,8 @@ const AUTO = "";
 const TAG_CHIP = "inline-flex items-center rounded-md border border-transparent px-2 py-[2px] text-[10px] transition-colors";
 const AVAILABLE_TAG = "bg-app text-muted hover:border-border hover:text-text";
 const TAG_PIN = "ml-0.5 h-2.5 w-2.5 shrink-0";
+// Explicit opacity keeps this surface outside the glass rule for .shadow-overlay.bg-panel.
+const TAG_PICKER_SURFACE = cx(CARD_FRAME, "border-border bg-panel/100 shadow-overlay");
 
 function TagPicker({ id, panelRef, index, groups, existing, query, pending, labelOf, groupLabelOf, onToggle }) {
   const { t } = useTranslation("annotation");
@@ -40,7 +43,7 @@ function TagPicker({ id, panelRef, index, groups, existing, query, pending, labe
       role="region"
       aria-label={t("batch.existing")}
       data-testid="tag-picker"
-      className="popover-scroll absolute inset-x-0 bottom-full mb-1 space-y-2 overflow-y-auto overscroll-contain rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay [overflow-anchor:none]"
+      className={cx(TAG_PICKER_SURFACE, "absolute inset-x-0 bottom-full mb-1 space-y-2 overflow-y-auto overscroll-contain [overflow-anchor:none]")}
       style={{ zIndex: Z.dropdown }}
     >
       {sections.length ? sections.map(({ group, items }) => (

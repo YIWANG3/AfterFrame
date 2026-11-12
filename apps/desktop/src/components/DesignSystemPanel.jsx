@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { Modal, Z } from "../ui";
+import { cx, Modal, Z } from "../ui";
+import { CARD_FRAME } from "../ui/surfaces";
 import { Palette, X, Search, Check, Star, Sparkles, Play, FolderPlus } from "lucide-react";
+
+const SPEC_CARD = cx(CARD_FRAME, "border-border/40 bg-panel2/50");
 
 /* ── Proposed design‑token reference ────────────────────────── */
 const RADIUS_SCALE = [
@@ -144,7 +147,7 @@ function Panel({ onClose }) {
               </div>
 
               {/* Spec table */}
-              <div className="rounded-xl border border-border/40 bg-panel2/50 p-3">
+              <div className={SPEC_CARD}>
                 <table className="w-full text-[11px]">
                   <thead>
                     <tr className="text-left text-muted2">
@@ -244,7 +247,7 @@ function Panel({ onClose }) {
               </div>
 
               {/* Spec */}
-              <div className="rounded-xl border border-border/40 bg-panel2/50 p-3">
+              <div className={SPEC_CARD}>
                 <table className="w-full text-[11px]">
                   <thead>
                     <tr className="text-left text-muted2">
@@ -276,7 +279,7 @@ function Panel({ onClose }) {
                 </div>
               ))}
             </div>
-            <div className="mt-3 rounded-xl border border-border/40 bg-panel2/50 p-3">
+            <div className={cx(SPEC_CARD, "mt-3")}>
               <p className="text-[11px] text-muted">
                 <span className="font-medium text-text">Recommended usage:</span>{" "}
                 Buttons & inputs <span className="text-accent">rounded-lg</span> &middot;
