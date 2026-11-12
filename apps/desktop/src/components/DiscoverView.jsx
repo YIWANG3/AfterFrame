@@ -46,7 +46,7 @@ async function loadPageData() {
     api.discoverCollections()
       .then((res) => (res && typeof res === "object" ? { places: res.places || [], memories: res.memories || [] } : { places: [], memories: [] }))
       .catch(() => ({ places: [], memories: [] })),
-    // Pinned covers: newest import for 最近添加 / 含 RAW, the best-rated photo
+    // Pinned covers: newest import for 最近添加 / 有配对 RAW, the best-rated photo
     // for 已评分 — the tile should show the library's favourite, not the last one.
     Promise.all([["recent", undefined], ["rated", "rating-desc"], ["matched", undefined]].map(([status, sort]) =>
       api.browseImages({ status, limit: 1, offset: 0, sort })

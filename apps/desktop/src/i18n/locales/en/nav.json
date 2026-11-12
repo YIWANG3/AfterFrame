@@ -6,7 +6,7 @@
     "all": "All Assets",
     "recent": "Recently Added",
     "rated": "Rated",
-    "matched": "With Raw",
+    "matched": "Has Paired RAW",
     "lookalikes": "Look-alikes",
     "similar": "Similar Photos"
   },
@@ -66,7 +66,7 @@
     "pinned": "Pinned",
     "albums": "Albums",
     "pinRated": "Rated",
-    "pinRaw": "With RAW",
+    "pinRaw": "Has Paired RAW",
     "unnamed": "Unnamed",
     "navigation": "Discover sections",
     "allFolders": "All folders"
@@ -251,9 +251,9 @@
     "notAnnotated": "Not annotated",
     "annotatedHint": "Filter by AI annotation presence — click to cycle with / without / off",
     "hasRaw": {
-      "label": "RAW",
-      "true": "With RAW",
-      "false": "No RAW"
+      "label": "Paired RAW",
+      "true": "Has paired RAW",
+      "false": "No paired RAW"
     },
     "iso": "ISO",
     "aperture": "Aperture",

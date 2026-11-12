@@ -6,7 +6,7 @@
     "all": "全部素材",
     "recent": "最近添加",
     "rated": "已评分",
-    "matched": "含 RAW",
+    "matched": "有配对 RAW",
     "lookalikes": "近似重复",
     "similar": "相似照片"
   },
@@ -66,7 +66,7 @@
     "pinned": "固定",
     "albums": "相册",
     "pinRated": "已评分",
-    "pinRaw": "含 RAW",
+    "pinRaw": "有配对 RAW",
     "unnamed": "未命名",
     "navigation": "发现页导航",
     "allFolders": "全部文件夹"
@@ -240,9 +240,9 @@
     "notAnnotated": "无 AI 标注",
     "annotatedHint": "按是否有 AI 标注筛选，点击在 有 / 无 / 关闭 之间切换",
     "hasRaw": {
-      "label": "RAW",
-      "true": "含 RAW",
-      "false": "无 RAW"
+      "label": "配对 RAW",
+      "true": "有配对 RAW",
+      "false": "没有配对 RAW"
     },
     "iso": "ISO",
     "aperture": "光圈",
