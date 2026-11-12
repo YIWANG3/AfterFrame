@@ -6,8 +6,7 @@
 //
 // Beside it, what the library says ABOUT its tags (db/tags.py): the tag
 // groups, and an index of every tag's group, pin and aliases, both fetched
-// once and dropped whenever a tag is written (a new tag may have made a
-// group's first entry) or an agent edits tags.
+// once and dropped when a write can change the library's tag metadata.
 
 import { useEffect, useSyncExternalStore } from "react";
 import api from "../../api";
@@ -34,11 +33,11 @@ function getCachedTags(assetId) {
   return assetId ? cache.get(assetId) : undefined;
 }
 
-export function setCachedTags(assetId, tags) {
+export function setCachedTags(assetId, tags, { invalidateIndex = true } = {}) {
   if (!assetId) return;
   cache.set(assetId, Array.isArray(tags) ? tags : []);
   // A write may have made a tag the library did not have.
-  tagIndex = null;
+  if (invalidateIndex) tagIndex = null;
   notify();
 }
 
@@ -145,16 +144,15 @@ export function useTagGroups() {
   return groups || [];
 }
 
-// Every tag's {group_id, pinned, aliases} (an empty Map until fetched).
+// Every tag's {group_id, pinned, aliases} (null until fetched).
 export function useTagIndex() {
   useSyncExternalStore(subscribe, getVersion, getVersion);
   const known = tagIndex !== null;
   useEffect(() => {
     if (!known) void fetchIndex();
   }, [known]);
-  return tagIndex || EMPTY_INDEX;
+  return tagIndex;
 }
-const EMPTY_INDEX = new Map();
 
 // ── Display names ────────────────────────────────────────────────────────────
 

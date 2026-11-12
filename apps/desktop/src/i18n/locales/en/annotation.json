@@ -12,6 +12,11 @@
   },
   "add": "Add",
   "addTag": "Add tag…",
+  "tagPicker": {
+    "close": "Close tag picker",
+    "loading": "Loading tags…",
+    "noMatches": "No matching tags"
+  },
   "removeTag": "Remove tag",
   "filterBy": "Filter by \"{{tag}}\"",
   "annotate": "Annotate with AI",

@@ -1,118 +1,223 @@
 // Inspector block for a photo's tags: one list, hand-added and AI alike
 // (annotation/tagStore.js), shown by group with the ungrouped last. A chip
 // filters the gallery by its tag; its menu moves, pins, renames the tag
-// for the whole library or takes it off this photo. The adder types to
-// search the library's tags (by group), Enter adds a new one into the group
-// picked, or "auto": the vocabulary's group, else ungrouped.
+// for the whole library or takes it off this photo. The adder shows the
+// library's tags by group and filters them as the user types.
 
 import api from "../api";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronRight, Pin, PinOff, Plus, X } from "lucide-react";
 import { Section } from "./AnnotationsSection";
-import { Z } from "../ui";
+import { cx, Z } from "../ui";
+import { CARD_FRAME } from "../ui/surfaces";
 import useDismiss from "../ui/useDismiss";
 import { groupLabel, invalidateTagGroups, invalidateTags, setCachedTags, tagLabel, useAssetTags, useTagGroups, useTagIndex } from "./annotation/tagStore";
 import { bucketByGroup } from "./tags/tagGroups";
+import { tagMatches } from "./tagsPage";
 
 const AUTO = "";
+const TAG_CHIP = "inline-flex items-center rounded-md border border-transparent px-2 py-[2px] text-[10px] transition-colors";
+const AVAILABLE_TAG = "bg-app text-muted hover:border-border hover:text-text";
+const TAG_PIN = "ml-0.5 h-2.5 w-2.5 shrink-0";
+// Explicit opacity keeps this surface outside the glass rule for .shadow-overlay.bg-panel.
+const TAG_PICKER_SURFACE = cx(CARD_FRAME, "border-border bg-panel/100 shadow-overlay");
 
-// Inline tag adder: type to search existing tags (server-side, scales to many)
-// or Enter to add a brand-new one, into the group picked.
-function TagAdder({ onAdd, existing, groups, pinned, labelOf, groupLabelOf }) {
+function TagPicker({ id, panelRef, index, groups, existing, query, pending, labelOf, groupLabelOf, onToggle }) {
+  const { t } = useTranslation("annotation");
+  const sections = useMemo(() => {
+    const matches = [];
+    for (const [tag, info] of index || []) {
+      const entry = { tag, ...info };
+      if (tagMatches(entry, query, labelOf)) matches.push(entry);
+    }
+    return bucketByGroup(matches, groups, (entry) => entry.group_id);
+  }, [index, groups, query, labelOf]);
+  const selected = new Set(existing);
+
+  return (
+    <div
+      ref={panelRef}
+      id={id}
+      role="region"
+      aria-label={t("batch.existing")}
+      data-testid="tag-picker"
+      className={cx(TAG_PICKER_SURFACE, "absolute inset-x-0 bottom-full mb-1 space-y-2 overflow-y-auto overscroll-contain [overflow-anchor:none]")}
+      style={{ zIndex: Z.dropdown }}
+    >
+      {sections.length ? sections.map(({ group, items }) => (
+        <section key={group?.group_id ?? "ungrouped"}>
+          <h3 className="mb-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted2">
+            {group ? groupLabelOf(group) : t("chip.ungrouped")}
+          </h3>
+          <div className="flex flex-wrap gap-1">
+            {items.map(({ tag, pinned }) => {
+              const isSelected = selected.has(tag);
+              const label = labelOf(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  disabled={pending}
+                  aria-pressed={isSelected}
+                  data-tag-suggestion={tag}
+                  title={label}
+                  onClick={() => onToggle(tag, isSelected)}
+                  className={cx(TAG_CHIP, "max-w-full", isSelected ? "bg-accent/15 text-accent" : AVAILABLE_TAG)}
+                >
+                  <span className="truncate">{label}</span>
+                  {pinned && <Pin className={cx(TAG_PIN, !isSelected && "text-muted2")} />}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )) : (
+        <p role="status" className="px-1 py-0.5 text-[10px] text-muted2">
+          {!index ? t("tagPicker.loading") : query ? t("tagPicker.noMatches") : t("noTags")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TagAdder({ onAdd, onRemove, existing, empty, groups, index, labelOf, groupLabelOf }) {
   const { t } = useTranslation("annotation");
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [group, setGroup] = useState(AUTO);
-  const [suggestions, setSuggestions] = useState([]);
+  const [pending, setPending] = useState(false);
+  const anchorRef = useRef(null);
+  const inputRef = useRef(null);
+  const panelRef = useRef(null);
+  const addButtonRef = useRef(null);
+  const restoreAddFocus = useRef(false);
+  const pickerId = useId();
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const have = new Set((existing || []).map((x) => String(x).toLowerCase()));
-    if (!q.trim()) {
-      // Nothing typed: the pinned tags are the quick picks.
-      setSuggestions(pinned.filter((tag) => !have.has(tag.toLowerCase())).map((tag) => ({ value: tag, pinned: true })));
-      return undefined;
-    }
-    const timer = setTimeout(async () => {
-      const res = (await api.searchFacet({ field: "tag", q: q.trim(), limit: 8 }).catch(() => [])) || [];
-      setSuggestions(res.filter((r) => !have.has(String(r.value).toLowerCase())));
-    }, 180);
-    return () => clearTimeout(timer);
-  }, [q, open, existing, pinned]);
-
-  function commit(tag) {
-    const v = (tag ?? q).trim();
-    if (v) onAdd(v, group || undefined);
+  function close(event) {
+    if (event?.isComposing) return;
+    restoreAddFocus.current = event?.type === "keydown" || event?.type === "click";
     setQ("");
     setOpen(false);
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        data-testid="tag-add"
-        className="inline-flex items-center gap-0.5 rounded border border-dashed border-border/60 px-2 py-[2px] text-[10px] text-muted2 transition-colors hover:border-border hover:text-text"
-      >
-        <Plus className="h-2.5 w-2.5" /> {t("add")}
-      </button>
-    );
+  useDismiss(anchorRef, close, { enabled: open });
+
+  useLayoutEffect(() => {
+    if (!open) {
+      if (restoreAddFocus.current) {
+        restoreAddFocus.current = false;
+        addButtonRef.current.focus({ preventScroll: true });
+      }
+      return undefined;
+    }
+    const anchor = anchorRef.current;
+    const panel = panelRef.current;
+    const scroller = anchor.closest(".overflow-y-auto");
+
+    function place() {
+      const bounds = anchor.getBoundingClientRect();
+      const viewport = scroller.getBoundingClientRect();
+      const room = bounds.top - viewport.top - 12;
+      panel.style.visibility = room > 0 && bounds.top < viewport.bottom ? "visible" : "hidden";
+      panel.style.maxHeight = `${Math.max(0, Math.min(320, room))}px`;
+    }
+
+    inputRef.current.focus({ preventScroll: true });
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(anchor.parentElement);
+    observer.observe(scroller);
+    scroller.addEventListener("scroll", place, { passive: true });
+    return () => {
+      observer.disconnect();
+      scroller.removeEventListener("scroll", place);
+    };
+  }, [open]);
+
+  async function updateTag(run) {
+    setPending(true);
+    try {
+      await run();
+    } finally {
+      setPending(false);
+    }
   }
+
   return (
-    // Focus leaving the whole adder (input and group picker) closes it; moving
-    // between the two does not.
-    <div
-      className="relative flex items-center gap-1"
-      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setTimeout(() => setOpen(false), 150); }}
-    >
-      <input
-        autoFocus
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          // Enter that ends an input method's composition picks the
-          // characters; it isn't the tag yet.
-          if (e.nativeEvent.isComposing) return;
-          if (e.key === "Enter") commit();
-          else if (e.key === "Escape") { setQ(""); setOpen(false); }
-        }}
-        placeholder={t("addTag")}
-        data-testid="tag-add-input"
-        className="h-[22px] w-28 rounded-md border border-accent/50 bg-app px-2 text-[10px] leading-none text-text outline-none placeholder:text-muted2"
-      />
-      {/* Where a NEW tag goes; a tag the library has keeps its group. */}
-      <select
-        value={group}
-        onMouseDown={(e) => e.stopPropagation()}
-        onChange={(e) => setGroup(e.target.value)}
-        data-testid="tag-add-group"
-        className="h-[22px] max-w-[88px] rounded-md border border-border/60 bg-app px-1 text-[10px] leading-none text-muted outline-none"
-      >
-        <option value={AUTO}>{t("group.auto")}</option>
-        {groups.map((g) => <option key={g.group_id} value={g.group_id}>{groupLabelOf(g)}</option>)}
-      </select>
-      {suggestions.length > 0 && (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-44 w-48 overflow-y-auto rounded-md border border-border/60 bg-chrome py-1 shadow-overlay">
-          {suggestions.map((s) => (
-            <button
-              key={s.value}
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); commit(s.value); }}
-              data-tag-suggestion={s.value}
-              className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[10px] text-muted hover:bg-hover hover:text-text"
-            >
-              <span className="flex min-w-0 items-center gap-1">
-                <span className="truncate">{labelOf(s.value)}</span>
-                {s.pinned && <Pin className="h-2.5 w-2.5 shrink-0 text-muted2" />}
-              </span>
-              {s.group_id != null && <span className="shrink-0 truncate text-[9px] text-muted2">{groupLabelOf(groups.find((g) => g.group_id === s.group_id))}</span>}
-              {s.count != null && <span className="shrink-0 text-[9px] tabular-nums text-muted2">{s.count}</span>}
-            </button>
-          ))}
+    <div ref={anchorRef} className="relative min-w-0">
+      {/* Keep the original row in flow so opening the picker reserves the same space. */}
+      <div className={cx("flex flex-wrap items-center gap-1", open && "invisible")}>
+        {empty && <span className="mr-1 text-[10px] text-muted2">{t("noTags")}</span>}
+        <button
+          ref={addButtonRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-expanded={open}
+          aria-controls={open ? pickerId : undefined}
+          data-testid="tag-add"
+          className="inline-flex items-center gap-0.5 rounded border border-dashed border-border/60 px-2 py-[2px] text-[10px] text-muted2 transition-colors hover:border-border hover:text-text"
+        >
+          <Plus className="h-2.5 w-2.5" /> {t("add")}
+        </button>
+      </div>
+      {open && (
+        <div className="absolute inset-0 flex items-center gap-1">
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => { setQ(e.target.value); panelRef.current.scrollTop = 0; }}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing || e.key !== "Enter" || pending) return;
+              if (q.trim()) void updateTag(() => onAdd(q.trim(), group || undefined));
+              close(e);
+            }}
+            aria-label={t("addTag")}
+            aria-controls={pickerId}
+            placeholder={t("addTag")}
+            data-testid="tag-add-input"
+            className="h-full min-w-0 flex-1 rounded-md border border-accent/50 bg-app px-2 text-[10px] leading-none text-text outline-none placeholder:text-muted2"
+          />
+          {/* The group picker applies to typed tags. */}
+          <select
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            aria-label={t("chip.moveTo")}
+            data-testid="tag-add-group"
+            className="h-full max-w-[88px] rounded-md border border-border/60 bg-app px-1 text-[10px] leading-none text-muted outline-none"
+          >
+            <option value={AUTO}>{t("group.auto")}</option>
+            {groups.map((g) => <option key={g.group_id} value={g.group_id}>{groupLabelOf(g)}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={close}
+            aria-controls={pickerId}
+            aria-label={t("tagPicker.close")}
+            title={t("tagPicker.close")}
+            className="inline-flex h-full w-[22px] shrink-0 items-center justify-center rounded-md text-muted2 hover:bg-hover hover:text-text"
+          >
+            <X className="h-3 w-3" />
+          </button>
         </div>
+      )}
+      {open && (
+        <TagPicker
+          id={pickerId}
+          panelRef={panelRef}
+          index={index}
+          groups={groups}
+          existing={existing}
+          query={q.trim().replace(/\s+/g, " ")}
+          pending={pending}
+          labelOf={labelOf}
+          groupLabelOf={groupLabelOf}
+          onToggle={(tag, isSelected) => {
+            inputRef.current.focus({ preventScroll: true });
+            void updateTag(() => isSelected ? onRemove(tag) : onAdd(tag));
+          }}
+        />
       )}
     </div>
   );
@@ -185,9 +290,9 @@ export default function TagsSection({ assetId, onTagClick, pushToast }) {
   const groups = useTagGroups();
   const index = useTagIndex();
   const [menu, setMenu] = useState(null); // { tag, x, y }
-  const labelOf = (tag) => tagLabel(tag, i18n.language);
+  const language = i18n.language;
+  const labelOf = useCallback((tag) => tagLabel(tag, language), [language]);
   const groupLabelOf = (group) => groupLabel(group, tNav);
-  const pinned = [...index.entries()].filter(([, info]) => info.pinned).map(([tag]) => tag);
 
   const fail = useCallback((key, e) => {
     pushToast?.({ title: t(key), message: e?.message || t("toast.failedFallback"), ttl: 4000, tone: "error" });
@@ -197,17 +302,18 @@ export default function TagsSection({ assetId, onTagClick, pushToast }) {
     if (!assetId || !tag) return;
     try {
       const updated = await api.addAssetTag(assetId, tag, group);
-      setCachedTags(assetId, updated?.tags || []);
+      // Attaching a known tag keeps its metadata and the open picker's scroll position.
+      setCachedTags(assetId, updated?.tags || [], { invalidateIndex: Boolean(group) || !index?.has(tag) });
     } catch (e) {
       fail("toast.addTagFailed", e);
     }
-  }, [assetId, fail]);
+  }, [assetId, fail, index]);
 
   const removeTag = useCallback(async (tag) => {
     if (!assetId || !tag) return;
     try {
       const updated = await api.removeAssetTag(assetId, tag);
-      setCachedTags(assetId, updated?.tags || []);
+      setCachedTags(assetId, updated?.tags || [], { invalidateIndex: false });
     } catch (e) {
       fail("toast.removeTagFailed", e);
     }
@@ -224,19 +330,19 @@ export default function TagsSection({ assetId, onTagClick, pushToast }) {
     }
   }, [fail]);
 
-  const buckets = bucketByGroup(tags, groups, (tag) => index.get(tag)?.group_id);
+  const buckets = bucketByGroup(tags, groups, (tag) => index?.get(tag)?.group_id);
 
   const chip = (tag) => (
     <span
       key={tag}
       data-tag={tag}
-      className="group/tag inline-flex items-center rounded-md border border-transparent bg-app px-2 py-[2px] text-[10px] text-muted transition-colors hover:border-border hover:text-text"
+      className={cx(TAG_CHIP, AVAILABLE_TAG, "group/tag")}
       onContextMenu={(e) => { e.preventDefault(); setMenu({ tag, x: e.clientX, y: e.clientY }); }}
     >
       <button type="button" onClick={() => onTagClick?.(tag)} title={t("filterBy", { tag: labelOf(tag) })} className="hover:text-text">
         {labelOf(tag)}
       </button>
-      {index.get(tag)?.pinned && <Pin className="ml-0.5 h-2.5 w-2.5 text-muted2" />}
+      {index?.get(tag)?.pinned && <Pin className={cx(TAG_PIN, "text-muted2")} />}
       <button
         type="button"
         onClick={() => removeTag(tag)}
@@ -253,22 +359,29 @@ export default function TagsSection({ assetId, onTagClick, pushToast }) {
       <div className="flex flex-col gap-1" data-testid="inspector-tags" data-count={known ? tags.length : undefined}>
         {buckets.map(({ group, items }) => (
           <div key={group?.group_id ?? "ungrouped"} data-tag-group={group?.group_id ?? ""} className="flex flex-wrap items-center gap-1">
-            {group && buckets.length > 1 && (
+            {group && (
               <span className="mr-0.5 text-[9px] uppercase tracking-[0.1em] text-muted2">{groupLabelOf(group)}</span>
             )}
             {items.map(chip)}
           </div>
         ))}
-        <div className="flex flex-wrap items-center gap-1">
-          {known && !tags.length && <span className="mr-1 text-[10px] text-muted2">{t("noTags")}</span>}
-          <TagAdder onAdd={addTag} existing={tags} groups={groups} pinned={pinned} labelOf={labelOf} groupLabelOf={groupLabelOf} />
-        </div>
+        <TagAdder
+          key={assetId}
+          onAdd={addTag}
+          onRemove={removeTag}
+          existing={tags}
+          empty={known && !tags.length}
+          groups={groups}
+          index={index}
+          labelOf={labelOf}
+          groupLabelOf={groupLabelOf}
+        />
       </div>
       {menu && (
         <ChipMenu
           at={menu}
           tag={menu.tag}
-          info={index.get(menu.tag)}
+          info={index?.get(menu.tag)}
           groups={groups}
           groupLabelOf={groupLabelOf}
           onClose={() => setMenu(null)}
