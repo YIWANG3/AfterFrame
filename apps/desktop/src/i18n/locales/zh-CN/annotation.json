@@ -12,6 +12,11 @@
   },
   "add": "添加",
   "addTag": "添加标签…",
+  "tagPicker": {
+    "close": "关闭标签选择器",
+    "loading": "正在加载标签…",
+    "noMatches": "没有匹配的标签"
+  },
   "removeTag": "移除标签",
   "filterBy": "按「{{tag}}」筛选",
   "annotate": "用 AI 标注",
