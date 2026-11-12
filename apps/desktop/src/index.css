@@ -20,7 +20,8 @@
 
 /* Tahoe 深黑皮肤 · token 三层(颜色 / 材质 / 圆角),见 docs/liquid-glass-redesign.md 七、二十一
    颜色仍是 RGB 三元组,tailwind 的 <alpha-value> 语法不变。 */
-:root {
+/* .theme-dark:浅色主题下仍要深色的局部(灯箱的详情栏,灯箱本身永远是黑的)。布局宽度不在此列,只属于 :root */
+:root, .theme-dark {
   color-scheme: dark;
   --app-bg: 6 6 7;               /* 舞台:近纯黑(第八轮:用户要更黑) */
   --chrome-bg: 14 14 16;         /* 弹层 / Modal 底 */
@@ -43,8 +44,6 @@
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.45);
   --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.45);
   --crop-scrim: rgba(0, 0, 0, 0.65);
-  --sidebar-width: 220px;
-  --inspector-width: 280px;
   /* 材质层 */
   --pane: rgba(255, 255, 255, 0.035);      /* 三栏面板:黑底上约 15 灰 */
   --glass: rgba(10, 10, 12, 0.6);          /* 工具栏胶囊 */
@@ -54,6 +53,10 @@
   --fill-2: rgba(255, 255, 255, 0.11);
   --fill-3: rgba(255, 255, 255, 0.16);
   --blur: blur(20px) saturate(1.4);
+}
+:root {
+  --sidebar-width: 220px;
+  --inspector-width: 280px;
 }
 
 :root[data-theme="light"] {
@@ -781,12 +784,13 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
    舞台(照片区)保留在两栏之间做适配,所以 fit 状态下照片不被遮;放大 / 拖动时照片从玻璃底下穿过。
    玻璃面板画在灯箱根节点的 ::before / ::after 上,向窗口外多伸 40px,避免 backdrop-filter 在窗口边缘采样出浅线 ───────── */
 .fixed.inset-0[data-layer="lightbox"] { position: fixed; }
-.fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { position: absolute; top: 0; left: 0; right: 0; z-index: 20; }
-.fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-center.justify-center.gap-3 { position: absolute; bottom: 76px; left: 0; right: 0; z-index: 20; }
-.fixed.inset-0[data-layer="lightbox"] > .h-16 { position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; }
-.fixed.inset-0[data-layer="lightbox"] > .relative.min-h-0.flex-1 { margin: 84px 0 140px; overflow: visible; z-index: 1; }
+/* --lightbox-info:详情栏打开时它占的宽度(Lightbox.jsx 写在根节点上),关着是 0。上下栏、舞台、两条玻璃都让到它左边,照片不被盖住 */
+.fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { position: absolute; top: 0; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
+.fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-center.justify-center.gap-3 { position: absolute; bottom: 76px; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
+.fixed.inset-0[data-layer="lightbox"] > .h-16 { position: absolute; bottom: 0; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
+.fixed.inset-0[data-layer="lightbox"] > .relative.min-h-0.flex-1 { margin: 84px var(--lightbox-info, 0px) 140px 0; overflow: visible; z-index: 1; }
 .fixed.inset-0[data-layer="lightbox"]::before, .fixed.inset-0[data-layer="lightbox"]::after {
-  content: ""; position: absolute; left: 0; right: 0; z-index: 10; pointer-events: none;
+  content: ""; position: absolute; left: 0; right: var(--lightbox-info, 0px); z-index: 10; pointer-events: none;
   /* 渐进模糊,没有清晰边缘:mask 从栏内实到栏外全透,压色也同步渐变;masked backdrop-filter 要独立合成层才会羽化 */
   transform: translateZ(0); will-change: transform;
   backdrop-filter: blur(22px) saturate(1.2); -webkit-backdrop-filter: blur(22px) saturate(1.2);

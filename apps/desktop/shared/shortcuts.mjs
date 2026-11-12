@@ -65,6 +65,7 @@ export const SHORTCUT_ACTIONS = [
   { id: "view.thumbLarger", group: "browse", scope: "gallery", defaults: ["Equal"] },
   { id: "view.thumbSmaller", group: "browse", scope: "gallery", defaults: ["Minus"] },
 
+  { id: "lightbox.info", group: "lightbox", scope: "lightbox", defaults: ["KeyI"] },
   { id: "lightbox.proof", group: "lightbox", scope: "lightbox", defaults: ["Mod+KeyP"] },
 
   { id: "app.settings", group: "app", scope: "global", defaults: ["Mod+Comma"], menu: "app:open-settings" },
