@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { FolderInput, ListFilter, Pencil, SlidersHorizontal, Trash2 } from "lucide-react";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
+import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
 
@@ -15,6 +16,14 @@ import { SectionHeading, useSectionOpen } from "./SidebarSection";
 export default function SmartCollections({ collections, activeId, view = "list", grow = false, onOpen, onEditRules, onRename, onDelete, onSnapshot }) {
   const { t } = useTranslation("nav");
   const [editingId, setEditingId] = useState(null);
+  // The row right-clicked: { col, x, y }. Its actions are in that menu.
+  const [menu, setMenu] = useState(null);
+  const menuItems = (col) => [
+    col.rules && { key: "edit-rules", icon: SlidersHorizontal, label: t("sidebar.editSmartRules"), onClick: () => onEditRules?.(col) },
+    col.rules && { key: "snapshot", icon: FolderInput, label: t("sidebar.snapshotToFolder"), onClick: () => onSnapshot?.(col) },
+    { key: "rename", icon: Pencil, label: t("sidebar.rename"), onClick: () => setEditingId(col.collection_id) },
+    { key: "delete", icon: Trash2, label: t("sidebar.delete"), danger: true, onClick: () => onDelete?.(col.collection_id) },
+  ].filter(Boolean);
   const smart = (collections || []).filter((c) => c.kind === "smart");
   const [open, toggleOpen] = useSectionOpen("smart");
 
@@ -90,8 +99,9 @@ export default function SmartCollections({ collections, activeId, view = "list",
             title={readable ? undefined : t("sidebar.smartUnreadable")}
             onClick={() => readable && onOpen?.(col)}
             onKeyDown={(e) => { if (e.key === "Enter" && readable) onOpen?.(col); }}
+            onContextMenu={(e) => { e.preventDefault(); setMenu({ col, x: e.clientX, y: e.clientY }); }}
             className={[
-              "group flex w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] px-2.5 py-1.5 text-left transition-colors",
+              "flex w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] px-2.5 py-1.5 text-left transition-colors",
               active ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
               readable ? "" : "opacity-50",
             ].join(" ")}
@@ -122,54 +132,15 @@ export default function SmartCollections({ collections, activeId, view = "list",
                 <span className="min-w-0 truncate text-[13px]">{col.name}</span>
               </span>
             )}
-            <span className="flex shrink-0 items-center gap-1">
-              {view !== "covers" && (
-                <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{col.item_count || 0}</span>
-              )}
-              <span className="hidden gap-0.5 group-hover:flex">
-                {readable && (
-                  <button
-                    type="button"
-                    className="rounded p-0.5 text-muted2 hover:text-text"
-                    title={t("sidebar.editSmartRules")}
-                    onClick={(e) => { e.stopPropagation(); onEditRules?.(col); }}
-                  >
-                    <SlidersHorizontal className="h-3 w-3" />
-                  </button>
-                )}
-                {readable && (
-                  <button
-                    type="button"
-                    className="rounded p-0.5 text-muted2 hover:text-text"
-                    title={t("sidebar.snapshotToFolder")}
-                    onClick={(e) => { e.stopPropagation(); onSnapshot?.(col); }}
-                  >
-                    <FolderInput className="h-3 w-3" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="rounded p-0.5 text-muted2 hover:text-text"
-                  title={t("sidebar.rename")}
-                  onClick={(e) => { e.stopPropagation(); setEditingId(col.collection_id); }}
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
-                  className="rounded p-0.5 text-muted2 hover:text-red-400"
-                  title={t("sidebar.delete")}
-                  onClick={(e) => { e.stopPropagation(); onDelete?.(col.collection_id); }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </span>
-            </span>
+            {view !== "covers" && (
+              <span className={`shrink-0 text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{col.item_count || 0}</span>
+            )}
           </div>
         );
       })}
       </div>
       )}
+      {menu && <FaceMenu testId="sidebar-smart-menu" position={menu} items={menuItems(menu.col)} onClose={() => setMenu(null)} />}
     </div>
   );
 }

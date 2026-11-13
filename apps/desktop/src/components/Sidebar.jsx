@@ -6,6 +6,7 @@ import { Images, Clock, Star, Copy, FolderPlus, FolderCog, Folder, Trash2, Penci
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
+import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
@@ -129,6 +130,8 @@ export default function Sidebar({
   const [creatingFolder, setCreatingFolder] = useState(false);
   // The folder a new subfolder is being named under (its field sits below its row).
   const [creatingUnder, setCreatingUnder] = useState(null);
+  // The folder row right-clicked: { col, x, y }.
+  const [rowMenu, setRowMenu] = useState(null);
   const [foldersOpen, toggleFolders, showFolders] = useSectionOpen("folders");
   // Folder list view: plain rows, or rows with a cover thumbnail (demo C's library list).
   const [folderView, setFolderView] = useState(() => {
@@ -182,8 +185,6 @@ export default function Sidebar({
   // instead of walking off the right edge. (A percentage in padding is of the
   // list's width, so the share follows a resized sidebar.)
   const deepest = treeRows.reduce((max, row) => Math.max(max, row.depth), 0);
-  // Is any folder on screen inside another, or holding one?
-  const nested = treeRows.some((row) => row.hasChildren || row.depth > 0);
   const indentShare = folderView === "covers" ? 24 : 28;
   const indentStep = deepest > 0 ? `max(3px, min(14px, ${(indentShare / deepest).toFixed(3)}%))` : "14px";
   const indentOf = (depth, extra = 0) => `calc(${10 + extra}px + ${depth} * ${indentStep})`;
@@ -298,6 +299,25 @@ export default function Sidebar({
   // their way out and back: those carry asset ids, and are read first).
   const filesDragged = (event) => !!onImportInto && !readDraggedAssetIds(event).length
     && !!event.dataTransfer?.types?.includes?.("Files");
+  // A folder row's actions, in its right-click menu.
+  const folderMenuItems = (col) => [
+    {
+      key: "new-subfolder",
+      icon: FolderPlus,
+      label: t("sidebar.newSubfolder"),
+      onClick: () => {
+        closeFolderSearch();
+        setCreatingFolder(false);
+        // Open it, so the new folder is seen the moment it exists.
+        expand([col.collection_id]);
+        setCreatingUnder(col.collection_id);
+      },
+    },
+    onAnnotateCollection && { key: "annotate", icon: Sparkles, label: t("sidebar.annotateFolder"), onClick: () => onAnnotateCollection(col.collection_id) },
+    { key: "rename", icon: Pencil, label: t("sidebar.rename"), onClick: () => setEditingId(col.collection_id) },
+    { key: "delete", icon: Trash2, label: t("sidebar.delete"), danger: true, onClick: () => void deleteFolder(col) },
+  ].filter(Boolean);
+
   const droppedPaths = (event) => [...(event.dataTransfer?.files || [])]
     .map((file) => api.getPathForFile?.(file) || file.path).filter(Boolean);
 
@@ -636,23 +656,21 @@ export default function Sidebar({
                   />
                 </div>
               ) : null;
-              // Folders with folders inside open and close; the others keep the
-              // space, so the covers of a level line up. A list with no folder
-              // inside another has nothing to open: no space is kept, and its
-              // rows start where the smart collections' do.
+              // A folder with folders inside opens and closes by the chevron after
+              // its count, at the row's right end. Nothing sits left of the icon
+              // or cover, so a top-level row starts where the smart collections'
+              // rows do, whether or not any folder is nested.
               const toggle = hasChildren ? (
                 <button
                   type="button"
                   data-folder-toggle={expanded ? "open" : "closed"}
                   aria-label={expanded ? t("sidebar.collapse") : t("sidebar.expand")}
                   aria-expanded={expanded}
-                  className="-ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted2 hover:bg-hover hover:text-text"
+                  className="-mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted2 hover:bg-hover hover:text-text"
                   onClick={(e) => { e.stopPropagation(); toggleExpanded(col.collection_id); }}
                 >
                   {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </button>
-              ) : nested ? (
-                <span className="-ml-1 h-4 w-4 shrink-0" aria-hidden="true" />
               ) : null;
               // A closed folder counts everything under it; open, only its own.
               const count = hasChildren && !expanded ? (col.subtree_count ?? col.item_count ?? 0) : (col.item_count || 0);
@@ -677,7 +695,6 @@ export default function Sidebar({
                     <Fragment key={col.collection_id}>
                       <div className={`flex w-full items-center rounded-md py-1.5 pr-2.5 ${active ? "bg-selected" : ""}`} style={indent}>
                         <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                          {toggle}
                           {coverOf(col) ? (
                             <img src={localFileUrl(coverOf(col))} alt="" draggable={false} className="h-10 w-10 shrink-0 rounded-[8px] object-cover" />
                           ) : (
@@ -730,6 +747,10 @@ export default function Sidebar({
                   }}
                   onDragEnd={endFolderDrag}
                   onClick={() => onSelectCollection?.(col.collection_id)}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setRowMenu({ col, x: event.clientX, y: event.clientY });
+                  }}
                   onKeyDown={(event) => {
                     if (event.target !== event.currentTarget) return;
                     if (event.key === "Enter") onSelectCollection?.(col.collection_id);
@@ -807,7 +828,7 @@ export default function Sidebar({
                     await onAddToCollection?.(col.collection_id, assetIds);
                   }}
                   className={[
-                    "sidebar-folder-row group relative flex w-full cursor-pointer items-center justify-between rounded-md py-1.5 pr-2.5 text-left transition-colors",
+                    "sidebar-folder-row relative flex w-full cursor-pointer items-center justify-between rounded-md py-1.5 pr-2.5 text-left transition-colors",
                     draggingFolderId === col.collection_id ? "opacity-50" : "",
                     dropTargetId === col.collection_id && !active
                       ? "bg-hover text-text ring-1 ring-inset ring-accent/45"
@@ -818,11 +839,7 @@ export default function Sidebar({
                   ].join(" ")}
                 >
                   {folderView === "covers" ? (
-                    // Clipped (the padding keeps the toggle's negative margin inside):
-                    // in a row too narrow for everything, the hover tools cover
-                    // nothing, the cover and name just end where they start.
-                    <span className="-ml-1 flex min-w-0 items-center gap-2.5 overflow-hidden pl-1">
-                      {toggle}
+                    <span className="flex min-w-0 items-center gap-2.5 overflow-hidden">
                       {coverOf(col) ? (
                         <img
                           src={localFileUrl(coverOf(col))}
@@ -842,8 +859,7 @@ export default function Sidebar({
                       </span>
                     </span>
                   ) : (
-                    <span className="-ml-1 flex min-w-0 items-center gap-2.5 overflow-hidden pl-1">
-                      {toggle}
+                    <span className="flex min-w-0 items-center gap-2.5 overflow-hidden">
                       <Folder className={`h-4 w-4 shrink-0 stroke-[1.6] ${active ? "text-accent" : ""}`} />
                       <span className="min-w-0">
                         <span className="block truncate text-[13px]">{col.name}</span>
@@ -865,48 +881,7 @@ export default function Sidebar({
                         {count}
                       </span>
                     )}
-                    <span className="hidden gap-0.5 group-hover:flex">
-                      <button
-                        type="button"
-                        className="rounded p-0.5 text-muted2 hover:text-text"
-                        title={t("sidebar.newSubfolder")}
-                        aria-label={t("sidebar.newSubfolder")}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          closeFolderSearch();
-                          setCreatingFolder(false);
-                          // Open it, so the new folder is seen the moment it exists.
-                          expand([col.collection_id]);
-                          setCreatingUnder(col.collection_id);
-                        }}
-                      >
-                        <FolderPlus className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded p-0.5 text-muted2 hover:text-text"
-                        title={t("sidebar.annotateFolder")}
-                        onClick={(e) => { e.stopPropagation(); onAnnotateCollection?.(col.collection_id); }}
-                      >
-                        <Sparkles className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded p-0.5 text-muted2 hover:text-text"
-                        title={t("sidebar.rename")}
-                        onClick={(e) => { e.stopPropagation(); setEditingId(col.collection_id); }}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded p-0.5 text-muted2 hover:text-red-400"
-                        title={t("sidebar.delete")}
-                        onClick={(e) => { e.stopPropagation(); void deleteFolder(col); }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </span>
+                    {toggle}
                   </span>
                 </div>
                 {subfolderField}
@@ -949,6 +924,8 @@ export default function Sidebar({
           </>)}
         </div>
       </nav>
+
+      {rowMenu && <FaceMenu testId="sidebar-folder-menu" position={rowMenu} items={folderMenuItems(rowMenu.col)} onClose={() => setRowMenu(null)} />}
 
       {api.capabilities.web && <div className="shrink-0 pt-2"><DesktopHint /></div>}
     </aside>

@@ -173,17 +173,17 @@ test("folders: create, add from the menu, open, remove, rename, delete", async (
   await ctx.window.getByText("Remove from Folder", { exact: true }).click();
   await expect(cards()).toHaveCount(0, { timeout: 10_000 });
 
-  const row = folder().locator("xpath=ancestor::*[contains(@class,'group')][1]");
-  await row.hover();
-  await row.getByTitle("Rename", { exact: true }).click();
+  const row = folder().locator("xpath=ancestor::*[@data-collection-id][1]");
+  await row.click({ button: "right" });
+  await ctx.window.locator("[data-menu-item='rename']").click();
   const rename = ctx.window.getByTestId("sidebar-folder-scroll").locator("input");
   await rename.fill("Trip 2");
   await rename.press("Enter");
   const renamed = () => ctx.window.getByTestId("sidebar-folder-scroll").getByText("Trip 2", { exact: true });
   await expect(renamed()).toBeVisible({ timeout: 5_000 });
-  const row2 = renamed().locator("xpath=ancestor::*[contains(@class,'group')][1]");
-  await row2.hover();
-  await row2.getByTitle("Delete", { exact: true }).click();
+  const row2 = renamed().locator("xpath=ancestor::*[@data-collection-id][1]");
+  await row2.click({ button: "right" });
+  await ctx.window.locator("[data-menu-item='delete']").click();
   await expect(renamed()).toHaveCount(0, { timeout: 5_000 });
 
   await ctx.window.getByRole("button", { name: /^All Assets/ }).click();

@@ -1,5 +1,5 @@
 // Nested folders: a folder inside a folder, any depth. The sidebar shows them
-// as a tree (open / close, a subfolder made from a row's hover button, a
+// as a tree (open / close, a subfolder made from a row's right-click menu, a
 // folder dragged onto another to nest it, dragged to the top-level zone to
 // bring it back out); a parent shows its subfolders' photos until the
 // toolbar switch says this folder only (remembered); the right-click submenu,
@@ -32,8 +32,8 @@ async function newTopLevelFolder(name) {
 }
 
 async function newSubfolder(parentName, name) {
-  await row(parentName).hover();
-  await row(parentName).getByLabel("New subfolder", { exact: true }).click();
+  await row(parentName).click({ button: "right" });
+  await w().locator("[data-menu-item='new-subfolder']").click();
   const field = w().getByTestId("sidebar-new-subfolder").locator("input");
   await field.fill(name);
   await field.press("Enter");
@@ -98,6 +98,24 @@ test("a subfolder is made from a row; the tree opens and closes", async () => {
   const tree = await folders();
   expect(tree.Kyoto.path).toBe("Trips / Japan / Kyoto");
   expect(tree.Kyoto.depth).toBe(2);
+
+  // The chevron sits after the count, at the row's right end, and only where
+  // there is something to open. Nothing is left of the icon, so a top-level
+  // row starts at the row's own padding, nested folders or not.
+  const trips = row("Trips");
+  const toggleBox = await trips.locator("[data-folder-toggle]").boundingBox();
+  const countBox = await trips.locator("span.tabular-nums").boundingBox();
+  expect(toggleBox.x).toBeGreaterThanOrEqual(countBox.x + countBox.width);
+  await expect(row("Kyoto").locator("[data-folder-toggle]")).toHaveCount(0);
+  const rowBox = await trips.boundingBox();
+  const iconBox = await trips.locator("svg").first().boundingBox();
+  expect(iconBox.x - rowBox.x).toBeCloseTo(10, 0);
+  // A row's actions are in its right-click menu, and nowhere on the row.
+  await expect(row("Kyoto").locator("button")).toHaveCount(0);
+  await row("Kyoto").click({ button: "right" });
+  await expect(w().getByTestId("sidebar-folder-menu").locator("[data-menu-item]")).toHaveCount(4);
+  await w().keyboard.press("Escape");
+  await expect(w().getByTestId("sidebar-folder-menu")).toHaveCount(0);
   expect(tree.Japan.parent_collection_id).toBe(tree.Trips.collection_id);
 });
 
@@ -257,8 +275,8 @@ test("deleting a folder takes the folders under it; the photos stay", async () =
   const before = (await callTool("get_catalog_info", {})).asset_count ?? null;
   // The sidebar asks first when there are folders inside, and, as these hold
   // photos no other folder does, what becomes of them (e2e/83 takes the other answers).
-  await row("Japan").hover();
-  await row("Japan").getByTitle("Delete", { exact: true }).click();
+  await row("Japan").click({ button: "right" });
+  await w().locator("[data-menu-item='delete']").click();
   await expect(w().getByText("Delete “Japan”?")).toBeVisible();
   await expect(w().getByText(/Its 1 subfolder goes with it/)).toBeVisible();
   await w().getByRole("button", { name: "Delete Folder Only", exact: true }).click();
