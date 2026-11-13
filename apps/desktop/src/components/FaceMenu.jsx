@@ -3,18 +3,19 @@ import useDismiss from "../ui/useDismiss";
 import { Z } from "../ui";
 import { createPortal } from "react-dom";
 
-// Context menu for people/face actions.
-export default function FaceMenu({ position, items, onClose }) {
+// A context menu at a point: people and faces, folder cards, sidebar rows.
+export default function FaceMenu({ position, items, onClose, testId }) {
   const ref = useRef(null);
   useDismiss(ref, onClose);
   const left = Math.min(position.x, window.innerWidth - 228);
   const top = Math.min(position.y, window.innerHeight - items.length * 30 - 16);
   return createPortal(
-    <div ref={ref} className="fixed w-[220px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top, zIndex: Z.popover }}>
+    <div ref={ref} data-testid={testId} className="fixed w-[220px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top, zIndex: Z.popover }}>
       {items.map(({ key, icon: Icon, label, onClick, danger = false }) => (
         <button
           key={key}
           type="button"
+          data-menu-item={key}
           onClick={() => { onClose(); onClick(); }}
           className={[
             "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] transition",

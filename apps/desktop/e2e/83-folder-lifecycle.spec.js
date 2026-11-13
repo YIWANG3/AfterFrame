@@ -134,8 +134,8 @@ test("on a folder row, a folder from Finder lands inside it and loose files go i
 
 test("deleting a folder asks what becomes of its photos; Cancel changes nothing", async () => {
   const before = await libraryCount();
-  await row("Wedding").hover();
-  await row("Wedding").getByTitle("Delete", { exact: true }).click();
+  await row("Wedding").click({ button: "right" });
+  await w().locator("[data-menu-item='delete']").click();
   await expect(w().getByText("Delete “Wedding”?")).toBeVisible();
   await expect(w().getByText("It holds 5 photos.")).toBeVisible();
   await expect(w().getByText("Its 1 subfolder goes with it.")).toBeVisible();
@@ -158,8 +158,8 @@ test("…out of the library: only the photos no other folder holds, and the file
   }, path.join(work.wedding, "a.jpg"));
   const before = await libraryCount();
 
-  await row("Wedding").hover();
-  await row("Wedding").getByTitle("Delete", { exact: true }).click();
+  await row("Wedding").click({ button: "right" });
+  await w().locator("[data-menu-item='delete']").click();
   await expect(w().getByText("1 of them is in another folder too and stays in the library.")).toBeVisible();
   await w().locator("[data-choice='library']", { hasText: "Also Remove 4 Photos from Library" }).click();
 
@@ -181,8 +181,8 @@ test("…or into the Trash: the files go with the records", async () => {
   await expect.poll(() => namesIn("Scraps"), { timeout: 90_000 }).toEqual(["x.jpg", "y.jpg"]);
   const before = await libraryCount();
 
-  await row("Scraps").hover();
-  await row("Scraps").getByTitle("Delete", { exact: true }).click();
+  await row("Scraps").click({ button: "right" });
+  await w().locator("[data-menu-item='delete']").click();
   await w().locator("[data-choice='trash']", { hasText: "Also Move 2 Files to Trash" }).click();
 
   await expect.poll(rowNames, { timeout: 15_000 }).toEqual(["0:Portfolio"]);
@@ -192,8 +192,8 @@ test("…or into the Trash: the files go with the records", async () => {
 
 test("…or nowhere: the folder alone goes, and an empty one goes without a question", async () => {
   const before = await libraryCount();
-  await row("Portfolio").hover();
-  await row("Portfolio").getByTitle("Delete", { exact: true }).click();
+  await row("Portfolio").click({ button: "right" });
+  await w().locator("[data-menu-item='delete']").click();
   await expect(w().getByText("It holds 1 photo.")).toBeVisible();
   await w().locator("[data-choice='folder']").click();
   await expect.poll(rowNames, { timeout: 15_000 }).toEqual([]);
@@ -201,8 +201,8 @@ test("…or nowhere: the folder alone goes, and an empty one goes without a ques
   expect(await inLibrary(path.join(work.wedding, "a.jpg"))).toBe(true);
 
   await newFolder("Empty");
-  await row("Empty").hover();
-  await row("Empty").getByTitle("Delete", { exact: true }).click();
+  await row("Empty").click({ button: "right" });
+  await w().locator("[data-menu-item='delete']").click();
   await expect.poll(rowNames, { timeout: 15_000 }).toEqual([]);
   await expect(w().locator("[data-choice]")).toHaveCount(0);
 });

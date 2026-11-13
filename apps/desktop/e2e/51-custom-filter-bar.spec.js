@@ -44,8 +44,8 @@ test("a hidden facet that is filtering shows anyway", async () => {
   await tool("manage_collections", { action: "create", name: "JPEGs", rules: { extension: "jpg" } });
   const row = ctx.window.locator("[data-smart-collection]").filter({ hasText: "JPEGs" });
   await expect(row).toBeVisible();
-  await row.hover();
-  await row.getByTitle("Edit conditions").click();
+  await row.click({ button: "right" });
+  await ctx.window.locator("[data-menu-item='edit-rules']").click();
   // The rule is on the bar although Format is unticked (as saved: "jpg").
   const rule = bar().getByRole("button", { name: /^jpg$/i });
   await expect(rule).toBeVisible();

@@ -121,8 +121,8 @@ test("a multi-value filter saves into a smart collection and comes back as one",
   await expect(cards()).toHaveCount(saved.item_count);
 
   // Editing its conditions shows both cameras ticked.
-  await row.hover();
-  await row.getByTitle("Edit conditions").click();
+  await row.click({ button: "right" });
+  await ctx.window.locator("[data-menu-item='edit-rules']").click();
   await bar().getByRole("button", { name: /\+1$/ }).click();
   await expect(option(CANON)).toHaveAttribute("aria-checked", "true");
   await expect(option(HASSELBLAD)).toHaveAttribute("aria-checked", "true");

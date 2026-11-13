@@ -178,8 +178,8 @@ test("condition groups: any one of them may hold, and they save with the collect
 
   // Editing the collection brings the groups back into the dialog.
   const row = ctx.window.locator("[data-smart-collection]").filter({ hasText: "Canon or unrated JPGs" });
-  await row.hover();
-  await row.getByTitle("Edit conditions").click();
+  await row.click({ button: "right" });
+  await ctx.window.locator("[data-menu-item='edit-rules']").click();
   await bar().getByRole("button", { name: "Any of 2 groups" }).click();
   await expect(dialog().locator("[data-filter-group-index]")).toHaveCount(2);
   await expect(dialog().locator("[data-filter-group-index='0']").getByRole("button", { name: CANON })).toBeVisible();

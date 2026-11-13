@@ -180,8 +180,8 @@ test("a refinement can be saved as a new collection nested on this one, or narro
 });
 
 test("editing conditions is its own mode: the bar shows the rules, Save rewrites them, Cancel does not", async () => {
-  await smartRow("Five stars").hover();
-  await smartRow("Five stars").getByTitle("Edit conditions").click();
+  await smartRow("Five stars").click({ button: "right" });
+  await window.locator("[data-menu-item='edit-rules']").click();
   await expect(window.locator("[data-smart-editing]")).toContainText("Five stars");
   const save = actions().getByRole("button", { name: "Save", exact: true });
   await expect(save).toBeDisabled(); // nothing changed yet
@@ -192,8 +192,8 @@ test("editing conditions is its own mode: the bar shows the rules, Save rewrites
   expect((await collectionNamed("Five stars")).rules.filters).toEqual({ rating_min: 5 });
   await expect(window.locator("[data-smart-editing]")).toHaveCount(0);
 
-  await smartRow("Five stars").hover();
-  await smartRow("Five stars").getByTitle("Edit conditions").click();
+  await smartRow("Five stars").click({ button: "right" });
+  await window.locator("[data-menu-item='edit-rules']").click();
   await window.getByTitle("Rating ≥ 4").click();
   await save.click();
   await expect(window.locator("[data-smart-editing]")).toHaveCount(0);
@@ -266,8 +266,8 @@ test("the sidebar's covers switch gives smart collections a cover too", async ()
 
 test("a snapshot freezes the current photos into an ordinary folder", async () => {
   const expected = await holds("Five stars");
-  await smartRow("Five stars").hover();
-  await smartRow("Five stars").getByTitle("Copy current photos to a folder").click();
+  await smartRow("Five stars").click({ button: "right" });
+  await window.locator("[data-menu-item='snapshot']").click();
   await expect.poll(() => window.evaluate(() => window.mediaWorkspace.listCollections()
     .then((rows) => rows.find((row) => row.name === "Five stars (snapshot)")?.item_count ?? null))).toBe(expected);
 });
