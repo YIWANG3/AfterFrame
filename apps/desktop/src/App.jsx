@@ -1486,6 +1486,7 @@ export default function App() {
               onMoveFolder={workspace.moveCollection}
               onRenameFolder={workspace.renameCollection}
               onDeleteFolders={deleteFolders}
+              onImportInto={api.can("fileSystem") ? importIntoFolders : undefined}
               onAnnotateFolder={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
               pushToast={pushToast}
             />

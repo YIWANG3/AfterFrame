@@ -6,7 +6,8 @@
 // folder, and loose files dropped on a row go into it. Deleting a folder that
 // is the only one holding some photos asks what becomes of them: they stay,
 // they leave the library, or their files go to the Trash. A photo another
-// folder holds too is never taken.
+// folder holds too is never taken. The Folders page takes the same drags as
+// the sidebar: on its background a top-level folder, on a card a subfolder.
 
 const fs = require("node:fs");
 const os = require("node:os");
@@ -50,7 +51,8 @@ async function newFolder(name) {
 // A drag from Finder. Electron hands real drags to the OS, so the DOM events
 // are dispatched; a File made in the page has no path on disk for the app to
 // read, so the fallback it reads (`file.path`) answers with the one meant.
-async function dropFromFinder(paths, target) {
+// `whileOver` runs between the dragover and the drop.
+async function dropFromFinder(paths, target, whileOver) {
   const transfer = await w().evaluateHandle((list) => {
     window.__droppedPaths = Object.fromEntries(list.map((p, index) => [`drop-${index}`, p]));
     if (!Object.getOwnPropertyDescriptor(File.prototype, "path")) {
@@ -61,6 +63,7 @@ async function dropFromFinder(paths, target) {
     return data;
   }, paths);
   await target.dispatchEvent("dragover", { dataTransfer: transfer });
+  await whileOver?.();
   await target.dispatchEvent("drop", { dataTransfer: transfer });
   await transfer.dispose();
 }
@@ -205,4 +208,39 @@ test("…or nowhere: the folder alone goes, and an empty one goes without a ques
   await row("Empty").getByTitle("Delete", { exact: true }).click();
   await expect.poll(rowNames, { timeout: 15_000 }).toEqual([]);
   await expect(w().locator("[data-choice]")).toHaveCount(0);
+});
+
+test("the Folders page takes a folder from Finder too: on the page it is a top-level folder", async () => {
+  test.setTimeout(120_000);
+  await w().getByTestId("sidebar-manage-folders").click();
+  const page = w().getByTestId("gallery-scroll");
+  await expect(w().getByTestId("folders-count")).toHaveText("· 0");
+
+  await dropFromFinder([work.wedding], page, () => expect(page).toHaveAttribute("data-import-drop", "true"));
+  // One folder made: it opens, as from the sidebar, and fills as the import goes
+  // (b.jpg and c.jpg left the library with the folder above, and are back).
+  await expect(row("Wedding")).toHaveClass(/bg-selected/, { timeout: 15_000 });
+  await expect.poll(() => namesIn("Wedding"), { timeout: 90_000 }).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+  expect(await rowNames()).toEqual(["0:Wedding"]);
+  expect(await inLibrary(path.join(work.wedding, "b.jpg"))).toBe(true);
+});
+
+test("…and on a folder's card it lands inside that folder, and loose files go into it", async () => {
+  test.setTimeout(120_000);
+  await w().getByTestId("sidebar-manage-folders").click();
+  const page = w().getByTestId("gallery-scroll");
+  const wedding = page.locator("[data-folder-id]").filter({ has: w().locator("[data-folder-name]", { hasText: /^Wedding$/ }) });
+  await expect(wedding).toBeVisible();
+
+  await dropFromFinder([work.selects, work.loose], wedding, async () => {
+    await expect(wedding).toHaveAttribute("data-import-drop", "true");
+    await expect(page).not.toHaveAttribute("data-import-drop", "true");
+  });
+  await expect.poll(rowNames, { timeout: 15_000 }).toEqual(["0:Wedding", "1:Selects"]);
+  await expect.poll(() => namesIn("Selects"), { timeout: 90_000 }).toEqual(["d.jpg"]);
+  await expect.poll(() => namesIn("Wedding"), { timeout: 30_000 }).toEqual(["a.jpg", "b.jpg", "c.jpg", "loose.jpg"]);
+  const tree = await folders();
+  expect(tree.Selects.parent_collection_id).toBe(tree.Wedding.collection_id);
+  // The one folder made is opened, as from the sidebar.
+  await expect(row("Selects")).toHaveClass(/bg-selected/);
 });
