@@ -36,13 +36,20 @@ const card = (window, id) => window.locator(`[data-gallery-item='true'][data-ass
 test("Left and Right wrap between the last and the first column", async () => {
   const { window } = ctx;
   await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
-  await window.getByTestId("display-mode-trigger").click();
-  await window.getByTestId("display-mode-waterfall").click();
+  // Straight to the layout through its remembered pref: on a narrow toolbar
+  // (CI windows) the layout menu is hidden by a container query. The
+  // smallest thumbnails give the most columns.
+  await window.evaluate(() => {
+    localStorage.setItem("afterframe.pref.gallery.displayMode", JSON.stringify("waterfall"));
+    localStorage.setItem("afterframe.pref.gallery.thumbSize", JSON.stringify(120));
+  });
+  await window.reload();
+  await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
 
   let columns;
   await expect.poll(async () => {
     columns = await columnsOnScreen(window);
-    return columns.length >= 2 && columns[0].length >= 2;
+    return columns.length >= 3 && columns[0].length >= 2;
   }, { timeout: 10_000 }).toBe(true);
   const first = columns[0];
   const last = columns[columns.length - 1];
