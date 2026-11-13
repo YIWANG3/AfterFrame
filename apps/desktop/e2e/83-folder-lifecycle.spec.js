@@ -142,7 +142,8 @@ test("deleting a folder asks what becomes of its photos; Cancel changes nothing"
   await expect(w().locator("[data-choice='folder']")).toHaveText("Delete Folder Only");
   await expect(w().locator("[data-choice='library']")).toHaveText("Also Remove 5 Photos from Library");
   await expect(w().locator("[data-choice='trash']")).toHaveText("Also Move 5 Files to Trash");
-  await w().getByRole("button", { name: "Cancel", exact: true }).click();
+  // The dialog's own Cancel: the import's card may still be in the job dock, with a Cancel of its own.
+  await w().locator("[data-choice='folder']").locator("..").getByRole("button", { name: "Cancel", exact: true }).click();
   expect(await rowNames()).toEqual(["0:Wedding", "1:Selects"]);
   expect(await libraryCount()).toBe(before);
 });
