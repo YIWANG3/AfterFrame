@@ -65,9 +65,9 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Smart collections (a saved filter with a live count: exclude any filter, ratings below a value or unrated, either-or condition groups) and manual folders
 - Folder list you can sort (custom order, name, newest, most photos) and search by name; new folders go on top
 - **Folders nest**, any depth: the sidebar is a tree, dragging a folder onto another nests it, and a parent shows its own photos plus everything under it (a toolbar switch turns that to this folder only)
-- The sidebar's Smart Collections and Folders sections each fold down to their heading
+- The sidebar's Smart Collections and Folders sections each fold down to their heading. A row's actions (rename, delete, new subfolder and the rest) are in its right-click menu
 - **Target folder**: the folder you last made or last added to is marked with a `B` in the sidebar, and **B** adds the selected photos to it (Shift+B adds one and moves on), like Lightroom's target collection
-- **One shoot, one folder**: drag a folder from Finder onto the sidebar and it is imported and becomes a folder of that name (onto a folder row, a subfolder of it). Deleting a folder can take the photos only it holds out of the library, or move their files to the Trash
+- **One shoot, one folder**: drag a folder from Finder onto the sidebar or the Folders page and it is imported and becomes a folder of that name (onto a folder's row or card, a subfolder of it). Deleting a folder can take the photos only it holds out of the library, or move their files to the Trash
 - **A page for your folders** shows every folder at once, with a mosaic of its newest photos, its count and the span of capture dates. Sort by last added or capture date too, filter by status, count or dates, switch to a sortable table, and select several to annotate or delete
 - **Look-alikes**: every photo gets a perceptual hash and, on the Mac, Apple Vision's feature print, so another export, a re-encode or a crop of one picture is found. A Look-alikes view in the sidebar, **Find Similar** on any photo, and a Similar strip in the inspector
 - **Copy** (⌘C) puts the selected photos on the clipboard as files, like Finder: paste them in Finder, WeChat, Notes or anything that takes a file drop
