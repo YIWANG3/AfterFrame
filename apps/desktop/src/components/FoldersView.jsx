@@ -2,7 +2,9 @@
 // columns the sidebar cannot fit — cover mosaic, capture span, when a photo
 // last joined — searchable, sortable, filterable, and selectable in bulk.
 // Opened from the sidebar's folder header (FolderCog) or Discover's Albums
-// row. The header is the gallery's two rows — Toolbar, then FilterBar — in
+// row. A folder dragged in from Finder becomes a folder here, as on the
+// sidebar: on a card it goes inside that folder, anywhere else to the top
+// level. The header is the gallery's two rows — Toolbar, then FilterBar — in
 // the same markup, so the skin dresses it the same way (index.css §5).
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -197,6 +199,9 @@ export default function FoldersView({
   // (ids) → asks, deletes, and resolves true when they are gone (App.jsx deleteFolders).
   onDeleteFolders,
   onAnnotateFolder,
+  // ({ paths, parentId }): import what was dragged in from Finder and file it
+  // (App.jsx importIntoFolders). Absent where there is no file system.
+  onImportInto,
   pushToast,
 }) {
   const { t, i18n } = useTranslation("nav");
@@ -218,6 +223,8 @@ export default function FoldersView({
   // false, or { parentId }: the folder the new one goes in (null = top level).
   const [creating, setCreating] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // What a drag from Finder is over: null, "page", or a folder's id.
+  const [importDrop, setImportDrop] = useState(null);
   const scrollRef = useRef(null);
   const sentinelRef = useRef(null);
 
@@ -359,10 +366,46 @@ export default function FoldersView({
     />
   );
 
+  // Files or folders on their way in from Finder, not this app's own photos.
+  const filesDragged = (event) => !!onImportInto
+    && !!event.dataTransfer?.types?.includes?.("Files")
+    && !event.dataTransfer.types.includes("application/x-media-workspace-asset");
+  const importDropped = (event, parentId) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setImportDrop(null);
+    const paths = [...(event.dataTransfer?.files || [])].map((file) => api.getPathForFile?.(file) || file.path).filter(Boolean);
+    if (paths.length) void onImportInto({ paths, parentId });
+  };
+  // The page takes the drag wherever no card does (a card stops the event).
+  const pageDropProps = {
+    "data-import-drop": importDrop === "page" ? "true" : undefined,
+    onDragOver: (event) => {
+      if (!filesDragged(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      setImportDrop("page");
+    },
+    onDragLeave: (event) => { if (!event.currentTarget.contains(event.relatedTarget)) setImportDrop(null); },
+    onDrop: (event) => { if (filesDragged(event)) importDropped(event, null); },
+  };
+
   // The card's shared handlers, for the grid tile and the list row alike.
   const rowProps = (folder) => ({
     "data-folder-id": folder.collection_id,
     "data-selected": selectedIds.has(folder.collection_id) ? "true" : undefined,
+    "data-import-drop": importDrop === folder.collection_id ? "true" : undefined,
+    onDragOver: (event) => {
+      if (!filesDragged(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "copy";
+      setImportDrop(folder.collection_id);
+    },
+    onDragLeave: (event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setImportDrop((current) => (current === folder.collection_id ? null : current));
+    },
+    onDrop: (event) => { if (filesDragged(event)) importDropped(event, folder.collection_id); },
     role: "button",
     tabIndex: 0,
     onClick: (event) => { if (!event.target.closest("button, input")) select(folder.collection_id, event); },
@@ -464,7 +507,12 @@ export default function FoldersView({
         </div>
       )}
 
-      <main ref={scrollRef} data-testid="gallery-scroll" className="min-h-0 flex-1 overflow-y-auto p-6 pb-24">
+      <main
+        ref={scrollRef}
+        data-testid="gallery-scroll"
+        {...pageDropProps}
+        className={cx("min-h-0 flex-1 overflow-y-auto p-6 pb-24", importDrop === "page" && "ring-2 ring-inset ring-accent/45")}
+      >
         {creating && (
           <div className="mb-4 max-w-[320px]" data-testid="folders-create" data-parent-id={creating.parentId || undefined}>
             {creating.parentId && byId.get(creating.parentId) && (
@@ -506,7 +554,7 @@ export default function FoldersView({
                 >
                   <div className={cx(
                     "relative aspect-square overflow-hidden rounded-xl border border-border/40 transition",
-                    isSelected ? "ring-2 ring-accent/80" : "group-hover/card:border-accent/40",
+                    isSelected || importDrop === folder.collection_id ? "ring-2 ring-accent/80" : "group-hover/card:border-accent/40",
                   )}>
                     <CoverMosaic paths={folder.cover_preview_paths} className="h-full w-full" />
                     <button
@@ -578,6 +626,7 @@ export default function FoldersView({
                     className={cx(
                       "cursor-default select-none border-t border-border/30 outline-none transition-colors focus-visible:bg-hover",
                       isSelected ? "bg-selected text-text" : "text-muted hover:bg-hover hover:text-text",
+                      importDrop === folder.collection_id && "bg-selected text-text shadow-[inset_0_0_0_1px_rgb(var(--accent-color)/0.8)]",
                     )}
                   >
                     <td className="px-2 py-1.5">
