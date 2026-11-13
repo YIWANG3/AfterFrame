@@ -3,7 +3,8 @@
 // stays in useWorkspace (it drives detail loading) and flows in as
 // primaryId/setPrimaryId. Pure selection logic — no IPC, no overlays.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { waterfallTarget } from "./waterfallNavigation";
 
 export default function useSelection({
   orderedIds,
@@ -17,6 +18,11 @@ export default function useSelection({
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [anchorId, setAnchorId] = useState(null);
+  // The line a run of Left/Right presses keeps to in the waterfall layout. It
+  // only applies while the photo it was set on is still the primary and still
+  // in the same spot (a resize or a reload re-flows the columns); anything
+  // else starts a new line.
+  const waterfallLineRef = useRef(null);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedIndex = useMemo(
     () => currentItems.findIndex((item) => item.asset_id === primaryId),
@@ -173,7 +179,6 @@ export default function useSelection({
 
     const isForward = direction === "right" || direction === "down";
     const curCenterX = current.left + current.width / 2;
-    const curCenterY = current.top + current.height / 2;
 
     function groupByPosition(items, getPos, tolerance) {
       const groups = [];
@@ -221,28 +226,15 @@ export default function useSelection({
     }
 
     if (displayMode === "waterfall") {
-      const columns = groupByPosition(layoutItems, (item) => item.left, 4);
-      for (const col of columns) col.items.sort((a, b) => a.top - b.top);
-      const curColIdx = columns.findIndex((c) => c.items.some((item) => item.assetId === current.assetId));
-      const curCol = columns[curColIdx];
-      const curItemInColIdx = curCol.items.findIndex((item) => item.assetId === current.assetId);
-
-      if (direction === "left" || direction === "right") {
-        const targetColIdx = isForward ? curColIdx + 1 : curColIdx - 1;
-        if (targetColIdx < 0 || targetColIdx >= columns.length) return;
-        const targetCol = columns[targetColIdx].items;
-        let best = targetCol[0];
-        let bestDist = Infinity;
-        for (const item of targetCol) {
-          const dist = Math.abs(item.top + item.height / 2 - curCenterY);
-          if (dist < bestDist) { bestDist = dist; best = item; }
-        }
-        selectSingle(best.assetId);
-      } else {
-        const targetIdx = isForward ? curItemInColIdx + 1 : curItemInColIdx - 1;
-        if (targetIdx < 0 || targetIdx >= curCol.items.length) return;
-        selectSingle(curCol.items[targetIdx].assetId);
-      }
+      const kept = waterfallLineRef.current;
+      const sameSpot = kept && kept.assetId === current.assetId && kept.left === current.left && kept.top === current.top;
+      const move = waterfallTarget(layoutItems, current.assetId, direction, sameSpot ? kept.y : null);
+      if (!move) return;
+      const target = layoutItems.find((item) => item.assetId === move.assetId);
+      waterfallLineRef.current = move.lineY == null
+        ? null
+        : { assetId: move.assetId, left: target.left, top: target.top, y: move.lineY };
+      selectSingle(move.assetId);
       return;
     }
   }
