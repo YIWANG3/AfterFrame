@@ -246,3 +246,4 @@ docs/                  截图与开发文档
 ---
 
 实现细节请参阅 [docs/developer-setup.md](docs/developer-setup.md)。
+参与贡献请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。
