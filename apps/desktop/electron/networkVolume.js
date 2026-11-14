@@ -67,11 +67,12 @@ async function defaultReadMounts(platform) {
 }
 
 // The nearest folder of `target` that exists, with symlinks resolved: a new
-// catalog's folder doesn't exist yet when the dialog returns.
+// catalog's folder doesn't exist yet when the dialog returns. POSIX paths
+// (macOS / Linux) whatever the host, so the tests read the same on Windows.
 function existingRealDir(target, { exists, realpath }) {
-  let current = path.resolve(target);
+  let current = path.posix.resolve(target);
   while (!exists(current)) {
-    const parent = path.dirname(current);
+    const parent = path.posix.dirname(current);
     if (parent === current) return current;
     current = parent;
   }
