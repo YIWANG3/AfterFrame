@@ -9,5 +9,11 @@
   "addRawFoldersTitle": "Add raw source folders",
   "openCatalogTitle": "Open catalog",
   "newCatalogTitle": "New catalog",
-  "newCatalogButton": "Create Catalog"
+  "newCatalogButton": "Create Catalog",
+  "networkCatalogMessage": "This catalog is on a network drive",
+  "networkCatalogDetail": "Every change to the catalog waits on the network drive, so importing and browsing get much slower, and a dropped connection can damage it. Keep the catalog on this computer; the photos can stay on the NAS.",
+  "networkCatalogChooseOther": "Choose Another Location",
+  "networkCatalogCreateAnyway": "Create Here Anyway",
+  "networkCatalogCancel": "Cancel",
+  "networkCatalogOpenAnyway": "Open Anyway"
 }

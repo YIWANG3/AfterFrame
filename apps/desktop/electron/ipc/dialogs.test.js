@@ -8,11 +8,16 @@ const { createDialogs, register } = require("./dialogs");
 // must exist for the assertion to see them.
 const DEFAULT_DIR = os.tmpdir();
 
-function fakeDialog(result) {
+// result: what every open / save dialog returns, or a list of them in turn.
+// boxResponses: the buttons clicked on message boxes, in turn.
+function fakeDialog(result, boxResponses = []) {
   const calls = [];
+  const results = Array.isArray(result) ? [...result] : null;
+  const next = () => (results ? results.shift() : result);
   const dialog = {
-    showOpenDialog: async (...args) => { calls.push(["open", ...args]); return result; },
-    showSaveDialog: async (...args) => { calls.push(["save", ...args]); return result; },
+    showOpenDialog: async (...args) => { calls.push(["open", ...args]); return next(); },
+    showSaveDialog: async (...args) => { calls.push(["save", ...args]); return next(); },
+    showMessageBox: async (...args) => { calls.push(["box", ...args]); return { response: boxResponses.shift() ?? 0 }; },
   };
   return { dialog, calls };
 }
@@ -34,8 +39,8 @@ test("createDialogs: modal to the asking window on Windows / Linux, free-standin
   assert.equal(macDialogs.dialogParent(event), null);
 });
 
-function registered(result, { platform = "darwin", settings = {} } = {}) {
-  const { dialog, calls } = fakeDialog(result);
+function registered(result, { platform = "darwin", settings = {}, networkPaths = [], boxResponses = [] } = {}) {
+  const { dialog, calls } = fakeDialog(result, boxResponses);
   const handlers = new Map();
   const allowed = [];
   const created = [];
@@ -52,6 +57,7 @@ function registered(result, { platform = "darwin", settings = {} } = {}) {
     defaultCatalogDir: () => DEFAULT_DIR,
     catalog: { createAt: (p) => { created.push(p); return `${p}.afcatalog`; } },
     media: { addAllowedMediaDir: (dir) => allowed.push(dir) },
+    networkVolumeOf: async (p) => (networkPaths.includes(p) ? { fsType: "smbfs", mountPoint: "/Volumes/nas" } : null),
   });
   return { handlers, calls, allowed, created, settings: () => stored };
 }
@@ -107,4 +113,36 @@ test("pick-catalog / create-catalog: start in the given folder; create goes thro
   assert.equal(created.calls[0][1].defaultPath, path.join(path.resolve(DEFAULT_DIR), "untitled.afcatalog"));
   assert.deepEqual(created.created, ["/libs/new"]);
   assert.equal(await registered({ canceled: true }).handlers.get("workspace:create-catalog")(event), null);
+});
+
+test("create-catalog on a network volume warns; Choose Another Location asks again, Create Here Anyway goes ahead", async () => {
+  const nas = "/Volumes/nas/2026";
+  const moved = registered(
+    [{ canceled: false, filePath: nas }, { canceled: false, filePath: "/libs/local" }],
+    { networkPaths: [nas], boxResponses: [0] },
+  );
+  assert.equal(await moved.handlers.get("workspace:create-catalog")(event), "/libs/local.afcatalog");
+  assert.deepEqual(moved.calls.map((call) => call[0]), ["save", "box", "save"]);
+  assert.equal(moved.calls[1][1].type, "warning");
+  assert.deepEqual(moved.calls[1][1].buttons, ["dialog.networkCatalogChooseOther", "dialog.networkCatalogCreateAnyway"]);
+  assert.deepEqual(moved.created, ["/libs/local"]);
+
+  const anyway = registered({ canceled: false, filePath: nas }, { networkPaths: [nas], boxResponses: [1] });
+  assert.equal(await anyway.handlers.get("workspace:create-catalog")(event), `${nas}.afcatalog`);
+  assert.deepEqual(anyway.created, [nas]);
+});
+
+test("pick-catalog on a network volume warns; Cancel opens nothing, Open Anyway opens it", async () => {
+  const nas = "/Volumes/nas/2026.afcatalog";
+  const cancelled = registered({ canceled: false, filePaths: [nas] }, { networkPaths: [nas], boxResponses: [0] });
+  assert.equal(await cancelled.handlers.get("workspace:pick-catalog")(event), null);
+  assert.deepEqual(cancelled.calls[1][1].buttons, ["dialog.networkCatalogCancel", "dialog.networkCatalogOpenAnyway"]);
+
+  const opened = registered({ canceled: false, filePaths: [nas] }, { networkPaths: [nas], boxResponses: [1] });
+  assert.equal(await opened.handlers.get("workspace:pick-catalog")(event), nas);
+
+  // A local catalog opens without a word.
+  const local = registered({ canceled: false, filePaths: ["/libs/a.afcatalog"] });
+  await local.handlers.get("workspace:pick-catalog")(event);
+  assert.deepEqual(local.calls.map((call) => call[0]), ["open"]);
 });

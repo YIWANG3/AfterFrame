@@ -9,5 +9,11 @@
   "addRawFoldersTitle": "添加 RAW 源文件夹",
   "openCatalogTitle": "打开图库",
   "newCatalogTitle": "新建图库",
-  "newCatalogButton": "创建图库"
+  "newCatalogButton": "创建图库",
+  "networkCatalogMessage": "图库在网络盘上",
+  "networkCatalogDetail": "图库每次写入都要等网络盘确认，导入和浏览会明显变慢，网络断开时还可能损坏。建议把图库放在这台电脑上，照片可以继续留在 NAS 里。",
+  "networkCatalogChooseOther": "换个位置",
+  "networkCatalogCreateAnyway": "仍然放在这里",
+  "networkCatalogCancel": "取消",
+  "networkCatalogOpenAnyway": "仍然打开"
 }
