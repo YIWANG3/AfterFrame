@@ -262,3 +262,4 @@ This project was vibe-coded with [Claude Code](https://claude.ai/code).
 ---
 
 For implementation details, see [docs/developer-setup.md](docs/developer-setup.md).
+To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
