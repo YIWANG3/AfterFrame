@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, galleryCards } = require("./helpers/app");
+const { clickLightboxControl } = require("./helpers/lightbox");
 
 test.describe("Lightbox progressive zoom", () => {
   let app, window, userDataDir;
@@ -44,7 +45,8 @@ test.describe("Lightbox progressive zoom", () => {
     await expect.poll(() => detail.evaluate((image) => image.style.transform)).not.toBe(detailTransformBeforePan);
     await window.mouse.up();
 
-    await window.getByTitle(/reset to fit/i).click();
+    // Unpinned, the zoom row comes out when the pointer reaches it.
+    await clickLightboxControl(window, window.getByTitle(/reset to fit/i));
     await expect(detail).toHaveCSS("visibility", "visible", { timeout: 5_000 });
   });
 });
