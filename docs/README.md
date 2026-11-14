@@ -46,7 +46,6 @@
 | [people-recognition-design.md](people-recognition-design.md) | 本地人物识别，已实现（`ipc/people.js`、`db/people.py`、`native/people-worker.swift`）；0.5.7 起 ArcFace 模型随 app 内置 |
 | [integration-plan.md](integration-plan.md) | 「打开方式」和监听文件夹，两项都已落地（`IntegrationsSettings.jsx`、`electron/watcher.js`，e2e 16 / 17）；文中「灯箱懒切换」一条已撤回 |
 | [ui-feedback-loop-notes.md](ui-feedback-loop-notes.md) | vibepin 标注 → 修改闭环的交接笔记；vibepin 已作为依赖接入 `src/main.jsx` |
-| [editoroverlay-refactor-plan.md](editoroverlay-refactor-plan.md) | 只做了 Phase 0（`editor/state/*` 的 hook 拆分模式即其产物），后续阶段没有推进 |
 | [unified-canvas-plan.md](unified-canvas-plan.md) | 统一画布 / 图层模型，已落地（`editorStateModel.js`） |
 | [text-tool-plan.md](text-tool-plan.md) | 文字工具，已落地（`TextPanel` / `TextCanvas`） |
 | [frame-watermark-plan.md](frame-watermark-plan.md) | 相框 / EXIF 水印，已落地（`useFrameTool`、`frameRender.js`，e2e 20） |
@@ -56,17 +55,14 @@
 | [settings-transfer-plan.md](settings-transfer-plan.md) | P1 已实现（e2e 34） |
 | [mcp-coverage-audit.md](mcp-coverage-audit.md) | 2026-08-16 的一次性盘点，是 mcp-parity-plan 的前置 |
 | [review-2026-06.md](review-2026-06.md) | 2026-06 综合 review 与清理计划（`db.py` 拆包、`main.js` 抽 transport 都源于此；后续 review 记录改放 `review/`） |
-| [cover-editor.md](cover-editor.md) / [editor-ui-requirement.md](editor-ui-requirement.md) | 2026-04 的编辑器设计与需求稿 |
 | [sticker-board-spec.md](sticker-board-spec.md) | 贴纸功能规格（2026-05） |
-| [people-faces-plan.md](people-faces-plan.md) | 人脸分组可行性研究，被 people-recognition-design 取代 |
 
-## 已撤回 / 已过期
+## 已删除
 
-| 文档 | 说明 |
-|---|---|
-| [current-plan.md](current-plan.md) | 2026-05-01 的「当前计划」，早已不是当前；保留仅作时间线参考 |
-| [image-asset-model.md](image-asset-model.md) | 2026-04 的资产模型设想（`raw_source` / `export_variant` …），代码里没有采用；实际模型是 `resource_sets` + `asset_links`，见 `db/resource_sets.py` |
-| [demo-projects.md](demo-projects.md) | 2026-05 的 agent 基准任务集设想，没有落地 |
+已撤回、被取代或事实上放弃的设计稿，2026-11-13 删除，需要时去 git 历史里找：`current-plan.md`（2026-05 的「当前计划」）、
+`image-asset-model.md`（2026-04 的资产模型设想，没采用；实际模型是 `resource_sets` + `asset_links`）、`demo-projects.md`
+（agent 基准任务集，没落地）、`people-faces-plan.md`（被 people-recognition-design 取代）、`editoroverlay-refactor-plan.md`
+（只做了 Phase 0）、`cover-editor.md` / `editor-ui-requirement.md`（2026-04 的编辑器设计与需求稿）。
 
 计划文档的目录名保持 `docs/` 而不是移进 `docs/archive/`，是因为代码注释会直接引用它们
 （例如 `sidecar/commands.js` 引用 `docs/review-2026-06.md P3-3`）。

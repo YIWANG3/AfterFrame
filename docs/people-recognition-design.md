@@ -4,7 +4,6 @@
 2026-10-03 更新：ArcFace R100 改为随 App 内置，不再在线下载，原因见第 2 节第 2 条和 4.1。  
 默认模型：**ArcFace R100**  
 相关原型：[人物与模型交互 Mock](prototypes/people-arcface-ui.html)  
-相关旧调研：[people-faces-plan.md](people-faces-plan.md)（其中 Vision FeaturePrint 路线已不再是实现方案）
 
 ## 1. 目标与边界
 
