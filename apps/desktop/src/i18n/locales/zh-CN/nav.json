@@ -401,6 +401,10 @@
     }
   },
   "lightbox": {
+    "pinControls": "固定上下栏",
+    "unpinControls": "取消固定上下栏",
+    "previous": "上一项",
+    "next": "下一项",
     "edit": "编辑",
     "info": "详情",
     "proof": "校样",
