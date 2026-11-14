@@ -418,6 +418,10 @@
     }
   },
   "lightbox": {
+    "pinControls": "Pin preview controls",
+    "unpinControls": "Unpin preview controls",
+    "previous": "Previous item",
+    "next": "Next item",
     "edit": "Edit",
     "info": "Info",
     "proof": "Proof",
