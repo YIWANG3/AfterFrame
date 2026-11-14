@@ -1,6 +1,6 @@
 // The lightbox's pin (#290).
 //
-// Unpinned, which is how it starts, the photo has the whole window and the
+// Unpinned, which is how it starts, the photo has the whole lightbox and the
 // bars (the header, the zoom row with the filmstrip, the arrows) stay out of
 // sight until the pointer comes near one of them; back on the photo they go
 // again, and the arrow keys page either way. The details float over the photo
@@ -25,12 +25,15 @@ const box = async (locator) => {
   const b = await locator.boundingBox();
   return { top: b.y, bottom: b.y + b.height, left: b.x, right: b.x + b.width, width: b.width, height: b.height };
 };
-const windowSize = () => w().evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+// The lightbox's own box: on Windows it starts under the app's 36px title
+// bar (index.css, .fixed.inset-0 under html.platform-win32), so window
+// coordinates are not its coordinates.
+const frame = () => box(lightbox(w()));
 const hidden = () => expect(lightbox(w())).toHaveAttribute("data-lightbox-controls-hidden", "true");
 const shown = () => expect(lightbox(w())).not.toHaveAttribute("data-lightbox-controls-hidden");
 const toCenter = async () => {
-  const size = await windowSize();
-  await w().mouse.move(size.width / 2, size.height / 2);
+  const f = await frame();
+  await w().mouse.move(f.left + f.width / 2, f.top + f.height / 2);
 };
 // The fitted photo lies inside the stage.
 const fitsStage = async () => {
@@ -57,28 +60,28 @@ test.afterAll(async () => {
   if (ctx) await closeApp(ctx.app, ctx.userDataDir);
 });
 
-test("unpinned at first: the photo has the whole window and the bars are out of sight", async () => {
+test("unpinned at first: the photo has the whole lightbox and the bars are out of sight", async () => {
   await expect(pin()).toHaveAttribute("aria-pressed", "false");
   await expect(lightbox(w())).toHaveAttribute("data-lightbox-floating", "true");
   await hidden();
   await expect(header()).toHaveCSS("opacity", "0");
 
-  const size = await windowSize();
+  const f = await frame();
   const stage = await box(viewport());
-  expect(stage.top).toBeLessThanOrEqual(1);
-  expect(stage.height).toBeGreaterThanOrEqual(size.height - 1);
+  expect(stage.top).toBeLessThanOrEqual(f.top + 1);
+  expect(stage.height).toBeGreaterThanOrEqual(f.height - 1);
   await fitsStage();
 });
 
 test("the pointer at a bar or an arrow brings the bars out; back on the photo they go", async () => {
-  const size = await windowSize();
-  await w().mouse.move(size.width / 2, 12);
+  const f = await frame();
+  await w().mouse.move(f.left + f.width / 2, f.top + 12);
   await shown();
   await expect(header()).toHaveCSS("opacity", "1");
   await toCenter();
   await hidden();
 
-  await w().mouse.move(size.width / 2, size.height - 12);
+  await w().mouse.move(f.left + f.width / 2, f.bottom - 12);
   await shown();
   await expect(zoomRow()).toHaveCSS("opacity", "1");
   await toCenter();
@@ -140,7 +143,7 @@ test("pinned, the bars stay out and the photo is fitted between them; the pin is
   await expect(pin()).toHaveAttribute("aria-pressed", "true");
   await expect(lightbox(w())).not.toHaveAttribute("data-lightbox-floating");
 
-  // Unpinned again, the photo is fitted to the whole window.
+  // Unpinned again, the photo is fitted to the whole lightbox.
   await pin().click();
   await expect(pin()).toHaveAttribute("aria-pressed", "false");
   await expect.poll(async () => (await box(viewport())).height).toBeGreaterThan(stage.height + 100);
