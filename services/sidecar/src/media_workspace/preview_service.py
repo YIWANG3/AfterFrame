@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -503,9 +503,12 @@ class PreviewService:
         # progress callback raises (cooperative job cancellation) we cancel the
         # queued futures before unwinding — otherwise the executor's exit
         # handler would block until every queued render finished anyway.
-        # Each result is written and committed before waiting for the next:
-        # an open transaction holds the catalog's write lock, and other
-        # processes (the app's own reads and writes) would wait on renders.
+        # Whatever has finished is written and committed in one go before
+        # waiting for the next render: an open transaction holds the catalog's
+        # write lock, and other processes (the app's own reads and writes)
+        # would wait on renders. One commit per preview instead cost most of a
+        # batch on a network volume, where SQLite has no WAL and each commit is
+        # several round trips to the server.
         try:
             with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
                 if any(visual_applies(row["asset_type"], "x") for row, _ in to_render):
@@ -515,59 +518,62 @@ class PreviewService:
                     for row, row_force in to_render
                 }
                 try:
-                    for future in as_completed(futures):
-                        row = futures[future]
-                        try:
-                            result, measured = future.result()
-                            # The thumbnail is the colour sample too: same file,
-                            # already decoded once, a few ms more. Read before the
-                            # first write, so the lock isn't held for it.
-                            if analyze_colors and kind == "preview" and row["asset_type"] == "image":
-                                analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
-                            if measured is not None:
-                                analyzer().store(result.asset_id, row["asset_type"], *measured)
-                            # And how it shows (portrait / landscape), for the filter.
-                            if kind == "preview" and result.relative_path:
-                                set_display_shape(connection, result.asset_id, preview_shape(self.catalog.root / result.relative_path), commit=False)
-                            upsert_preview_entry(
-                                connection,
-                                asset_id=result.asset_id,
-                                kind=result.kind,
-                                relative_path=result.relative_path,
-                                width=result.width,
-                                height=result.height,
-                                status=result.status,
-                                commit=False,
+                    pending = set(futures)
+                    while pending:
+                        done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                        for future in done:
+                            row = futures[future]
+                            try:
+                                result, measured = future.result()
+                                # The thumbnail is the colour sample too: same file,
+                                # already decoded once, a few ms more. Read before this
+                                # result's writes.
+                                if analyze_colors and kind == "preview" and row["asset_type"] == "image":
+                                    analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
+                                if measured is not None:
+                                    analyzer().store(result.asset_id, row["asset_type"], *measured)
+                                # And how it shows (portrait / landscape), for the filter.
+                                if kind == "preview" and result.relative_path:
+                                    set_display_shape(connection, result.asset_id, preview_shape(self.catalog.root / result.relative_path), commit=False)
+                                upsert_preview_entry(
+                                    connection,
+                                    asset_id=result.asset_id,
+                                    kind=result.kind,
+                                    relative_path=result.relative_path,
+                                    width=result.width,
+                                    height=result.height,
+                                    status=result.status,
+                                    commit=False,
+                                )
+                                generated += 1
+                            except SourceNotReadyError:
+                                # Keep an existing good preview/DB entry. A later watcher
+                                # change event retries after the editor finishes writing.
+                                deferred += 1
+                            except Exception:
+                                upsert_preview_entry(
+                                    connection,
+                                    asset_id=row["asset_id"],
+                                    kind=kind,
+                                    relative_path="",
+                                    width=None,
+                                    height=None,
+                                    status="failed",
+                                    commit=False,
+                                )
+                                failed += 1
+                            processed += 1
+                            report_progress(
+                                progress_callback,
+                                phase="generate_previews",
+                                processed=processed,
+                                total=total,
+                                generated=generated,
+                                skipped=skipped,
+                                failed=failed,
+                                deferred=deferred,
                             )
-                            generated += 1
-                        except SourceNotReadyError:
-                            # Keep an existing good preview/DB entry. A later watcher
-                            # change event retries after the editor finishes writing.
-                            deferred += 1
-                        except Exception:
-                            upsert_preview_entry(
-                                connection,
-                                asset_id=row["asset_id"],
-                                kind=kind,
-                                relative_path="",
-                                width=None,
-                                height=None,
-                                status="failed",
-                                commit=False,
-                            )
-                            failed += 1
-                        processed += 1
                         connection.commit()
-                        report_progress(
-                            progress_callback,
-                            phase="generate_previews",
-                            processed=processed,
-                            total=total,
-                            generated=generated,
-                            skipped=skipped,
-                            failed=failed,
-                            deferred=deferred,
-                        )
                 except BaseException:
                     pool.shutdown(wait=False, cancel_futures=True)
                     connection.commit()  # keep previews finished before the cancel

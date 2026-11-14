@@ -68,6 +68,32 @@ class JobPaused(Exception):
     """Raised only at asset boundaries after a pause request is persisted."""
 
 
+# A progress write commits the catalog, and with it whatever the phase has
+# written since. That's cheap on a local disk. On a network volume SQLite has
+# no WAL (it falls back to a rollback journal), so every commit is several
+# synchronous round trips to the server, and one per file was most of an
+# import's time. Progress is written at most this often, plus the first and
+# last update of a phase; the cancel flag is still checked on every update.
+PROGRESS_WRITE_SECONDS = 0.5
+
+
+class _ProgressGate:
+    def __init__(self, interval: float = PROGRESS_WRITE_SECONDS, clock: Callable[[], float] = time.monotonic):
+        self._interval = interval
+        self._clock = clock
+        self._last: float | None = None
+
+    def due(self, update: dict[str, Any]) -> bool:
+        processed = int(update.get("processed", 0) or 0)
+        total = int(update.get("total", 0) or 0)
+        now = self._clock()
+        final = total > 0 and processed >= total
+        if self._last is not None and not final and now - self._last < self._interval:
+            return False
+        self._last = now
+        return True
+
+
 def _check_cancel(connection, job_id: str) -> None:
     if is_cancel_requested(connection, job_id):
         raise JobCancelled(job_id)
@@ -591,8 +617,12 @@ def run_import_job(
                     "total": 0,
                 }
 
+                scan_gate = _ProgressGate()
+
                 def scan_progress(update: dict[str, int | str]) -> None:
                     _check_cancel(connection, job_id)
+                    if not scan_gate.due(update):
+                        return
                     overall_processed = int(scan_totals["processed"]) + int(update.get("processed", 0) or 0)
                     overall_discovered = int(scan_totals["discovered"]) + int(update.get("discovered", 0) or 0)
                     phase_result = {
@@ -648,8 +678,12 @@ def run_import_job(
                 progress=(phase_cursor / len(phases)),
             )
 
+            resolve_gate = _ProgressGate()
+
             def resolve_progress(update: dict[str, int | str]) -> None:
                 _check_cancel(connection, job_id)
+                if not resolve_gate.due(update):
+                    return
                 phase_fraction = _fraction(int(update.get("processed", 0)), int(update.get("total", 0)))
                 update_job(
                     connection,
@@ -719,8 +753,12 @@ def run_import_job(
                 progress=(phase_cursor / len(phases)),
             )
 
+            preview_gate = _ProgressGate()
+
             def preview_progress(update: dict[str, int | str]) -> None:
                 _check_cancel(connection, job_id)
+                if not preview_gate.due(update):
+                    return
                 phase_fraction = _fraction(int(update.get("processed", 0)), int(update.get("total", 0)))
                 update_job(
                     connection,
@@ -821,8 +859,12 @@ def run_import_job(
                 progress=(phase_cursor / len(phases)),
             )
 
+            preview_hd_gate = _ProgressGate()
+
             def preview_hd_progress(update: dict[str, int | str]) -> None:
                 _check_cancel(connection, job_id)
+                if not preview_hd_gate.due(update):
+                    return
                 phase_fraction = _fraction(int(update.get("processed", 0)), int(update.get("total", 0)))
                 update_job(
                     connection,
@@ -917,8 +959,12 @@ def _run_single_phase_job(
     }
     update_job(connection, job_id, status="running", payload=payload, progress=0.0)
 
+    gate = _ProgressGate()
+
     def progress(update: dict[str, Any]) -> None:
         _check_cancel(connection, job_id)
+        if not gate.due(update):
+            return
         update_job(
             connection,
             job_id,
