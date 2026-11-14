@@ -486,7 +486,16 @@ export default function Sidebar({
         {/* Open, the folders keep at least a few rows however short the window:
             the smart collections above give way first (they may shrink). */}
         <div
-          className={foldersOpen ? "flex min-h-[180px] flex-1 flex-col" : "shrink-0"}
+          className={[
+            foldersOpen ? "flex min-h-[180px] flex-1 flex-col" : "shrink-0",
+            // The highlight shows where a Finder drop lands: the whole section.
+            // Drawn on top, so a selected row's fill doesn't cover its sides;
+            // it reaches into the gap above as far as the heading's own gap
+            // below, so the heading sits centred at its top.
+            rootDrop && !draggingFolderId
+              ? "relative after:pointer-events-none after:absolute after:inset-x-0 after:-top-1.5 after:bottom-0 after:z-10 after:rounded-md after:ring-1 after:ring-inset after:ring-accent/45"
+              : "",
+          ].join(" ")}
           data-sidebar-folders="true"
           data-open={foldersOpen ? "true" : "false"}
           // A folder dragged in from Finder becomes a folder here. On a row it
@@ -514,7 +523,12 @@ export default function Sidebar({
             open={foldersOpen}
             onToggle={toggleFolders}
             holdsActive={manualCollections.some((c) => c.collection_id === activeCollectionId)}
-            className={rootDrop ? "rounded-md ring-1 ring-inset ring-accent/45" : ""}
+            // A folder dragged here goes to the top level. The heading's box
+            // ends in the gap above the first row; the highlight is centred on
+            // the heading itself and keeps clear of that row.
+            className={rootDrop && draggingFolderId
+              ? "relative before:pointer-events-none before:absolute before:inset-x-0 before:-top-[3px] before:bottom-[3px] before:rounded-md before:ring-1 before:ring-inset before:ring-accent/45"
+              : ""}
             data-folder-root-drop={draggingFolderId ? "true" : undefined}
             onDragOver={(event) => {
               if (!draggingFolderId || parentIdOf(collections, draggingFolderId) === null) return;
