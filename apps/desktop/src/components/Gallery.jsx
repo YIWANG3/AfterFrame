@@ -57,6 +57,7 @@ export default function Gallery({
 }) {
   const { t } = useTranslation("nav");
   const containerRef = useRef(null);
+  const contentRef = useRef(null);
   const scrollRafRef = useRef(0);
   const [contextMenu, setContextMenu] = useState(null);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
@@ -371,14 +372,15 @@ export default function Gallery({
 
   const fit = displayMode === "justified" ? "contain" : "cover";
 
+  // Marquee and layout boxes are positioned inside the content div, which sits
+  // inside the scroller's padding — measure from it, not the scroller, or the
+  // box starts a padding-width away from the pointer. Its rect already moves
+  // with the scroll position.
   function getContentPoint(clientX, clientY) {
-    const container = containerRef.current;
-    if (!container) return { x: 0, y: 0 };
-    const rect = container.getBoundingClientRect();
-    return {
-      x: clientX - rect.left + container.scrollLeft,
-      y: clientY - rect.top + container.scrollTop,
-    };
+    const content = contentRef.current;
+    if (!content) return { x: 0, y: 0 };
+    const rect = content.getBoundingClientRect();
+    return { x: clientX - rect.left, y: clientY - rect.top };
   }
 
   useEffect(() => {
@@ -484,7 +486,7 @@ export default function Gallery({
       className={`h-full select-none overflow-x-hidden overflow-y-auto bg-app ${isTileMode ? "px-0 py-0" : "px-2 py-2"}`}
       style={{ scrollbarGutter: "stable" }}
     >
-      <div className="relative" style={{ height: `${totalHeight}px` }}>
+      <div ref={contentRef} className="relative" style={{ height: `${totalHeight}px` }}>
         {visibleItems.map((entry) => {
           const item = entry.item;
           const imgHeight = entry.height ?? entry.imgHeight;
@@ -513,6 +515,7 @@ export default function Gallery({
         })}
         {marquee && marquee.moved && (
           <div
+            data-testid="gallery-marquee"
             className="pointer-events-none absolute z-30 rounded-sm border border-accent/60 bg-accent/10"
             style={{
               left: `${Math.min(marquee.originX, marquee.currentX)}px`,
