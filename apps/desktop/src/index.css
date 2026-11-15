@@ -411,7 +411,7 @@ html.electron.fs .noise-overlay > .grid > section.bg-app .library-view > .app-to
 html.electron .fixed.inset-0 { -webkit-app-region: no-drag; }
 html.electron .fixed.inset-0[data-layer="editor"] > .h-11, html.electron .fixed.inset-0[data-layer="overlay"] > .h-10,
 html.electron .fixed.inset-0[data-settings-overlay] > .rounded-xl > .h-12,
-html.electron .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { -webkit-app-region: drag; }   /* 灯箱头部一行也可拖 */
+html.electron .fixed.inset-0[data-layer="lightbox"]:not([data-lightbox-floating]) > .flex.shrink-0.items-start { -webkit-app-region: drag; }   /* 灯箱头部一行也可拖 */
 html.electron .fixed.inset-0[data-layer="editor"] > .h-11 > *, html.electron .fixed.inset-0[data-layer="overlay"] > .h-10 > *,
 html.electron .fixed.inset-0[data-settings-overlay] > .rounded-xl > .h-12 > *,
 html.electron .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start > * { -webkit-app-region: no-drag; }
@@ -781,14 +781,29 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 .fixed.inset-0[data-layer="overlay"] [data-testid="batch-page-card"] > .ring-1:not([class*="ring-[rgb"]) { --tw-ring-color: transparent; box-shadow: var(--shadow-menu); }
 
 /* ───────── 12a · 灯箱上下栏玻璃化:头部与底部(缩放行 + 胶片条)不再是两条实黑,改成压在照片之上的 Clear 玻璃。
-   舞台(照片区)保留在两栏之间做适配,所以 fit 状态下照片不被遮;放大 / 拖动时照片从玻璃底下穿过。
+   固定时照片区保留在两栏之间做适配,取消固定时使用整个窗口内容区。
    玻璃面板画在灯箱根节点的 ::before / ::after 上,向窗口外多伸 40px,避免 backdrop-filter 在窗口边缘采样出浅线 ───────── */
 .fixed.inset-0[data-layer="lightbox"] { position: fixed; }
-/* --lightbox-info:详情栏打开时它占的宽度(Lightbox.jsx 写在根节点上),关着是 0。上下栏、舞台、两条玻璃都让到它左边,照片不被盖住 */
+/* --lightbox-info 是详情栏为控件留出的宽度。固定时照片区也留出这部分宽度。 */
 .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { position: absolute; top: 0; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
 .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-center.justify-center.gap-3 { position: absolute; bottom: 76px; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
 .fixed.inset-0[data-layer="lightbox"] > .h-16 { position: absolute; bottom: 0; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
-.fixed.inset-0[data-layer="lightbox"] > .relative.min-h-0.flex-1 { margin: 84px var(--lightbox-info, 0px) 140px 0; overflow: visible; z-index: 1; }
+.fixed.inset-0[data-layer="lightbox"] > [data-lightbox-viewport] { z-index: 1; }
+.fixed.inset-0[data-layer="lightbox"]:not([data-lightbox-floating]) > [data-lightbox-viewport] { margin: 84px var(--lightbox-info, 0px) 140px 0; overflow: visible; }
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-floating] > div[data-lightbox-control] { pointer-events: auto; }
+/* Keep the controls in the tab order so keyboard focus can reveal them. */
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden]:not(:has(> [data-lightbox-control]:focus-visible, > [data-lightbox-control] :focus-visible)) { --lightbox-controls-opacity: 0; }
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-floating][data-lightbox-controls-hidden]:not(:has(> [data-lightbox-control]:focus-visible, > [data-lightbox-control] :focus-visible)) > [data-lightbox-control],
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden]:not(:has(> [data-lightbox-control]:focus-visible, > [data-lightbox-control] :focus-visible)) > [data-lightbox-control] * { pointer-events: none; }
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-floating] > [data-lightbox-control],
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-floating]::before,
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-floating]::after {
+  opacity: var(--lightbox-controls-opacity, 1);
+  transition: opacity var(--lightbox-controls-fade-duration, 180ms) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-layer="lightbox"] { --lightbox-controls-fade-duration: 0ms; }
+}
 .fixed.inset-0[data-layer="lightbox"]::before, .fixed.inset-0[data-layer="lightbox"]::after {
   content: ""; position: absolute; left: 0; right: var(--lightbox-info, 0px); z-index: 10; pointer-events: none;
   /* 渐进模糊,没有清晰边缘:mask 从栏内实到栏外全透,压色也同步渐变;masked backdrop-filter 要独立合成层才会羽化 */
@@ -796,14 +811,14 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
   backdrop-filter: blur(22px) saturate(1.2); -webkit-backdrop-filter: blur(22px) saturate(1.2);
 }
 .fixed.inset-0[data-layer="lightbox"]::before {
-  top: -40px; height: 240px;
+  top: -40px; height: 124px;
   /* 保留标题后的压色,用长尾缓出代替短距离线性退场,避免玻璃在照片上形成横向分界。 */
-  --lightbox-header-fade: linear-gradient(180deg, #000 0%, #000 20%, rgba(0,0,0,.92) 35%, rgba(0,0,0,.64) 50%, rgba(0,0,0,.32) 65%, rgba(0,0,0,.1) 80%, rgba(0,0,0,.02) 90%, transparent 100%);
+  --lightbox-header-fade: linear-gradient(180deg, #000 0%, rgba(0,0,0,.94) 20%, rgba(0,0,0,.93) 35%, rgba(0,0,0,.85) 50%, rgba(0,0,0,.68) 65%, rgba(0,0,0,.49) 80%, rgba(0,0,0,.30) 90%, transparent 100%);
   background: linear-gradient(180deg, rgba(0,0,0,.6) 0%, rgba(0,0,0,.5) 30%, rgba(0,0,0,.28) 50%, rgba(0,0,0,.08) 70%, transparent 100%);
   backdrop-filter: blur(18px) saturate(1.08); -webkit-backdrop-filter: blur(18px) saturate(1.08);
   -webkit-mask-image: var(--lightbox-header-fade); mask-image: var(--lightbox-header-fade);
 }
-.fixed.inset-0[data-layer="lightbox"]::after { bottom: -40px; height: 220px;
+.fixed.inset-0[data-layer="lightbox"]::after { bottom: -40px; height: 180px;
   background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,.45) 55%, rgba(0,0,0,0));
   -webkit-mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); }
 .fixed.inset-0[data-layer="lightbox"].bg-white::before, .fixed.inset-0[data-layer="lightbox"].bg-white::after { display: none; }

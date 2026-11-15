@@ -8,6 +8,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, galleryCards } = require("./helpers/app");
+const { pinLightboxControls } = require("./helpers/lightbox");
 
 let ctx;
 const w = () => ctx.window;
@@ -29,6 +30,10 @@ test.beforeAll(async () => {
   await expect(galleryCards(w()).first()).toBeVisible({ timeout: 15_000 });
   await galleryCards(w()).first().dblclick();
   await expect(photo()).toBeVisible({ timeout: 10_000 });
+  // Making room is the pinned layout; unpinned, the pane floats over the
+  // photo (85-lightbox-pin). The pin is remembered, so it holds after the
+  // close and reopen below too.
+  await pinLightboxControls(w());
 });
 
 test.afterAll(async () => {

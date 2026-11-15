@@ -1,13 +1,15 @@
-import { ChevronLeft, ChevronRight, Flag, FlagOff, ImageOff, Info, Minus, Pencil, Plus, Star, SwatchBook, X } from "lucide-react";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Flag, FlagOff, ImageOff, Info, Minus, Pencil, Pin, Plus, Star, SwatchBook, X } from "lucide-react";
+import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clamp, fileName, localFileUrl, httpMediaUrl } from "../utils/format";
 import { buildLightboxSources, resolveLightboxLogicalSize } from "./lightboxView";
 import { useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
+import { usePref } from "../hooks/usePref";
+import { bool } from "../utils/prefs";
 import VideoPlayer from "./VideoPlayer";
 import api from "../api";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
-import { Z } from "../ui";
+import { Button, Z } from "../ui";
 import PreviewImage from "./PreviewImage";
 import { browserDecodesOriginal } from "../../shared/formats.mjs";
 
@@ -15,6 +17,7 @@ const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
 const WHEEL_ZOOM_SENSITIVITY = 0.014;
 const DETAIL_SETTLE_DELAY_MS = 180;
+const CONTROLS_HIDE_DELAY_MS = 350;
 
 function OverlayButton({ children, className = "", ...props }) {
   return (
@@ -77,6 +80,7 @@ function Filmstrip({ items, index, onPick, hidden }) {
   return (
     <div
       ref={ref}
+      data-lightbox-control="bottom"
       className={[
         // Film look: sits 12px off the bottom edge, both ends fade to black so the
         // strip reads as a reel running under the frame rather than a hard row.
@@ -131,8 +135,8 @@ export default function Lightbox({
   onIndexChange,
   // The photo's details, docked on the right: the pane (a node the caller
   // builds), whether it is out, and the toggle. Without a pane there is no
-  // button. It takes its width off the stage rather than covering the photo
-  // (index.css reads --lightbox-info), so the fit follows it in and out.
+  // button. The pane reserves space beside a pinned preview and floats
+  // above the photo when the controls are unpinned.
   info = null,
   infoOpen = false,
   onToggleInfo,
@@ -140,6 +144,9 @@ export default function Lightbox({
   const { t } = useTranslation("nav");
   // The pills show the keys, which the user may have rebound.
   useShortcuts();
+  const [controlsPinned, setControlsPinned] = usePref("lightbox.controlsPinned", false, bool);
+  const [controlsRevealed, setControlsRevealed] = useState(false);
+  const controlsHideTimerRef = useRef(null);
   const viewportRef = useRef(null);
   const imageRef = useRef(null);
   const detailImageRef = useRef(null);
@@ -232,8 +239,46 @@ export default function Lightbox({
   const metaWidth = Number(currentItem?.image_metadata?.width || 0);
   const metaHeight = Number(currentItem?.image_metadata?.height || 0);
   const showInfo = Boolean(infoOpen && info && !proofMode);
+  // The native video surface sits above the DOM and needs its reserved space.
+  const floatingControls = !controlsPinned && !proofMode && !isVideo;
   const canGoPrev = clampedIndex > 0;
   const canGoNext = clampedIndex < (items?.length || 0) - 1;
+
+  function cancelControlsHide() {
+    clearTimeout(controlsHideTimerRef.current);
+    controlsHideTimerRef.current = null;
+  }
+
+  function hideControls() {
+    cancelControlsHide();
+    setControlsRevealed(false);
+  }
+
+  useEffect(() => {
+    if (!open || !floatingControls) setControlsRevealed(false);
+    return cancelControlsHide;
+  }, [open, floatingControls]);
+
+  function handleControlsPointerMove(event) {
+    if (event.pointerType === "touch") return;
+    const { currentTarget, clientX, clientY } = event;
+    const windowBottom = currentTarget.getBoundingClientRect().bottom;
+    const controls = currentTarget.querySelectorAll(":scope > [data-lightbox-control]");
+    // Measure the controls even while hidden so the photo can still receive
+    // pointer events underneath. Treat the zoom row and filmstrip as one bar.
+    const overControls = Array.from(controls).some((control) => {
+      const { left, right, top, bottom } = control.getBoundingClientRect();
+      const hitBottom = control.dataset.lightboxControl === "bottom" ? windowBottom : bottom;
+      return clientX >= left && clientX < right && clientY >= top && clientY < hitBottom;
+    });
+    if (overControls) {
+      cancelControlsHide();
+      if (!controlsRevealed) setControlsRevealed(true);
+    } else if (controlsRevealed && controlsHideTimerRef.current === null) {
+      // Give the pointer time to travel from a bar to a floating arrow.
+      controlsHideTimerRef.current = setTimeout(hideControls, CONTROLS_HIDE_DELAY_MS);
+    }
+  }
 
   function syncZoomedState(nextScale) {
     const nextIsZoomed = nextScale > fitScaleRef.current + 0.001;
@@ -247,36 +292,40 @@ export default function Lightbox({
     if (scaleLabelRef.current) scaleLabelRef.current.textContent = formatPercent(nextScale);
   }
 
-  function schedulePaint() {
-    if (paintFrameRef.current) return;
-    paintFrameRef.current = requestAnimationFrame(() => {
-      paintFrameRef.current = 0;
-      const image = imageRef.current;
-      const current = viewRef.current;
-      if (!image || !current) return;
-      const transform = `translate3d(${current.tx}px, ${current.ty}px, 0) scale(${current.scale})`;
-      image.style.transform = transform;
-      // The detail layer only follows single-shot transforms (resize, reveal).
-      // During continuous interaction it is hidden first, so the full-size
-      // bitmap never gets resampled per wheel/drag frame.
-      if (detailVisibleRef.current && detailImageRef.current) {
-        detailImageRef.current.style.transform = transform;
-      }
-      paintScaleControls(current.scale);
-    });
+  function paintView() {
+    const image = imageRef.current;
+    const current = viewRef.current;
+    if (!image || !current) return;
+    const transform = `translate3d(${current.tx}px, ${current.ty}px, 0) scale(${current.scale})`;
+    image.style.transform = transform;
+    // The detail layer only follows single-shot transforms (resize, reveal).
+    // During continuous interaction it is hidden first, so the full-size
+    // bitmap never gets resampled per wheel/drag frame.
+    if (detailVisibleRef.current && detailImageRef.current) {
+      detailImageRef.current.style.transform = transform;
+    }
+    paintScaleControls(current.scale);
   }
 
-  function applyView(nextView, previewDuringMotion = false) {
+  function applyView(nextView, { previewDuringMotion = false, immediate = false } = {}) {
     if (!nextView) return;
     if (previewDuringMotion) beginDetailInteraction();
     else preferDetail();
     viewRef.current = nextView;
     syncZoomedState(nextView.scale);
-    schedulePaint();
+    if (immediate) {
+      if (paintFrameRef.current) cancelAnimationFrame(paintFrameRef.current);
+      paintFrameRef.current = 0;
+      paintView();
+    } else if (!paintFrameRef.current) {
+      paintFrameRef.current = requestAnimationFrame(() => {
+        paintFrameRef.current = 0;
+        paintView();
+      });
+    }
     if (previewDuringMotion) settleDetailInteraction();
   }
-  // The resize observer and wheel listener are bound per open/naturalSize
-  // but must run the newest applyView (it closes over detail-mode state).
+  // The wheel listener must run the newest applyView (it closes over detail state).
   const applyLatestView = useEffectEvent(applyView);
 
   function hideDetail() {
@@ -339,6 +388,23 @@ export default function Lightbox({
     applyView(fit);
   }
 
+  const updateFitForLayout = useEffectEvent(() => {
+    const size = logicalSizeRef.current;
+    if (!viewportRef.current || !size) return;
+
+    const nextFit = computeFit(size.width, size.height);
+    const current = viewRef.current;
+    const wasAtFit = !current || current.scale <= fitScaleRef.current + 0.001;
+    fitScaleRef.current = nextFit.scale;
+    if (wasAtFit || current.scale < nextFit.scale) {
+      applyView(nextFit, { immediate: true });
+    }
+  });
+
+  useLayoutEffect(() => {
+    updateFitForLayout();
+  }, [controlsPinned]);
+
   function zoomFromCenter(nextScale, previewDuringMotion = false) {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -353,7 +419,7 @@ export default function Lightbox({
       scale: clampedScale,
       tx: cx - ratio * (cx - current.tx),
       ty: cy - ratio * (cy - current.ty),
-    }, previewDuringMotion);
+    }, { previewDuringMotion });
   }
 
   // Synchronously reset image display state — must be called in the same
@@ -430,13 +496,8 @@ export default function Lightbox({
     const observer = new ResizeObserver(() => {
       if (frame) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const nextFit = computeFit(naturalSize.width, naturalSize.height);
-        const current = viewRef.current;
-        const wasAtFit = !current || current.scale <= fitScaleRef.current + 0.001;
-        fitScaleRef.current = nextFit.scale;
-        if (wasAtFit || current.scale < nextFit.scale) {
-          applyLatestView(nextFit);
-        }
+        frame = null;
+        updateFitForLayout();
       });
     });
 
@@ -467,7 +528,7 @@ export default function Lightbox({
         scale: nextScale,
         tx: mx - ratio * (mx - current.tx),
         ty: my - ratio * (my - current.ty),
-      }, true);
+      }, { previewDuringMotion: true });
     }
 
     viewport.addEventListener("wheel", handleWheel, { passive: false });
@@ -633,17 +694,26 @@ export default function Lightbox({
     <div
       style={{ zIndex: Z.lightbox, "--lightbox-info": showInfo ? "var(--inspector-width)" : "0px" }}
       data-layer="lightbox"
+      data-lightbox-floating={floatingControls || undefined}
+      data-lightbox-controls-hidden={(floatingControls && !controlsRevealed) || undefined}
       className={[
         "fixed inset-0 flex flex-col",
         proofMode ? "bg-white" : "bg-black/90 backdrop-blur-sm",
       ].join(" ")}
       data-lightbox-proof={proofMode ? "true" : "false"}
       onClick={onClose}
+      onPointerEnter={floatingControls ? handleControlsPointerMove : undefined}
+      onPointerMove={floatingControls ? handleControlsPointerMove : undefined}
+      onPointerLeave={floatingControls ? hideControls : undefined}
     >
-      <div className={[
-        "pointer-events-none flex shrink-0 items-start justify-between px-6 py-5",
-        proofMode ? "invisible" : "",
-      ].join(" ")}>
+      <div
+        data-lightbox-control
+        className={[
+          "pointer-events-none flex shrink-0 items-start justify-between px-6 py-5",
+          proofMode ? "invisible" : "",
+        ].join(" ")}
+        onClick={floatingControls ? (event) => event.stopPropagation() : undefined}
+      >
         <div className="pointer-events-auto min-w-0">
           <div className="truncate text-[15px] font-medium text-white">{title}</div>
           <div className="mt-1 text-[12px] text-white/60">
@@ -703,6 +773,23 @@ export default function Lightbox({
               onClick={onToggleInfo}
             />
           ) : null}
+          {!isVideo && (
+            <Button
+              variant="icon"
+              pill
+              aria-label={t("lightbox.pinControls")}
+              aria-pressed={controlsPinned}
+              title={t(controlsPinned ? "lightbox.unpinControls" : "lightbox.pinControls")}
+              className="theme-dark !h-9 !w-9 aria-pressed:bg-hover aria-pressed:text-text"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (controlsPinned) setControlsRevealed(true);
+                setControlsPinned(!controlsPinned);
+              }}
+            >
+              <Pin className="h-4 w-4" />
+            </Button>
+          )}
           <OverlayButton onClick={onClose}>
             <X className="h-4 w-4" />
           </OverlayButton>
@@ -710,8 +797,9 @@ export default function Lightbox({
       </div>
 
       {!proofMode && canGoPrev ? (
-
         <OverlayButton
+          data-lightbox-control
+          aria-label={t("lightbox.previous")}
           onClick={(event) => {
             event.stopPropagation();
             onIndexChange(clampedIndex - 1);
@@ -724,6 +812,8 @@ export default function Lightbox({
 
       {!proofMode && canGoNext ? (
         <OverlayButton
+          data-lightbox-control
+          aria-label={t("lightbox.next")}
           onClick={(event) => {
             event.stopPropagation();
             onIndexChange(clampedIndex + 1);
@@ -824,6 +914,7 @@ export default function Lightbox({
 
       {!isVideo && (
         <div
+          data-lightbox-control="bottom"
           className={[
             "pointer-events-none flex shrink-0 items-center justify-center gap-3 py-4",
             proofMode ? "invisible" : "",
