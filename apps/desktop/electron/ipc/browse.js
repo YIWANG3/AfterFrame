@@ -22,6 +22,7 @@ const SIDECAR_QUERIES = [
   ["workspace:browse-map-points", "browseMapPoints", []],
   ["workspace:find-by-keywords", "findByKeywords", { limit: 0, keywords: [] }, (options) => (options?.keywords?.length ? [options] : null)],
   ["workspace:discover-collections", "discoverCollections", { places: [], memories: [] }, noArgs],
+  ["workspace:catalog-stats", "catalogStats", null],
   ["workspace:get-asset-location", "getAssetLocation", null, idArg],
   ["workspace:resolve-ai-locations", "resolveAiLocations", null, noArgs],
   ["workspace:facet-values", "facetValues", null],

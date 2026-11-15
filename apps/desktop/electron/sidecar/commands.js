@@ -96,6 +96,15 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["discover-collections"]).then((out) => out || { places: [], memories: [] });
     },
 
+    // The statistics page: cameras, lenses, exposure, culling, places,
+    // rhythm and storage of the gallery's set, narrowed by the gallery's
+    // facet filters (sidecar db/stats.py). Read-only.
+    catalogStats({ filters } = {}) {
+      const argv = ["catalog-stats"];
+      if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+      return callJson(argv);
+    },
+
     // One-shot backfill: resolve existing AI annotations' location guesses
     // into asset_locations (offline gazetteer). New annotations resolve at
     // save time in the sidecar; this covers pre-existing ones.

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Fragment } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Copy, FolderPlus, FolderCog, Folder, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, ChevronDown, ChevronRight, X, Tags } from "lucide-react";
+import { Images, Clock, Star, Copy, FolderPlus, FolderCog, Folder, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, ChevronDown, ChevronRight, X, Tags, BarChart3 } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
@@ -110,12 +110,14 @@ export default function Sidebar({
   onOpenDiscover,
   onOpenFolders,
   onOpenTags,
+  onOpenStats,
   // The view App is showing: "assets", "people", … or a feature view's id.
   activeView = "assets",
   peopleMode = false,
   discoverMode = false,
   foldersMode = false,
   tagsMode = false,
+  statsMode = false,
 }) {
   const { t, i18n } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
@@ -384,7 +386,7 @@ export default function Sidebar({
                 </span>
               </button>
             ) : null;
-            const active = !activeCollectionId && !activeSmartCollectionId && !similarTo && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && !tagsMode && item.key === status;
+            const active = !activeCollectionId && !activeSmartCollectionId && !similarTo && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && !tagsMode && !statsMode && item.key === status;
             return (
               <Fragment key={item.key}>
               <button
@@ -469,11 +471,27 @@ export default function Sidebar({
               </span>
             </button>
           )}
+          {onOpenStats && (
+            <button
+              type="button"
+              data-testid="sidebar-stats"
+              onClick={(e) => { e.currentTarget.blur(); onOpenStats(); }}
+              className={[
+                "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
+                statsMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
+              ].join(" ")}
+            >
+              <span className="flex items-center gap-2.5">
+                <BarChart3 className={`h-4 w-4 stroke-[1.6] ${statsMode ? "text-accent" : ""}`} />
+                <span className="text-[13px]">{t("sidebar.stats")}</span>
+              </span>
+            </button>
+          )}
         </div>
 
         <SmartCollections
           collections={collections}
-          activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode ? null : activeSmartCollectionId}
+          activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode || statsMode ? null : activeSmartCollectionId}
           view={folderView}
           grow={!foldersOpen}
           onOpen={onOpenSmartCollection}
