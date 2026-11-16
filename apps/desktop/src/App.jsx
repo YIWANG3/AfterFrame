@@ -54,6 +54,7 @@ import { ConfirmHost, confirm, choose } from "./components/confirm";
 import TagBatchDialog from "./components/TagBatchDialog";
 import FindByListDialog from "./components/FindByListDialog";
 import TagsView from "./components/TagsView";
+import StatsView from "./components/StatsView";
 import { isBinding, loadShortcuts, matchShortcut, shortcutLabel } from "./shortcuts/store";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
@@ -116,7 +117,7 @@ export default function App() {
     setCollageSourceId(workspace.activeCollectionId || null);
     setCollageItems(items);
   }
-  const [viewMode, setViewMode] = useState("assets"); // "assets" | "people" | "discover" | "folders" | a feature view's id ("stickers")
+  const [viewMode, setViewMode] = useState("assets"); // "assets" | "people" | "discover" | "folders" | "tags" | "stats" | a feature view's id ("stickers")
   const [peopleGroup, setPeopleGroup] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const workspaceSplitRef = useRef(null);
@@ -791,10 +792,10 @@ export default function App() {
     if (paths.length) workspace.addImagesFromPaths(paths);
   }
 
-  // The Folders and Tags pages have no photo to select, so the Inspector would
-  // only ever show its empty state: the pane is left out and the page takes
-  // its width.
-  const inspectorHidden = viewMode === "folders" || viewMode === "tags";
+  // The Folders, Tags and Statistics pages have no photo to select, so the
+  // Inspector would only ever show its empty state: the pane is left out and
+  // the page takes its width.
+  const inspectorHidden = viewMode === "folders" || viewMode === "tags" || viewMode === "stats";
   const layoutStyle = {
     gridTemplateColumns: [
       `${workspace.sidebarWidth}px`,
@@ -1411,6 +1412,8 @@ export default function App() {
           foldersMode={viewMode === "folders"}
           tagsMode={viewMode === "tags"}
           onOpenTags={() => openView("tags")}
+          statsMode={viewMode === "stats"}
+          onOpenStats={api.has("catalogStats") ? () => openView("stats") : undefined}
           onOpenDiscover={() => openView("discover")}
           onOpenView={(id) => {
             openView(id);
@@ -1463,6 +1466,8 @@ export default function App() {
                 onOpenFolders={() => openView("folders")}
               />
             </>
+          ) : viewMode === "stats" ? (
+            <StatsView catalogRevision={workspace.catalogRevision} onOpenGallery={openDiscoverTarget} />
           ) : viewMode === "tags" ? (
             <TagsView
               catalogRevision={workspace.catalogRevision}

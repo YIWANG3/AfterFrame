@@ -178,6 +178,7 @@
     "smartUnreadable": "由更新版本的 AfterFrame 保存",
     "editSmartRules": "编辑条件",
     "tags": "标签",
+    "stats": "统计",
     "newSubfolder": "新建子文件夹",
     "expand": "展开",
     "collapse": "折叠",
@@ -522,6 +523,139 @@
     "deleteGroupMessage": "组里的 {{count}} 个标签会变成未分组，照片上的标签不会丢。",
     "loadFailed": "无法加载标签",
     "editFailed": "无法修改标签"
+  },
+  "stats": {
+    "title": "统计",
+    "photoCount_other": "{{formatted}} 张照片",
+    "share": "占照片的 {{share}}",
+    "openInGallery_other": "{{formatted}} 张 · 点击查看",
+    "loadFailed": "无法加载统计",
+    "empty": "还没有照片。导入一个文件夹后这里就有数据了。",
+    "range": {
+      "label": "时间范围",
+      "all": "全部时间",
+      "year": "今年",
+      "12m": "近 12 个月"
+    },
+    "monthsShort": ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+    "weekdaysShort": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
+    "overview": {
+      "photos": "照片",
+      "videos_other": "另有 {{formatted}} 段视频",
+      "days": "拍摄天数",
+      "perDay": "平均每天 {{count}} 张",
+      "span": "时间跨度",
+      "keepRate": "留用率",
+      "keepRateDetail": "留用 {{picks}} · 拒绝 {{rejects}}",
+      "places": "国家 · 城市",
+      "placesDetail": "来自照片的位置信息",
+      "storage": "占用空间",
+      "rawShare": "RAW 占 {{share}}"
+    },
+    "gear": {
+      "title": "器材",
+      "subtitle": "真正在用的是哪几台、哪几支",
+      "cameras": "相机",
+      "camera": "相机",
+      "lenses": "镜头",
+      "lens": "镜头",
+      "body": "机身",
+      "photos": "张数",
+      "share": "占比",
+      "keepRate": "留用率",
+      "topLens": "最常用镜头",
+      "used": "使用期间",
+      "timeline": "近 24 个月",
+      "combos": "常用组合",
+      "idle_other": "{{count}} 个月未用",
+      "idleYears_other": "{{count}} 年未用",
+      "noCameras": "这里的照片都没有记录相机型号。",
+      "noLenses": "这里的照片都没有记录镜头。",
+      "otherCameras_other": "另有 {{count}} 台相机，共 {{photos}} 张。",
+      "withoutCamera_other": "{{formatted}} 张照片没有记录相机。",
+      "withoutLens_other": "{{formatted}} 张照片没有记录镜头——手机和定焦镜头相机常常不写。通过「添加 RAW 来源」登记的 RAW 要运行「元数据补全」才会读全。"
+    },
+    "habits": {
+      "title": "拍摄习惯",
+      "subtitle": "焦段、光圈、快门、ISO",
+      "focal": "焦段",
+      "focalSubtitle": "35mm 等效",
+      "focalUnknown_other": "{{formatted}} 张没有计入：相机的画幅系数未知（手机、无人机等）。",
+      "aperture": "光圈",
+      "shutter": "快门速度",
+      "shutterSubtitle": "悬停查看每档被拒绝的比例",
+      "rejectRate": "拒绝 {{share}}",
+      "iso": "ISO",
+      "orientation": "画幅方向",
+      "formats": "文件类型"
+    },
+    "orientation": {
+      "landscape": "横构图",
+      "portrait": "竖构图",
+      "square": "方形"
+    },
+    "formats": {
+      "raw_pair": "RAW + JPEG",
+      "raw": "仅 RAW",
+      "jpeg": "JPEG",
+      "heif": "HEIF",
+      "other": "其他图片",
+      "video": "视频"
+    },
+    "culling": {
+      "title": "挑片与整理",
+      "subtitle": "拍了多少、留下多少、还剩多少没看",
+      "funnel": "从导入到成片",
+      "funnelSubtitle": "每一项占全部照片的比例",
+      "funnelNote": "已过目 = 有旗标或星级。有编辑版本 = 在 AfterFrame 里做过版本，或用在了拼图里。",
+      "unreviewed": "还没过目",
+      "unreviewedDetail_other": "没有旗标也没有星级 · 其中 {{formatted}} 张是近 30 天导入的",
+      "ratings": "星级分布"
+    },
+    "funnel": {
+      "all": "导入",
+      "reviewed": "已过目",
+      "picks": "留用",
+      "rated4": "4 星及以上",
+      "versions": "有编辑版本"
+    },
+    "places": {
+      "title": "地点",
+      "subtitle": "{{share}} 的照片有位置信息（其中 AI 推断 {{ai}}）",
+      "none": "这里的照片都没有位置信息。"
+    },
+    "rhythm": {
+      "title": "拍摄节奏",
+      "subtitle": "按相机时钟",
+      "calendar": "拍摄日历",
+      "calendarSummary_other": "{{days}} 天里拍了 {{photos}}",
+      "run_other": "连续 {{count}} 天",
+      "calendarNote": "最长连续拍摄：{{run}}；单日最多：{{day}}，{{photos}}。",
+      "noPhotos": "没有拍摄",
+      "months": "每月照片数",
+      "weekdays": "星期分布",
+      "hours": "一天中的时间",
+      "hoursSubtitle": "相机时钟的小时"
+    },
+    "storage": {
+      "title": "存储",
+      "subtitle": "空间花在哪",
+      "byKind": "按文件类型",
+      "byYear": "按拍摄年份",
+      "kinds": {
+        "raw": "RAW",
+        "jpeg": "JPEG",
+        "heif": "HEIF",
+        "other": "其他图片",
+        "video": "视频"
+      },
+      "cleanup": "可以清理",
+      "cleanupSubtitle": "在图库里打开逐张确认，这里不会删除任何东西",
+      "rejected": "已拒绝",
+      "lookalikes": "相似照片中多出的",
+      "lookalikesDetail_other": "{{groups}} 组相似照片中，除最好的一张外的 {{formatted}} 张",
+      "missing": "磁盘上缺失"
+    }
   },
   "findList": {
     "title": "按清单找图",

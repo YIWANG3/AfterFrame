@@ -42,6 +42,7 @@ export const CORE_IPC_METHODS = [
   ["browseMapPoints", "workspace:browse-map-points", 1],
   ["resolveAiLocations", "workspace:resolve-ai-locations", 0],
   ["discoverCollections", "workspace:discover-collections", 0],
+  ["catalogStats", "workspace:catalog-stats", 1],
   ["getAssetLocation", "workspace:get-asset-location", 1],
   ["clearAiLocation", "workspace:clear-ai-location", 1],
   ["getFacetValues", "workspace:facet-values", 1],

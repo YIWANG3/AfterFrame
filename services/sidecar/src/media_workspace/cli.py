@@ -274,6 +274,12 @@ def build_parser() -> argparse.ArgumentParser:
     # locality) and memories (one visit to a place). Read-only.
     subparsers.add_parser("discover-collections", parents=[common])
 
+    # Statistics page: cameras, lenses, exposure, culling, places, rhythm and
+    # storage of the gallery's set, narrowed by the gallery's facet filters
+    # (db/stats.py). Read-only.
+    stats_p = subparsers.add_parser("catalog-stats", parents=[common])
+    stats_p.add_argument("--filters", default=None, help="JSON object of facet filters, as the gallery sends them")
+
     # Effective location of one image asset (RAW-first, no precision floor) —
     # powers the Inspector's "click a location → jump the map there".
     asset_location_p = subparsers.add_parser("get-asset-location", parents=[common])
@@ -1729,6 +1735,14 @@ def _cmd_discover_collections(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_catalog_stats(args, connection, catalog, parser):
+    from .db.stats import catalog_stats
+
+    filters = json.loads(args.filters) if args.filters else None
+    print(json.dumps(catalog_stats(connection, filters), ensure_ascii=False))
+    return 0
+
+
 def _cmd_resolve_ai_locations(args, connection, catalog, parser):
     print(json.dumps(resolve_ai_locations(connection)))
     return 0
@@ -2157,6 +2171,7 @@ COMMAND_HANDLERS = {
     "browse-map-points": _cmd_browse_map_points,
     "resolve-ai-locations": _cmd_resolve_ai_locations,
     "discover-collections": _cmd_discover_collections,
+    "catalog-stats": _cmd_catalog_stats,
     "get-asset-location": _cmd_get_asset_location,
     "set-asset-location": _cmd_set_asset_location,
     "clear-ai-location": _cmd_clear_ai_location,

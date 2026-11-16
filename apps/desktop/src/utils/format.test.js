@@ -74,6 +74,7 @@ describe("formatBytes", () => {
   it("formats valid sizes and rejects empty or invalid values", () => {
     expect(formatBytes(1536)).toBe("2 KB");
     expect(formatBytes(1024 ** 2)).toBe("1.0 MB");
+    expect(formatBytes(2.84 * 1024 ** 4)).toBe("2.84 TB");
     expect(formatBytes(0)).toBeNull();
     expect(formatBytes(-1)).toBeNull();
   });

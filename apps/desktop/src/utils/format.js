@@ -91,6 +91,7 @@ export function escapePathLabel(value) {
 export function formatBytes(value) {
   const bytes = Number(value ?? 0);
   if (!bytes || Number.isNaN(bytes) || bytes < 0) return null;
+  if (bytes >= 1024 ** 4) return `${(bytes / 1024 ** 4).toFixed(2)} TB`;
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
   if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;

@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>统计页 · 原型</title>
+<style>
+  :root{color-scheme:dark;--app:#141416;--chrome:#1c1c1f;--pane:#19191c;--card:#1e1e22;--fill:#26262a;--fill2:#2e2e33;--border:#2f2f35;--text:#ececf1;--muted:#a3a3ad;--muted2:#7c7c86;--accent:#7aa2ff;--hover:#27272c;--selected:#2b2f3f;
+    /* 数据色：dataviz 参考色板的深色档。顺序 = 身份，不随排名重排 */
+    --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s7:#9085e9;--other:#55555c;
+    --q0:#26262a;--q1:#184f95;--q2:#256abf;--q3:#3987e5;--q4:#6da7ec;
+    --bar:#5d8fe8;--bar-hi:#8db3ff;--note:#c9a227}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--app);color:var(--text);font:13px/1.45 -apple-system,"PingFang SC","Helvetica Neue",sans-serif;height:100vh;display:grid;grid-template-columns:220px 1fr;overflow:hidden}
+  aside{background:var(--chrome);padding:14px 10px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
+  aside .h{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);padding:14px 10px 6px}
+  aside .row{padding:6px 10px;border-radius:6px;color:var(--muted);display:flex;justify-content:space-between;cursor:pointer}
+  aside .row:hover{background:var(--hover);color:var(--text)}
+  aside .row.on{background:var(--selected);color:var(--text)}
+  aside .row small{color:var(--muted2);font-variant-numeric:tabular-nums}
+  aside .row .new{font-size:9px;color:var(--accent);border:1px solid rgba(122,162,255,.4);border-radius:4px;padding:0 4px}
+  main{display:flex;flex-direction:column;min-width:0;height:100vh;padding:8px}
+  .panel{background:var(--pane);border-radius:8px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+  .toolbar{height:44px;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--chrome);flex-shrink:0}
+  .title{margin:0 8px;flex:1;display:flex;align-items:baseline;gap:6px;min-width:0}
+  .title h1{font-size:13px;font-weight:600;margin:0}
+  .title .n{font-size:12px;color:var(--muted2);white-space:nowrap}
+  .seg{display:flex;background:var(--app);border:1px solid var(--border);border-radius:999px;padding:2px;height:32px;align-items:center}
+  .seg button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;height:26px;padding:0 12px;border-radius:999px;cursor:pointer}
+  .seg button.on{background:var(--fill2);color:var(--text)}
+  .btn{height:32px;border-radius:6px;border:1px solid var(--border);background:var(--app);color:var(--text);font:inherit;font-size:12px;padding:0 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .btn:hover{border-color:#3a3a41}
+  .btn.on{border-color:rgba(201,162,39,.6);color:var(--note)}
+  .scroll{flex:1;overflow:auto}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 24px 80px}
+  section{margin-top:28px}
+  section>header{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+  section>header h2{font-size:15px;font-weight:600;margin:0;letter-spacing:-.01em}
+  section>header p{margin:0;color:var(--muted2);font-size:12px}
+  .grid{display:grid;gap:12px}
+  .g2{grid-template-columns:repeat(2,minmax(0,1fr))} .g3{grid-template-columns:repeat(3,minmax(0,1fr))} .g4{grid-template-columns:repeat(4,minmax(0,1fr))} .g6{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .g21{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+  @media (max-width:1100px){.g4,.g6{grid-template-columns:repeat(3,minmax(0,1fr))}.g21,.g3{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;min-width:0}
+  .card h3{margin:0 0 2px;font-size:12px;font-weight:600;color:var(--text)}
+  .card .sub{font-size:11px;color:var(--muted2);margin-bottom:10px}
+  .kpi .v{font-size:24px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px}
+  .kpi .l{font-size:11px;color:var(--muted)}
+  .kpi .d{font-size:11px;color:var(--muted2);margin-top:2px}
+  .insight{display:flex;gap:8px;align-items:flex-start;margin-top:10px;padding:8px 10px;background:rgba(122,162,255,.07);border-radius:6px;font-size:12px;color:var(--muted)}
+  .insight b{color:var(--text);font-weight:600}
+  .insight::before{content:"✦";color:var(--accent);font-size:11px;line-height:18px}
+  .note{display:none;margin-top:10px;border:1px dashed rgba(201,162,39,.45);border-radius:6px;padding:7px 10px;font-size:11px;color:#bfae74;background:rgba(201,162,39,.05)}
+  .note code{font:11px ui-monospace,Menlo,monospace;color:#e2cf8e}
+  body.notes .note{display:block}
+  svg{display:block;overflow:visible}
+  svg text{font:10px -apple-system,"PingFang SC",sans-serif;fill:var(--muted2)}
+  .hit{cursor:pointer}
+  .hit:hover .mk{fill:var(--bar-hi)}
+  .yr{display:flex;gap:4px;margin-left:auto}
+  .yr button{border:1px solid var(--border);background:transparent;color:var(--muted);font:inherit;font-size:11px;border-radius:6px;padding:2px 8px;cursor:pointer}
+  .yr button.on{background:var(--fill2);color:var(--text)}
+  .row-h{display:flex;align-items:center}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--muted);margin-top:8px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .stack{display:flex;height:14px;gap:2px;border-radius:4px;overflow:hidden}
+  .stack div{height:100%;cursor:pointer}
+  .stack div:hover{filter:brightness(1.2)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{font-weight:500;color:var(--muted2);font-size:11px;text-align:left;padding:0 8px 6px;border-bottom:1px solid var(--border);white-space:nowrap}
+  td{padding:7px 8px;border-bottom:1px solid rgba(47,47,53,.5);vertical-align:middle;white-space:nowrap}
+  tr.click{cursor:pointer} tr.click:hover td{background:var(--hover)}
+  td.num{text-align:right;font-variant-numeric:tabular-nums} th.num{text-align:right}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px}
+  .bar-cell{width:22%}
+  .hbar{height:6px;border-radius:3px;background:var(--fill)}
+  .hbar>div{height:100%;border-radius:3px;background:var(--bar)}
+  .tag{font-size:10px;border-radius:4px;padding:1px 5px;margin-left:6px;border:1px solid}
+  .tag.idle{color:#e3a35b;border-color:rgba(227,163,91,.4)}
+  .tag.top{color:var(--accent);border-color:rgba(122,162,255,.35)}
+  .muted{color:var(--muted2)}
+  .list .it{display:grid;grid-template-columns:110px 1fr 54px;gap:10px;align-items:center;padding:4px 0;cursor:pointer;border-radius:4px}
+  .list .it:hover .lab{color:var(--text)} .list .it:hover .hbar>div{background:var(--bar-hi)}
+  .list .lab{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .list .val{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .funnel .st{display:grid;grid-template-columns:120px 1fr 120px;gap:10px;align-items:center;margin:5px 0;cursor:pointer}
+  .funnel .bw{height:22px;background:var(--fill);border-radius:4px;overflow:hidden}
+  .funnel .bw>div{height:100%;background:var(--bar);border-radius:4px}
+  .funnel .st:hover .bw>div{background:var(--bar-hi)}
+  .funnel .lab{color:var(--muted);font-size:12px}
+  .funnel .val{font-variant-numeric:tabular-nums;font-size:12px}
+  .funnel .val span{color:var(--muted2);margin-left:6px}
+  .clean{display:flex;flex-direction:column;gap:6px}
+  .clean .c{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer}
+  .clean .c:hover{background:var(--hover)}
+  .clean .c b{font-weight:600;font-variant-numeric:tabular-nums}
+  .clean .c .go{margin-left:auto;color:var(--accent);font-size:12px}
+  .strips{display:flex;gap:3px;height:120px;align-items:stretch}
+  .strips .m{flex:1;display:flex;flex-direction:column;gap:1px;border-radius:4px;overflow:hidden;cursor:pointer}
+  .strips .m:hover{outline:1px solid var(--text);outline-offset:1px}
+  .people{display:flex;gap:14px;flex-wrap:wrap}
+  .people .p{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;width:64px}
+  .people .av{width:52px;height:52px;border-radius:50%;border:2px solid var(--border)}
+  .people .p:hover .av{border-color:var(--accent)}
+  .people .nm{font-size:11px;color:var(--muted)} .people .ct{font-size:10px;color:var(--muted2)}
+  #tip{position:fixed;pointer-events:none;background:#0e0e10;border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:11px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.5);opacity:0;transition:opacity .08s;z-index:50;max-width:260px}
+  #tip .t2{color:var(--muted2);margin-top:2px}
+  #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:#25252a;border:1px solid var(--border);border-radius:999px;padding:8px 16px;font-size:12px;opacity:0;transition:all .2s;z-index:60;white-space:nowrap}
+  #toast.on{opacity:1;transform:translateX(-50%)}
+  .ds{font-size:10px;font-weight:500;border-radius:4px;padding:1px 6px;margin-left:8px;vertical-align:1px;border:1px solid}
+  .ds.ok{color:#7fc79a;border-color:rgba(127,199,154,.35)} .ds.calc{color:#8db3ff;border-color:rgba(141,179,255,.35)}
+  .ds.job{color:#d9b25f;border-color:rgba(217,178,95,.4)} .ds.new{color:#ef8f7a;border-color:rgba(239,143,122,.45)}
+  .dslegend{display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--muted2);margin:6px 0 0}
+  .dslegend .ds{margin:0 4px 0 0}
+  .gx{display:grid;gap:2px;font-size:11px}
+  .gx .h{color:var(--muted2);padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gx .c{height:26px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;cursor:pointer;color:#dfe7f7}
+  .gx .c:hover{outline:1px solid var(--text)}
+  .lede{color:var(--muted);font-size:12px;margin:0 0 4px}
+</style>
+</head>
+<body class="notes">
+<aside>
+  <div class="row">全部素材 <small>49,417</small></div>
+  <div class="row">最近添加 <small>1,208</small></div>
+  <div class="row">已评分 <small>11,204</small></div>
+  <div class="h">视图</div>
+  <div class="row">发现</div>
+  <div class="row">地图</div>
+  <div class="row">人物</div>
+  <div class="row">标签</div>
+  <div class="row">文件夹</div>
+  <div class="row on">统计 <span class="new">NEW</span></div>
+  <div class="h">文件夹</div>
+  <div class="row">2026 京都 <small>4,102</small></div>
+  <div class="row">2025 冰岛 <small>1,920</small></div>
+  <div class="row">日常 <small>12,880</small></div>
+</aside>
+
+<main><div class="panel">
+  <div class="toolbar">
+    <div class="title"><h1>统计</h1><span class="n" id="scopeN">整个图库 · 48,213 张照片 · 1,204 段视频</span></div>
+    <button class="btn" title="范围：整个图库 / 某个文件夹 / 当前筛选结果">范围：整个图库 ▾</button>
+    <div class="seg" id="range">
+      <button class="on">全部时间</button><button>今年</button><button>近 12 个月</button><button>自定义…</button>
+    </div>
+    <button class="btn on" id="noteBtn" title="显示 / 隐藏设计注释">设计注释</button>
+  </div>
+
+  <div class="scroll"><div class="wrap">
+    <p class="lede">一页看清「用什么拍、拍什么、怎么拍、留下了多少」。每个数字、柱子、行都可以点击，跳到图库并带上对应筛选。</p>
+    <div class="note">设计原则：统计页只读、不做编辑；所有数字来自 catalog 的现有字段，按「范围 + 时间」整体重算。点任何一处 = 打开图库 + 预填 FilterBar 筛选（复用现有 filter 体系），这样统计页不是死报表，而是另一个入口。</div>
+    <div class="dslegend note" style="display:flex">数据来源：<span><span class="ds ok">现有字段</span>catalog 里已有，直接 SQL 聚合</span><span><span class="ds calc">需加工</span>有原始数据，要加映射表或计算，不用重新扫描</span><span><span class="ds job">依赖已跑任务</span>用户跑过人脸识别 / AI 标注 / 元数据补全才有</span><span><span class="ds new">需新扫描</span>目前没有数据，要新 pipeline</span></div>
+
+    <!-- 1 概览 -->
+    <section>
+      <header><h2>概览</h2></header>
+      <div class="grid g6" id="kpis"></div>
+    </section>
+
+    <!-- 3 器材 -->
+    <section>
+      <header><h2>器材</h2><p>真正在用的是哪几台、哪几支</p></header>
+      <div class="card">
+        <h3>相机<span class="ds calc">需加工</span></h3><div class="sub">占比 · 留用率 · 使用时间线</div>
+        <div class="stack" id="camStack"></div>
+        <table style="margin-top:12px" id="camTable"></table>
+        <div class="note">数据：<code>meta_camera_model</code>（已有索引列，FilterBar 的「相机」筛选也用它）。<b>需加工</b>：EXIF 里的机型是 <code>ILCE-7CM2</code>、<code>RICOH GR IIIx</code> 这种，要一张显示名映射表（Sony A7C II），不需要重新扫描。留用率 = P 旗标 /（P + X），衡量「这台机器出片率」。时间线 = 近 24 个月每月张数。超过 6 个月没用标「闲置」——卖器材前看一眼。</div>
+      </div>
+      <div class="grid g21" style="margin-top:12px">
+        <div class="card">
+          <h3>镜头<span class="ds calc">需加工</span></h3><div class="sub">按张数</div>
+          <table id="lensTable"></table>
+        </div>
+        <div class="card">
+          <h3>常用组合<span class="ds ok">现有字段</span></h3><div class="sub">机身 + 镜头</div>
+          <div class="list" id="combos"></div>
+          <div class="note">数据：<code>meta_lens_model</code>。镜头名同样要归一（<code>XF33mmF1.4 R LM WR</code> 等）；固定镜头相机（GR、X100、手机）常常没有镜头名，按机型补成「内置」。注意：只通过「添加 RAW 来源」登记的 RAW 导入时只读了拍摄时间和机型，镜头 / 光圈 / ISO 要等「运行元数据补全」；普通导入的照片是完整读取的。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 题材 -->
+    <section>
+      <header><h2>题材</h2><p>拍什么，以及拍不同题材时用什么</p></header>
+      <div class="grid g2">
+        <div class="card">
+          <h3>题材分布<span class="ds new">需新扫描</span></h3><div class="sub">已识别 46,870 / 48,213 张 · 本机识别，不上传</div>
+          <div class="list" id="genres"></div>
+          <div class="insight"><span>街拍和人像占了 <b>53%</b>；风光虽然只有 12%，留用率却最高。</span></div>
+        </div>
+        <div class="card">
+          <h3>每类题材怎么拍<span class="ds new">需新扫描</span></h3><div class="sub">留用率 · 最常用镜头 · 中位焦段</div>
+          <table id="genreTable"></table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <h3>题材 × 镜头<span class="ds new">需新扫描</span></h3><div class="sub">每一行 = 这类题材里各镜头的占比</div>
+        <div class="gx" id="gx"></div>
+        <div class="insight"><span>人像 <b>71%</b> 用 85mm 和 56mm；街拍几乎都是 GR 和 33mm。</span></div>
+        <div class="note"><b>现在没有题材数据。</b>catalog 里能沾边的只有：用户标签（<code>asset_tags</code>，自由文本、覆盖率低）、AI 标注（<code>asset_ai_annotations</code>，要用户配 API 逐张跑，有成本）、人脸（只能推出「有人」）。要做题材，需要一个新的本机分类步骤：<br>
+        · <b>Mac</b>：Apple Vision 的 <code>VNClassifyImageRequest</code>（系统自带、约 1,300 个标签、无需下载模型），在已有的 512 px 预览上跑，和相似照片任务（<code>visual</code> job，导入后自动补跑）同一遍读图，新增一张 <code>asset_scenes</code> 表存 top 标签，再由一张映射表归到 ~12 个摄影题材。<br>
+        · <b>Windows</b>：暂无系统分类器，要带一个 CLIP 类 ONNX 模型做零样本分类（体积在 ≤1 GB 的约束内），可以后做；Windows 上先显示「仅 Mac」。<br>
+        · 已有 AI 标注或用户标签的照片，优先用它们。</div>
+      </div>
+    </section>
+
+<!-- 4 习惯 -->
+    <section>
+      <header><h2>拍摄习惯</h2><p>焦段、光圈、快门、ISO 的真实分布</p></header>
+      <div class="grid g2">
+        <div class="card"><h3>焦段（35mm 等效）<span class="ds calc">需加工</span></h3><div class="sub">定焦尖峰 vs 变焦分布</div><div id="focal"></div>
+          <div class="insight"><span><b>41%</b> 落在 35–40mm。24-70 的 <b>62%</b> 停在两端（24 / 70），中间焦段很少用。</span></div>
+          <div class="note">现在只存了物理焦距 <code>focal_length</code>。等效焦距按机型的画幅系数换算（APS-C ×1.5、M43 ×2、手机按机型），一张映射表、不用重新扫描；查不到系数的机型显示物理焦距。以后的导入可以顺手存 ExifTool 的 <code>FocalLengthIn35mmFormat</code>。</div>
+        </div>
+        <div class="card"><h3>光圈<span class="ds ok">现有字段</span></h3><div class="sub">f 值</div><div id="aperture"></div>
+          <div class="insight"><span>定焦镜头 <b>58%</b> 的照片用最大光圈拍摄。</span></div>
+        </div>
+        <div class="card"><h3>快门速度<span class="ds ok">现有字段</span></h3><div class="sub">秒</div><div id="shutter"></div>
+          <div class="insight"><span>慢于 1/60 的照片有 <b>22%</b> 被标为拒绝，是平均值的 2.4 倍——可能是手抖。</span></div>
+          <div class="note">与拒绝旗标（<code>assets.app_flag = -1</code>）交叉。阈值可以按焦段给（1/等效焦距 规则）。</div>
+        </div>
+        <div class="card"><h3>ISO<span class="ds ok">现有字段</span></h3><div class="sub">感光度</div><div id="iso"></div>
+          <div class="insight"><span>ISO 6400 以上占 <b>7%</b>，其中 <b>81%</b> 来自 A7C II。</span></div>
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:12px">
+        <div class="card"><h3>画幅方向<span class="ds ok">现有字段</span></h3><div class="sub">按显示方向（已考虑旋转）</div><div class="list" id="orient"></div>
+          <div class="note">用现有的 <code>display_shape</code>（存储尺寸是未旋转的，别用 width/height 直接算）。</div></div>
+        <div class="card"><h3>文件类型<span class="ds ok">现有字段</span></h3><div class="sub">RAW / JPEG / HEIC / 视频</div><div class="list" id="types"></div>
+          <div class="note">RAW+JPEG 配对算一张照片；另列「未配对 RAW」。</div></div>
+      </div>
+    </section>
+
+    <!-- 5 挑片 -->
+    <section>
+      <header><h2>挑片与整理</h2><p>拍了多少、留下多少、还剩多少没看</p></header>
+      <div class="grid g21">
+        <div class="card">
+          <h3>从导入到成片<span class="ds ok">现有字段</span></h3><div class="sub">每一步占上一步的比例</div>
+          <div class="funnel" id="funnel"></div>
+          <div class="note">导入 = 全部照片；已过目 = 有旗标或星级；留用 = P；精选 = ≥4★；有编辑或导出版本 = <code>asset_links</code> 里作为 <code>source_of</code> / <code>collage_source</code> 的源。app 没有单独记录「导出」这件事，所以不再单列「已导出」。</div>
+        </div>
+        <div class="card">
+          <h3>待处理<span class="ds ok">现有字段</span></h3><div class="sub">还没过目的照片</div>
+          <div class="kpi"><div class="v">3,412</div><div class="l">张未标记、未评分</div><div class="d">其中 1,208 张是最近 30 天导入的</div></div>
+          <div style="margin-top:14px"><h3>星级分布</h3><div class="sub">已评分的 11,204 张</div><div id="stars"></div></div>
+          <div class="insight"><span>上一次清空待处理是 <b>9 月 2 日</b>。</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 地点 + 人物 -->
+    <section>
+      <header><h2>去过哪里，拍了谁</h2></header>
+      <div class="grid g2">
+        <div class="card">
+          <h3>城市<span class="ds ok">现有字段</span></h3><div class="sub">有位置信息的照片 62%（含 AI 推断 9%）</div>
+          <div class="list" id="cities"></div>
+          <div class="insight"><span>今年新去了 <b>6</b> 个城市：京都、金泽、大理、伊斯坦布尔、卡帕多奇亚、波尔图。</span></div>
+          <div class="note">数据：<code>asset_locations.city_key / country_code</code>（导入时从 EXIF GPS 写入）；「AI 推断」那部分要跑过 AI 标注。点城市 = 跳到地图视图并定位。</div>
+        </div>
+        <div class="card">
+          <h3>人物<span class="ds job">依赖已跑任务</span></h3><div class="sub">出现最多的人</div>
+          <div class="people" id="people"></div>
+          <div style="margin-top:18px"><h3>色彩<span class="ds ok">现有字段</span></h3><div class="sub">每月照片的主色（近 24 个月）</div><div class="strips" id="strips"></div></div>
+          <div class="note">人物：<code>person_groups</code>，用户没开人脸识别时这块显示「去开启」；色彩：<code>asset_colors</code> 按月加权 share 聚合。色彩更偏「好看」而非「有用」，可放 P2。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 节奏 -->
+    <section>
+      <header><h2>拍摄节奏</h2><p>什么时候在拍，拍得勤不勤</p></header>
+      <div class="card">
+        <div class="row-h"><h3>拍摄日历<span class="ds ok">现有字段</span></h3><div class="yr" id="yrs"></div></div>
+        <div class="sub" id="calSub"></div>
+        <div id="cal"></div>
+        <div class="legend" style="justify-content:flex-end;gap:4px;align-items:center">少 <i style="background:var(--q0)"></i><i style="background:var(--q1)"></i><i style="background:var(--q2)"></i><i style="background:var(--q3)"></i><i style="background:var(--q4)"></i> 多</div>
+        <div class="insight" id="calInsight"></div>
+        <div class="note">数据：<code>capture_time</code> 按天聚合。连续拍摄天数、单日最多（配合 <code>asset_locations.city_*</code> 给出地点）。点格子 = 图库按当天筛选。</div>
+      </div>
+      <div class="grid g21" style="margin-top:12px">
+        <div class="card"><h3>每月照片数<span class="ds ok">现有字段</span></h3><div class="sub">近 24 个月 · 点柱子查看当月</div><div id="months"></div></div>
+        <div class="card"><h3>星期分布<span class="ds ok">现有字段</span></h3><div class="sub">工作日 vs 周末</div><div id="weekday"></div></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <h3>一天中的时间<span class="ds ok">现有字段</span></h3><div class="sub">按相机时钟</div>
+        <div id="hours"></div>
+        <div class="note">上一版的「黄金时刻 / 蓝调」分类先拿掉了：<code>capture_time</code> 存的是相机时钟、不带时区（metadata.py 有意丢掉了 offset），算太阳高度角需要真实时刻，得再从 GPS 推时区（要一份时区边界数据）并且信任相机时钟是当地时间。出国没调时钟的照片会错，错了比没有更糟。放到以后再说。</div>
+      </div>
+    </section>
+
+    <!-- 7 存储 -->
+    <section>
+      <header><h2>存储</h2><p>空间花在哪，能腾出多少</p></header>
+      <div class="grid g21">
+        <div class="card">
+          <h3>按格式<span class="ds ok">现有字段</span></h3><div class="sub">共 2.84 TB</div>
+          <div class="stack" id="fmtStack" style="height:18px"></div>
+          <div class="legend" id="fmtLegend"></div>
+          <h3 style="margin-top:18px">按拍摄年份</h3><div id="years"></div>
+        </div>
+        <div class="card">
+          <h3>可以清理<span class="ds ok">现有字段</span></h3><div class="sub">点进去逐张确认，不会自动删除</div>
+          <div class="clean" id="clean"></div>
+          <div class="note">相似组来自 <code>asset_visual.dup_group</code>（相似照片任务导入后自动补跑；每组保留评分最高的一张，其余算可释放）；缺失 = <code>exists_on_disk = 0</code>。</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="note" style="display:block;border-color:var(--border);color:var(--muted);background:transparent">
+        <b style="color:var(--text)">分期建议</b><br>
+        P1（不需要新扫描）：概览、器材（含机型/镜头显示名映射）、焦段（画幅系数表换算等效）/光圈/快门/ISO、挑片漏斗、地点、拍摄节奏、存储 —— 一条 sidecar 聚合查询（类似 <code>collection_stats</code>），都走已有索引列。<br>
+        P2（新 pipeline）：题材 —— Mac 上用 Vision 分类挂进 <code>visual</code> job，新表 + 题材映射；Windows 之后。<br>
+        P3：年度回顾（同一套数据换成可分享长图）；光线分类（等时区问题有解）。
+      </div>
+    </section>
+  </div></div>
+</div></main>
+
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+// ---------- 假数据（固定种子，刷新不变） ----------
+let seed = 7;
+const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+const fmt = n => n.toLocaleString("en-US");
+const pct = (a, b) => (a / b * 100).toFixed(a / b < 0.1 ? 1 : 0) + "%";
+const TOTAL = 48213;
+
+const tip = document.getElementById("tip");
+function showTip(e, a, b) { tip.innerHTML = `<div>${a}</div>${b ? `<div class="t2">${b}</div>` : ""}`; tip.style.opacity = 1; moveTip(e); }
+function moveTip(e) { const w = tip.offsetWidth; tip.style.left = Math.min(e.clientX + 12, innerWidth - w - 8) + "px"; tip.style.top = (e.clientY + 14) + "px"; }
+function hideTip() { tip.style.opacity = 0; }
+let toastT;
+function jump(what) { const t = document.getElementById("toast"); t.textContent = "→ 打开图库，筛选：" + what; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 1800); }
+function bindHover(el, a, b, filter) {
+  el.addEventListener("mouseenter", e => showTip(e, a, b));
+  el.addEventListener("mousemove", moveTip);
+  el.addEventListener("mouseleave", hideTip);
+  if (filter) el.addEventListener("click", () => jump(filter));
+}
+const NS = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); parent && parent.appendChild(n); return n; };
+// 顶部圆角、底部贴基线的柱子
+function barPath(x, y, w, h, r = 3) { r = Math.min(r, w / 2, h); return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; }
+
+// 竖柱图：data = [{label, value, tip, filter, color}]
+// 跟随容器宽度重画
+const ro = new ResizeObserver(entries => entries.forEach(en => { const el = en.target, w = Math.round(en.contentRect.width); if (w && w !== el._w) { el._w = w; el.innerHTML = ""; drawColumns(el, ...el._args); } }));
+function columns(el, ...args) { el._args = args; ro.observe(el); }
+function drawColumns(el, data, { h = 140, labelEvery = 1, unit = "张", total = TOTAL, maxOverride } = {}) {
+  const W = el._w, padB = 18, padT = 14;
+  const svg = svgEl("svg", { width: W, height: h + padB + padT }, el);
+  const max = maxOverride || Math.max(...data.map(d => d.value));
+  const slot = W / data.length, bw = Math.max(3, Math.min(slot - 2, 34));
+  [0.5, 1].forEach(f => svgEl("line", { x1: 0, x2: W, y1: padT + h - h * f, y2: padT + h - h * f, stroke: "#2a2a30" }, svg));
+  svgEl("line", { x1: 0, x2: W, y1: padT + h, y2: padT + h, stroke: "#3a3a41" }, svg);
+  data.forEach((d, i) => {
+    const bh = Math.max(d.value ? 2 : 0, d.value / max * h), x = i * slot + (slot - bw) / 2;
+    const g = svgEl("g", { class: "hit" }, svg);
+    svgEl("rect", { x: i * slot, y: padT, width: slot, height: h, fill: "transparent" }, g);
+    svgEl("path", { class: "mk", d: barPath(x, padT + h - bh, bw, bh), fill: d.color || "var(--bar)" }, g);
+    if (d.mark) { const t = svgEl("text", { x: x + bw / 2, y: padT + h - bh - 4, "text-anchor": "middle", style: "fill:var(--muted)" }, svg); t.textContent = d.mark; }
+    if (i % labelEvery === 0 || d.forceLabel) { const t = svgEl("text", { x: i * slot + slot / 2, y: padT + h + 13, "text-anchor": "middle" }, svg); t.textContent = d.label; }
+    bindHover(g, `<b>${d.tipLabel || d.label}</b> · ${fmt(d.value)} ${unit}`, d.tip || (total ? pct(d.value, total) + " · 点击查看" : "点击查看"), d.filter || d.label);
+  });
+}
+// 横向列表
+function hlist(el, data, { total = TOTAL, unit = "张", fmtVal } = {}) {
+  const max = Math.max(...data.map(d => d.value));
+  data.forEach(d => {
+    const it = document.createElement("div"); it.className = "it";
+    it.innerHTML = `<div class="lab">${d.label}</div><div class="hbar"><div style="width:${d.value / max * 100}%"></div></div><div class="val">${fmtVal ? fmtVal(d.value) : fmt(d.value)}</div>`;
+    el.appendChild(it);
+    bindHover(it, `<b>${d.label}</b> · ${fmtVal ? fmtVal(d.value) : fmt(d.value) + " " + unit}`, d.tip || (total ? pct(d.value, total) + " · 点击查看" : "点击查看"), d.filter || d.label);
+  });
+}
+function stack(el, parts, legendEl, { unit = "张", fmtVal = fmt } = {}) {
+  const sum = parts.reduce((s, p) => s + p.value, 0);
+  parts.forEach(p => {
+    const d = document.createElement("div"); d.style.flex = p.value; d.style.background = p.color; el.appendChild(d);
+    bindHover(d, `<b>${p.label}</b> · ${fmtVal(p.value)}${unit ? " " + unit : ""}`, pct(p.value, sum) + " · 点击查看", p.label);
+  });
+  if (legendEl) legendEl.innerHTML = parts.map(p => `<span><i style="background:${p.color}"></i>${p.label} <span class="muted">${pct(p.value, sum)}</span></span>`).join("");
+}
+
+// ---------- 1 概览 ----------
+const kpis = [
+  ["照片", "48,213", "+1,208 近 30 天"],
+  ["拍摄天数", "612", "平均每天 79 张"],
+  ["时间跨度", "2014–2026", "12 年"],
+  ["国家 · 城市", "14 · 87", "今年新增 6 个城市"],
+  ["留用率", "18.4%", "P /（P + X），去年 15.1%"],
+  ["占用空间", "2.84 TB", "RAW 占 71%"],
+];
+document.getElementById("kpis").innerHTML = kpis.map(([l, v, d]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join("");
+
+// ---------- 2 日历 ----------
+const yrs = document.getElementById("yrs");
+const trips = { 2026: [[95, 103, "京都"], [180, 185, "金泽"], [238, 246, "伊斯坦布尔"], [290, 294, "波尔图"]], 2025: [[40, 47, "冰岛"], [150, 154, "大理"], [270, 278, "纽约"]], 2024: [[60, 66, "东京"], [210, 216, "香港"], [300, 303, "上海"]] };
+function drawCal(year) {
+  const el = document.getElementById("cal"); el.innerHTML = "";
+  seed = year;
+  const start = new Date(year, 0, 1), days = (year % 4 === 0) ? 366 : 365, today = new Date(2026, 10, 15);
+  const cell = 12, gap = 2, offset = start.getDay();
+  const cols = Math.ceil((days + offset) / 7);
+  const svg = svgEl("svg", { width: cols * (cell + gap) + 24, height: 7 * (cell + gap) + 18 }, el);
+  ["一", "三", "五"].forEach((t, i) => { const n = svgEl("text", { x: 0, y: 18 + (i * 2 + 1) * (cell + gap) + 9 }, svg); n.textContent = t; });
+  const months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+  let total = 0, shotDays = 0, best = { v: 0 }, streak = 0, bestStreak = 0;
+  for (let d = 0; d < days; d++) {
+    const date = new Date(year, 0, 1 + d);
+    if (date > today) break;
+    const dow = date.getDay(), col = Math.floor((d + offset) / 7), row = (dow + 6) % 7;
+    if (date.getDate() === 1) { const t = svgEl("text", { x: 22 + col * (cell + gap), y: 9 }, svg); t.textContent = months[date.getMonth()]; }
+    const trip = (trips[year] || []).find(([a, b]) => d >= a && d <= b);
+    let v = 0;
+    if (trip) v = Math.round(180 + rnd() * 700);
+    else if (rnd() < (dow === 0 || dow === 6 ? 0.42 : 0.16)) v = Math.round(5 + rnd() * rnd() * 220);
+    if (v) { total += v; shotDays++; streak++; bestStreak = Math.max(bestStreak, streak); } else streak = 0;
+    if (v > best.v) best = { v, date, place: trip ? trip[2] : "上海" };
+    const q = v === 0 ? 0 : v < 30 ? 1 : v < 100 ? 2 : v < 300 ? 3 : 4;
+    const r = svgEl("rect", { x: 22 + col * (cell + gap), y: 18 + row * (cell + gap), width: cell, height: cell, rx: 2, fill: `var(--q${q})`, class: "hit" }, svg);
+    const ds = `${date.getMonth() + 1}月${date.getDate()}日`;
+    bindHover(r, `<b>${year}年${ds}</b> · ${v ? fmt(v) + " 张" : "没有拍摄"}`, trip ? trip[2] + " · 点击查看" : (v ? "点击查看" : ""), v ? `拍摄日期 = ${year}-${date.getMonth() + 1}-${date.getDate()}` : null);
+  }
+  document.getElementById("calSub").textContent = `${year} 年 · ${fmt(total)} 张 · ${shotDays} 个拍摄日`;
+  document.getElementById("calInsight").innerHTML = `<span>最长连续拍摄 <b>${bestStreak} 天</b>；单日最多 <b>${fmt(best.v)} 张</b>（${best.date.getMonth() + 1}月${best.date.getDate()}日，${best.place}）。</span>`;
+}
+[2026, 2025, 2024, "更早"].forEach((y, i) => {
+  const b = document.createElement("button"); b.textContent = y; if (!i) b.className = "on";
+  b.onclick = () => { if (typeof y !== "number") return jump("年份选择器"); yrs.querySelectorAll("button").forEach(x => x.classList.remove("on")); b.classList.add("on"); drawCal(y); };
+  yrs.appendChild(b);
+});
+drawCal(2026);
+
+// 每月
+seed = 11;
+const monthData = [];
+for (let i = 23; i >= 0; i--) {
+  const d = new Date(2026, 10 - i, 1), m = d.getMonth() + 1;
+  let v = Math.round(500 + rnd() * 900);
+  if ([2, 9].includes(m) && d.getFullYear() === 2025) v += 1600;
+  if (m === 4 && d.getFullYear() === 2026) v += 3400;
+  if (m === 8 && d.getFullYear() === 2026) v += 2100;
+  monthData.push({ label: m === 1 ? `${d.getFullYear()}` : `${m}`, tipLabel: `${d.getFullYear()}年${m}月`, value: v, forceLabel: m === 1, filter: `${d.getFullYear()}年${m}月` });
+}
+columns(document.getElementById("months"), monthData, { labelEvery: 3 });
+columns(document.getElementById("weekday"), ["一", "二", "三", "四", "五", "六", "日"].map((l, i) => ({ label: "周" + l, value: [4210, 3880, 3920, 4105, 5020, 14230, 12848][i] })), { h: 140 });
+
+// 时间
+const hv = [120, 60, 30, 20, 40, 380, 1420, 2100, 1650, 1480, 1720, 2010, 2240, 2060, 2180, 2560, 3420, 4380, 3610, 2280, 1840, 1260, 680, 340];
+columns(document.getElementById("hours"), hv.map((v, i) => ({ label: `${i}`, tipLabel: `${i}:00–${i}:59`, value: v, filter: `拍摄时刻 ${i} 点` })), { h: 120, labelEvery: 3 });
+
+
+// ---------- 3 器材 ----------
+const cams = [
+  { name: "Fujifilm X-T5", n: 18402, color: "var(--s1)", keep: "21%", span: "2023-02 — 今天", top: "33mm" },
+  { name: "Sony A7C II", n: 14880, color: "var(--s2)", keep: "17%", span: "2024-01 — 今天", top: "24-70mm" },
+  { name: "Ricoh GR IIIx", n: 8931, color: "var(--s3)", keep: "24%", span: "2022-06 — 3 天前", top: "26.1mm" },
+  { name: "iPhone 16 Pro", n: 4620, color: "var(--s4)", keep: "9%", span: "2024-09 — 今天", top: "24mm" },
+  { name: "其他（X100V、RX100 VII）", n: 1380, color: "var(--other)", keep: "12%", span: "2014-05 — 2023-01", idle: "34 个月未用" },
+];
+stack(document.getElementById("camStack"), cams.map(c => ({ label: c.name, value: c.n, color: c.color })));
+function spark(seedN, idleFrom) {
+  seed = seedN; let s = '<svg width="150" height="22">';
+  for (let i = 0; i < 24; i++) { const v = i >= idleFrom ? 0 : rnd() * rnd(); const h = Math.max(v ? 2 : 1, v * 20); s += `<rect x="${i * 6.2}" y="${22 - h}" width="4.6" height="${h}" rx="1" fill="${v ? "var(--bar)" : "#33333a"}"/>`; }
+  return s + "</svg>";
+}
+const camT = document.getElementById("camTable");
+camT.innerHTML = `<tr><th>相机</th><th class="num">张数</th><th class="bar-cell">占比</th><th class="num">留用率</th><th>最常用</th><th>使用期间</th><th>近 24 个月</th></tr>` +
+  cams.map((c, i) => `<tr class="click" data-f="相机 = ${c.name}"><td><span class="dot" style="background:${c.color}"></span>${c.name}${c.idle ? `<span class="tag idle">${c.idle}</span>` : ""}</td><td class="num">${fmt(c.n)}</td><td class="bar-cell"><div class="hbar"><div style="width:${c.n / cams[0].n * 100}%"></div></div></td><td class="num">${c.keep}</td><td class="muted">${c.top || "—"}</td><td class="muted">${c.span}</td><td>${spark(30 + i, c.idle ? 0 : (i === 2 ? 24 : 24))}</td></tr>`).join("");
+const lenses = [
+  ["XF 33mm F1.4 R LM WR", 9210, "X-T5", "f/1.4 用了 61%"],
+  ["GR 26.1mm（内置，40mm 等效）", 8931, "GR IIIx", ""],
+  ["FE 24-70mm F2.8 GM II", 7640, "A7C II", "62% 在两端"],
+  ["XF 16-55mm F2.8 R LM WR", 5104, "X-T5", ""],
+  ["iPhone 主摄", 4620, "iPhone", ""],
+  ["FE 85mm F1.8", 3980, "A7C II", "人像 78%"],
+  ["XF 56mm F1.2 R WR", 2880, "X-T5", ""],
+  ["FE 20mm F1.8 G", 1840, "A7C II", ""],
+  ["XF 10-24mm F4 R OIS WR", 1210, "X-T5", "", "14 个月未用"],
+];
+document.getElementById("lensTable").innerHTML = `<tr><th>镜头</th><th>机身</th><th class="num">张数</th><th class="bar-cell">占比</th><th></th></tr>` +
+  lenses.map(([n, c, b, note, idle], i) => `<tr class="click" data-f="镜头 = ${n}"><td>${n}${i === 0 ? '<span class="tag top">最常用</span>' : ""}${idle ? `<span class="tag idle">${idle}</span>` : ""}</td><td class="muted">${b}</td><td class="num">${fmt(c)}</td><td class="bar-cell"><div class="hbar"><div style="width:${c / lenses[0][1] * 100}%"></div></div></td><td class="muted">${note}</td></tr>`).join("");
+hlist(document.getElementById("combos"), [
+  { label: "X-T5 + 33mm", value: 9210 }, { label: "GR IIIx", value: 8931 }, { label: "A7C II + 24-70", value: 7640 },
+  { label: "X-T5 + 16-55", value: 5104 }, { label: "A7C II + 85", value: 3980 }, { label: "X-T5 + 56", value: 2880 },
+]);
+
+// ---------- 题材 ----------
+const genres = [
+  ["街拍", 13420, "24%", "GR 26.1mm", "40mm"], ["人像", 11380, "19%", "FE 85mm F1.8", "85mm"], ["风光", 5620, "31%", "FE 24-70 GM II", "24mm"],
+  ["建筑", 4010, "22%", "XF 16-55", "28mm"], ["夜景", 3480, "14%", "FE 20mm F1.8 G", "20mm"], ["美食", 2860, "11%", "iPhone 主摄", "24mm"],
+  ["动物 / 宠物", 2210, "16%", "XF 56mm F1.2", "85mm"], ["花卉植物", 1740, "13%", "XF 33mm", "50mm"], ["静物", 1210, "18%", "XF 33mm", "50mm"], ["其他", 940, "9%", "—", "—"],
+];
+hlist(document.getElementById("genres"), genres.map(([l, v]) => ({ label: l, value: v, filter: "题材 = " + l })));
+document.getElementById("genreTable").innerHTML = `<tr><th>题材</th><th class="num">留用率</th><th>最常用镜头</th><th class="num">中位焦段</th></tr>` +
+  genres.slice(0, 8).map(([l, , k, lens, f]) => `<tr class="click" data-f="题材 = ${l}"><td>${l}</td><td class="num">${k}</td><td class="muted">${lens}</td><td class="num">${f}</td></tr>`).join("");
+const gxLens = ["XF 33mm", "GR 26.1mm", "FE 24-70", "XF 16-55", "FE 85mm", "XF 56mm", "其他"];
+const gxRows = { "街拍": [31, 52, 6, 3, 1, 1, 6], "人像": [12, 4, 6, 3, 44, 27, 4], "风光": [5, 6, 48, 27, 2, 1, 11], "建筑": [10, 9, 24, 41, 2, 1, 13], "夜景": [22, 14, 18, 6, 4, 6, 30], "美食": [18, 12, 4, 6, 1, 3, 56], "动物 / 宠物": [14, 6, 10, 5, 22, 33, 10], "花卉植物": [38, 12, 8, 14, 10, 12, 6] };
+const gx = document.getElementById("gx");
+gx.style.gridTemplateColumns = `90px repeat(${gxLens.length}, minmax(0,1fr))`;
+gx.innerHTML = `<div></div>` + gxLens.map(l => `<div class="h" style="text-align:center">${l}</div>`).join("");
+const stepOf = v => v < 5 ? "var(--q0)" : v < 15 ? "var(--q1)" : v < 30 ? "var(--q2)" : v < 45 ? "var(--q3)" : "var(--q4)";
+Object.entries(gxRows).forEach(([g, row]) => {
+  gx.insertAdjacentHTML("beforeend", `<div class="h">${g}</div>`);
+  row.forEach((v, i) => {
+    const c = document.createElement("div"); c.className = "c"; c.style.background = stepOf(v); c.textContent = v >= 5 ? v + "%" : "";
+    if (v >= 45) c.style.color = "#0c1020";
+    gx.appendChild(c);
+    bindHover(c, `<b>${g} · ${gxLens[i]}</b> · ${v}%`, "这类题材里用这支镜头的比例 · 点击查看", `题材 = ${g}，镜头 = ${gxLens[i]}`);
+  });
+});
+
+// ---------- 4 习惯 ----------
+columns(document.getElementById("focal"), [["14", 420], ["16", 610], ["20", 1840], ["24", 6920], ["28", 2310], ["35", 4120], ["40", 15140], ["50", 9480], ["58", 520], ["70", 3010], ["85", 7860], ["100", 380], ["135", 260], ["200+", 140]]
+  .map(([l, v]) => ({ label: l, tipLabel: l + "mm（等效）", value: v, filter: `焦段 ≈ ${l}mm` })), { h: 130 });
+columns(document.getElementById("aperture"), [["1.2", 2150], ["1.4", 6420], ["1.8", 4030], ["2", 1210], ["2.8", 14820], ["4", 7920], ["5.6", 5110], ["8", 4280], ["11", 1610], ["16+", 662]]
+  .map(([l, v]) => ({ label: "f/" + l, value: v, filter: `光圈 = f/${l}` })), { h: 130 });
+columns(document.getElementById("shutter"), [["1/4000+", 1820], ["1/2000", 3420], ["1/1000", 6910], ["1/500", 9120], ["1/250", 10840], ["1/125", 7930], ["1/60", 4120], ["1/30", 1960], ["1/15", 880], ["1/4", 610], ["1s+", 593]]
+  .map(([l, v]) => ({ label: l, value: v, filter: `快门 = ${l}`, color: ["1/30", "1/15", "1/4", "1s+"].includes(l) ? "#4a6fb3" : null, tip: ["1/30", "1/15", "1/4", "1s+"].includes(l) ? "拒绝率 22% · 点击查看" : null })), { h: 130 });
+columns(document.getElementById("iso"), [["≤100", 6120], ["200", 9840], ["400", 10220], ["800", 8130], ["1600", 5940], ["3200", 4580], ["6400", 2210], ["12800+", 1173]]
+  .map(([l, v]) => ({ label: l, tipLabel: "ISO " + l, value: v, filter: `ISO = ${l}` })), { h: 130 });
+hlist(document.getElementById("orient"), [{ label: "横构图", value: 30212 }, { label: "竖构图", value: 15840 }, { label: "方形", value: 2161 }]);
+hlist(document.getElementById("types"), [{ label: "RAW + JPEG", value: 21430 }, { label: "仅 RAW", value: 14380 }, { label: "仅 JPEG", value: 7310 }, { label: "HEIC", value: 4620 }, { label: "未配对 RAW", value: 473 }, { label: "视频", value: 1204, tip: "视频不计入照片总数" }]);
+
+// ---------- 5 挑片 ----------
+const steps = [["导入", 48213], ["已过目", 44801], ["留用（P）", 8870], ["精选 ≥4★", 2310], ["有编辑或导出版本", 1402]];
+const fun = document.getElementById("funnel");
+steps.forEach(([l, v], i) => {
+  const st = document.createElement("div"); st.className = "st";
+  const prev = i ? steps[i - 1][1] : v;
+  st.innerHTML = `<div class="lab">${l}</div><div class="bw"><div style="width:${Math.max(0.8, v / steps[0][1] * 100)}%"></div></div><div class="val">${fmt(v)}<span>${i ? pct(v, prev) : ""}</span></div>`;
+  fun.appendChild(st);
+  bindHover(st, `<b>${l}</b> · ${fmt(v)} 张`, i ? `上一步的 ${pct(v, prev)} · 总数的 ${pct(v, TOTAL)}` : "", l);
+});
+columns(document.getElementById("stars"), [["1★", 1420], ["2★", 2210], ["3★", 5264], ["4★", 1810], ["5★", 500]].map(([l, v]) => ({ label: l, value: v, filter: "星级 " + l })), { h: 70, total: 11204 });
+
+// ---------- 6 地点 / 人物 / 色彩 ----------
+const pg = 29912;
+hlist(document.getElementById("cities"), [["东京 · JP", 6210], ["京都 · JP", 4102], ["上海 · CN", 3880], ["香港 · HK", 2410], ["雷克雅未克 · IS", 1920], ["大理 · CN", 1604], ["纽约 · US", 1388], ["伊斯坦布尔 · TR", 1102]].map(([l, v]) => ({ label: l, value: v, tip: "有位置照片的 " + pct(v, pg) + " · 点击在地图中查看", filter: "城市 = " + l })));
+const ppl = [["小林", 2410, "#6b7fa8"], ["阿珍", 1880, "#9a7b6a"], ["妈妈", 1204, "#7a9a7e"], ["Leo", 912, "#8b6fa3"], ["奶茶（猫）", 860, "#a58f5c"], ["未命名 #12", 430, "#5c6670"]];
+const pe = document.getElementById("people");
+ppl.forEach(([n, c, col]) => { const p = document.createElement("div"); p.className = "p"; p.innerHTML = `<div class="av" style="background:radial-gradient(circle at 50% 38%, ${col} 0 26%, transparent 27%), radial-gradient(ellipse at 50% 100%, ${col} 0 45%, #2a2a30 46%)"></div><div class="nm">${n}</div><div class="ct">${fmt(c)}</div>`; pe.appendChild(p); bindHover(p, `<b>${n}</b> · ${fmt(c)} 张`, "点击查看", "人物 = " + n); });
+const pal = { winter: ["#2b3a4a", "#6f8299", "#c9d3dc", "#3f3a36", "#a89a8c"], spring: ["#e8b9c3", "#8aa36c", "#f2efe9", "#5b6e7a", "#c77d8a"], summer: ["#2f6fa3", "#e9d8b4", "#3b8a6e", "#f0a24b", "#1d3446"], autumn: ["#b5542d", "#d9a441", "#5b3b2a", "#8a8f5a", "#e7d3b0"] };
+const strips = document.getElementById("strips");
+seed = 99;
+for (let i = 23; i >= 0; i--) {
+  const d = new Date(2026, 10 - i, 1), m = d.getMonth() + 1;
+  const p = m <= 2 || m === 12 ? pal.winter : m <= 5 ? pal.spring : m <= 8 ? pal.summer : pal.autumn;
+  const col = document.createElement("div"); col.className = "m";
+  const order = [...p].sort(() => rnd() - 0.5);
+  col.innerHTML = order.map((c, k) => `<div style="flex:${5 - k + rnd() * 2};background:${c}"></div>`).join("");
+  strips.appendChild(col);
+  bindHover(col, `<b>${d.getFullYear()}年${m}月</b> 主色`, "点击按这些颜色筛选", `${d.getFullYear()}年${m}月 · 主色`);
+}
+
+// ---------- 7 存储 ----------
+const tb = v => v >= 1000 ? (v / 1000).toFixed(2) + " TB" : v + " GB";
+stack(document.getElementById("fmtStack"), [
+  { label: "RAW", value: 2016, color: "var(--s1)" }, { label: "JPEG", value: 312, color: "var(--s2)" },
+  { label: "HEIC", value: 41, color: "var(--s3)" }, { label: "视频", value: 418, color: "var(--s4)" }, { label: "编辑版本 / 导出", value: 53, color: "var(--other)" },
+], document.getElementById("fmtLegend"), { unit: "", fmtVal: tb });
+columns(document.getElementById("years"), [["2014", 18], ["15", 22], ["16", 31], ["17", 40], ["18", 46], ["19", 61], ["20", 38], ["21", 92], ["22", 188], ["23", 402], ["24", 611], ["25", 702], ["26", 589]]
+  .map(([l, v]) => ({ label: l, tipLabel: (l.length === 2 ? "20" + l : l) + " 年", value: v, filter: "拍摄年份 " + l })), { h: 90, unit: "GB", total: 2840 });
+const cl = [
+  ["已拒绝（X）", "2,140 张", "58 GB"], ["相似组中的多余张", "1,812 张 · 604 组", "96 GB"],
+  ["配对里的 JPEG（可选）", "21,430 张 · 已有 RAW", "214 GB"], ["未配对 RAW", "473 张", "12 GB"], ["磁盘上缺失的文件", "12 张", "—"],
+];
+document.getElementById("clean").innerHTML = cl.map(([a, b, c]) => `<div class="c" data-f="${a}"><div><div>${a}</div><div class="muted" style="font-size:11px">${b}</div></div><b style="margin-left:auto">${c}</b><span class="go" style="margin-left:10px">查看 →</span></div>`).join("");
+document.querySelectorAll(".clean .c").forEach(c => c.addEventListener("click", () => jump(c.dataset.f)));
+
+document.querySelectorAll("tr.click").forEach(tr => tr.addEventListener("click", () => jump(tr.dataset.f)));
+
+// ---------- 工具栏 ----------
+document.querySelectorAll("#range button").forEach(b => b.onclick = () => { document.querySelectorAll("#range button").forEach(x => x.classList.remove("on")); b.classList.add("on"); jump("时间范围 = " + b.textContent + "（原型里数字不变）"); });
+document.getElementById("noteBtn").onclick = e => { document.body.classList.toggle("notes"); e.currentTarget.classList.toggle("on"); };
+</script>
+</body>
+</html>
