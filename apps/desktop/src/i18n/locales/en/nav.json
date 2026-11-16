@@ -145,7 +145,11 @@
     "deletedFromLibrary_other": "Folder deleted, {{count}} photos removed from the library",
     "deletedToTrash_one": "Folder deleted, {{count}} file moved to the Trash",
     "deletedToTrash_other": "Folder deleted, {{count}} files moved to the Trash",
-    "importFolderFailed": "Couldn't make a folder for the import"
+    "importFolderFailed": "Couldn't make a folder for the import",
+    "dropHasSubfoldersOne": "“{{name}}” has subfolders",
+    "dropHasSubfoldersMany": "These folders have subfolders",
+    "dropFlatten": "Put Everything in One Folder",
+    "dropKeepSubfolders": "Keep the Subfolders"
   },
   "sidebar": {
     "reorderHint": "Drag to reorder · Option/Alt + ↑/↓",

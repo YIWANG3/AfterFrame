@@ -43,10 +43,10 @@ function register({ ipcMain, commands, catalog: { state: getCatalogState } }) {
     return await commands.collectionAddItems(collectionId, assetIds);
   });
 
-  ipcMain.handle("workspace:collection-add-paths", async (_event, collectionId, paths) => {
+  ipcMain.handle("workspace:collection-add-paths", async (_event, collectionId, paths, options) => {
     const list = [...new Set((paths || []).map(String).filter(Boolean))];
     if (!collectionId || !list.length) return { matched: 0, added: 0 };
-    return await commands.collectionAddPaths(collectionId, list);
+    return await commands.collectionAddPaths(collectionId, list, { mirror: Boolean(options?.mirror) });
   });
 
   const NO_CONTENTS = { folders: 0, total: 0, shared: 0, photos: [] };

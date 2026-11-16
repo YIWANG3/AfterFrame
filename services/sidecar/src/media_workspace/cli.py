@@ -362,6 +362,7 @@ def build_parser() -> argparse.ArgumentParser:
     col_add_paths = subparsers.add_parser("collection-add-paths", parents=[common])
     col_add_paths.add_argument("--collection-id", required=True)
     col_add_paths.add_argument("--paths", required=True, help="JSON array of files and folders on disk")
+    col_add_paths.add_argument("--mirror", action="store_true", help="file subfolders on disk into folders of the same name inside this one")
 
     # Before deleting folders: the photos only they (and the folders under
     # them) hold, which the delete may take out of the library or off the disk.
@@ -2044,7 +2045,7 @@ def _cmd_collection_add_paths(args, connection, catalog, parser):
     paths = json.loads(args.paths)
     if not isinstance(paths, list):
         parser.error("--paths must be a JSON array")
-    result = add_collection_paths(connection, args.collection_id, [Path(str(path)) for path in paths])
+    result = add_collection_paths(connection, args.collection_id, [Path(str(path)) for path in paths], mirror=args.mirror)
     print(json.dumps({"ok": True, "collection_id": args.collection_id, **result}))
     return 0
 

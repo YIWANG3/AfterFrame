@@ -16,6 +16,7 @@ from media_workspace.db.collections import (
     add_collection_paths,
     collection_contents,
     create_collection,
+    list_collections,
 )
 from media_workspace.models import ImageCandidate, MatchDecision
 
@@ -126,6 +127,95 @@ class FolderLifecycleTests(unittest.TestCase):
         self.assertEqual(collection_contents(self.connection, []), {"folders": 0, "total": 0, "shared": 0, "photos": []})
 
 
+class MirroredFolderTests(unittest.TestCase):
+    """A dropped folder that keeps its subfolders: each one on disk becomes
+    a folder of the same name inside the dropped one."""
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name).resolve()
+        self.connection = connect(self.root / "catalog.sqlite")
+        self.addCleanup(self.connection.close)
+        init_db(self.connection)
+        self.ids = {
+            name: add_photo(self.connection, self.root / name)
+            for name in ("trip/top.jpg", "trip/day1/a.jpg", "trip/day1/b.jpg", "trip/day2/c.jpg", "trip/day2/sunset/d.jpg", "other/e.jpg")
+        }
+        (self.root / "trip" / "notes").mkdir()
+        self.connection.commit()
+
+    def tree(self):
+        """{"trip/day1": [asset ids], ...} for every folder by its path of names."""
+        folders = {row["collection_id"]: row for row in list_collections(self.connection) if row["kind"] == "manual"}
+
+        def path(folder_id):
+            folder = folders[folder_id]
+            parent = folder["parent_collection_id"]
+            return (path(parent) + "/" if parent else "") + folder["name"]
+
+        return {
+            path(folder_id): sorted(row["asset_id"] for row in browse_collection(self.connection, folder_id))
+            for folder_id in folders
+        }
+
+    def ids_of(self, *names):
+        return sorted(self.ids[name] for name in names)
+
+    def test_subfolders_on_disk_become_folders_inside(self):
+        trip = create_collection(self.connection, "trip")
+        result = add_collection_paths(self.connection, trip["collection_id"], [self.root / "trip"], mirror=True)
+        self.assertEqual(result, {"matched": 5, "added": 5, "folders_created": 3})
+        self.assertEqual(self.tree(), {
+            "trip": self.ids_of("trip/top.jpg"),
+            "trip/day1": self.ids_of("trip/day1/a.jpg", "trip/day1/b.jpg"),
+            "trip/day2": self.ids_of("trip/day2/c.jpg"),
+            "trip/day2/sunset": self.ids_of("trip/day2/sunset/d.jpg"),
+        })
+        # The folder still shows the whole shoot, with what is inside it.
+        self.assertEqual(
+            sorted(row["asset_id"] for row in browse_collection(self.connection, trip["collection_id"], include_descendants=True)),
+            self.ids_of("trip/top.jpg", "trip/day1/a.jpg", "trip/day1/b.jpg", "trip/day2/c.jpg", "trip/day2/sunset/d.jpg"),
+        )
+
+    def test_asking_again_finds_the_folders_it_made(self):
+        trip = create_collection(self.connection, "trip")
+        add_collection_paths(self.connection, trip["collection_id"], [self.root / "trip"], mirror=True)
+        late = add_photo(self.connection, self.root / "trip" / "day1" / "late.jpg")
+        fresh = add_photo(self.connection, self.root / "trip" / "day3" / "f.jpg")
+        self.connection.commit()
+        result = add_collection_paths(self.connection, trip["collection_id"], [self.root / "trip"], mirror=True)
+        self.assertEqual(result, {"matched": 7, "added": 2, "folders_created": 1})
+        tree = self.tree()
+        self.assertEqual(len(tree), 5)
+        self.assertIn(late, tree["trip/day1"])
+        self.assertEqual(tree["trip/day3"], [fresh])
+
+    def test_a_folder_already_there_by_that_name_is_used(self):
+        trip = create_collection(self.connection, "trip")
+        day1 = create_collection(self.connection, "day1", parent_id=trip["collection_id"])
+        result = add_collection_paths(self.connection, trip["collection_id"], [self.root / "trip"], mirror=True)
+        self.assertEqual(result["folders_created"], 2)
+        self.assertEqual(
+            sorted(row["asset_id"] for row in browse_collection(self.connection, day1["collection_id"])),
+            self.ids_of("trip/day1/a.jpg", "trip/day1/b.jpg"),
+        )
+
+    def test_subfolders_keep_their_order_on_disk(self):
+        trip = create_collection(self.connection, "trip")
+        add_collection_paths(self.connection, trip["collection_id"], [self.root / "trip"], mirror=True)
+        children = sorted(
+            (row for row in list_collections(self.connection) if row["parent_collection_id"] == trip["collection_id"]),
+            key=lambda row: row["sort_order"],
+        )
+        self.assertEqual([row["name"] for row in children], ["day1", "day2"])
+
+    def test_without_mirror_everything_goes_in_one_folder(self):
+        trip = create_collection(self.connection, "trip")
+        self.assertEqual(add_collection_paths(self.connection, trip["collection_id"], [self.root / "trip"]), {"matched": 5, "added": 5})
+        self.assertEqual(list(self.tree()), ["trip"])
+
+
 class FolderLifecycleCommandsTest(unittest.TestCase):
     def test_the_commands_take_json_lists(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -140,6 +230,8 @@ class FolderLifecycleCommandsTest(unittest.TestCase):
             folder = request("create-collection", "--name", "shoot", "--kind", "manual")
             added = request("collection-add-paths", "--collection-id", folder["collection_id"], "--paths", json.dumps([str(Path(tmp) / "shoot")]))
             self.assertEqual((added["matched"], added["added"]), (0, 0))
+            mirrored = request("collection-add-paths", "--collection-id", folder["collection_id"], "--paths", json.dumps([str(Path(tmp) / "shoot")]), "--mirror")
+            self.assertEqual(mirrored["folders_created"], 0)
             self.assertEqual(request("collection-contents", "--collection-ids", json.dumps([folder["collection_id"]])),
                              {"folders": 1, "total": 0, "shared": 0, "photos": []})
 

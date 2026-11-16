@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { photosOfSidecar, register, importTargets } = require("./watcher");
+const { photosOfSidecar, register, importTargets, hasSubfolder } = require("./watcher");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const fdDir = process.platform === "darwin" ? "/dev/fd" : process.platform === "linux" ? "/proc/self/fd" : null;
@@ -173,4 +173,18 @@ test("many files go to the importer as their outermost folders", () => {
   ];
   assert.deepEqual(importTargets(files), [path.join("/Trips", "Tokyo"), path.join("/Trips", "Tokyo 2")]);
   assert.deepEqual(importTargets(files.slice(0, 3)), files.slice(0, 3));
+});
+
+test("a dropped folder has subfolders when it holds a folder that isn't hidden", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "af-subfolders-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const flat = path.join(root, "flat");
+  fs.mkdirSync(path.join(flat, ".thumbs"), { recursive: true });
+  fs.writeFileSync(path.join(flat, "a.jpg"), "jpg");
+  const nested = path.join(root, "nested");
+  fs.mkdirSync(path.join(nested, "day1"), { recursive: true });
+  assert.equal(hasSubfolder(flat), false);
+  assert.equal(hasSubfolder(nested), true);
+  assert.equal(hasSubfolder(path.join(flat, "a.jpg")), false);
+  assert.equal(hasSubfolder(path.join(root, "missing")), false);
 });

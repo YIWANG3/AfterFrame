@@ -156,6 +156,12 @@ function isDir(p) {
   try { return fs.statSync(p).isDirectory(); } catch { return false; }
 }
 
+function hasSubfolder(p) {
+  try {
+    return fs.readdirSync(p, { withFileTypes: true }).some((entry) => entry.isDirectory() && !entry.name.startsWith("."));
+  } catch { return false; }
+}
+
 function watchedDirs(catalogPath = catalog.path()) {
   return (catalog.read(catalogPath)?.integrations?.watchedDirs || []).filter(Boolean);
 }
@@ -235,8 +241,11 @@ function register({
 
   // For the contextual "add to watched?" toast: which of these paths are dirs.
   ipcMain.handle("app:stat-dirs", (_e, paths) => (paths || []).map(String).filter(isDir));
+  // A folder dropped on the sidebar asks whether to keep its subfolders only
+  // when it has some: which of these folders hold a folder (not a hidden one).
+  ipcMain.handle("app:dirs-with-subfolders", (_e, paths) => (paths || []).map(String).filter(hasSubfolder));
 
   return { start: rebuild, rebuild, stop: close, watchedDirs, addWatchedDir, removeWatchedDir };
 }
 
-module.exports = { photosOfSidecar, register, importTargets };
+module.exports = { photosOfSidecar, register, importTargets, hasSubfolder };

@@ -367,8 +367,12 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
 
     // The photos at these paths (a file, or everything under a folder on
     // disk) go into the folder: a Finder folder dropped on the sidebar.
-    collectionAddPaths(collectionId, paths) {
-      return callJson(["collection-add-paths", "--collection-id", String(collectionId), "--paths", JSON.stringify((paths || []).map(String))]);
+    // `mirror`: the subfolders on disk become folders inside it.
+    collectionAddPaths(collectionId, paths, { mirror = false } = {}) {
+      return callJson([
+        "collection-add-paths", "--collection-id", String(collectionId), "--paths", JSON.stringify((paths || []).map(String)),
+        ...(mirror ? ["--mirror"] : []),
+      ]);
     },
 
     // The photos only these folders (and the folders under them) hold: what

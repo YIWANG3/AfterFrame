@@ -924,19 +924,40 @@ export default function App() {
   // them. Each folder on disk becomes a folder here of the same name, inside
   // the folder it was dropped on or at the top level; one already there by
   // that name is used again, so dropping a shoot twice makes one folder.
-  // Loose files go into the folder they were dropped on.
+  // Loose files go into the folder they were dropped on. A folder with
+  // subfolders asks first: all of it in one folder, or a folder inside it
+  // for each subfolder on disk (`mirror`, made as their photos arrive).
   async function importIntoFolders({ paths, parentId = null }) {
     const dropped = [...new Set((paths || []).filter(Boolean))];
     if (!dropped.length) return;
     const dirs = new Set((await Promise.resolve(api.statDirs?.(dropped)).catch(() => null)) || []);
+    const dropDirs = dropped.filter((path) => dirs.has(path));
+    let mirror = false;
+    const nested = dropDirs.length && api.has?.("dirsWithSubfolders")
+      ? (await Promise.resolve(api.dirsWithSubfolders(dropDirs)).catch(() => null)) || []
+      : [];
+    if (nested.length) {
+      const choice = await choose({
+        title: nested.length === 1 && dropDirs.length === 1
+          ? tNav("folders.dropHasSubfoldersOne", { name: fileName(nested[0]) || nested[0] })
+          : tNav("folders.dropHasSubfoldersMany"),
+        choices: [
+          { id: "flat", label: tNav("folders.dropFlatten") },
+          { id: "mirror", label: tNav("folders.dropKeepSubfolders") },
+        ],
+        cancelLabel: tNav("folders.deleteCancel"),
+      });
+      if (!choice) return;
+      mirror = choice === "mirror";
+    }
     const fileInto = [];
     try {
-      for (const dir of dropped.filter((path) => dirs.has(path))) {
+      for (const dir of dropDirs) {
         const name = fileName(dir) || dir;
         const existing = workspaceRef.current.collections.find((c) => c.kind === "manual"
           && (c.parent_collection_id || null) === (parentId || null) && c.name === name);
         const folder = existing || await workspaceRef.current.createCollection(name, parentId || null);
-        if (folder?.collection_id) fileInto.push({ collectionId: folder.collection_id, paths: [dir] });
+        if (folder?.collection_id) fileInto.push({ collectionId: folder.collection_id, paths: [dir], mirror });
       }
     } catch (error) {
       pushToast({ title: tNav("folders.importFolderFailed"), message: String(error?.message || error), tone: "error", ttl: 6000 });

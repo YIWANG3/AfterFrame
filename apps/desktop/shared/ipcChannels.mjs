@@ -59,6 +59,7 @@ export const CORE_IPC_METHODS = [
   ["addWatchedDir", "app:add-watched-dir", 1],
   ["removeWatchedDir", "app:remove-watched-dir", 1],
   ["statDirs", "app:stat-dirs", 1],
+  ["dirsWithSubfolders", "app:dirs-with-subfolders", 1],
   ["verifyAssets", "workspace:verify-assets", 1],
   ["relinkAsset", "workspace:relink-asset", 1],
   ["setLocale", "app:set-locale", 1],
@@ -101,7 +102,7 @@ export const CORE_IPC_METHODS = [
   ["deleteCollection", "workspace:delete-collection", 1],
   ["collectionAddItems", "workspace:collection-add-items", 2],
   ["collectionRemoveItems", "workspace:collection-remove-items", 2],
-  ["collectionAddPaths", "workspace:collection-add-paths", 2],
+  ["collectionAddPaths", "workspace:collection-add-paths", 3],
   ["collectionContents", "workspace:collection-contents", 1],
   ["browseCollection", "workspace:browse-collection", 2],
   // ── jobs ──
