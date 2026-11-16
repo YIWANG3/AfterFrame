@@ -77,3 +77,14 @@ test("the time range narrows every number", async () => {
   await w().locator('[data-stats-range="all"]').click();
   await expect(w().getByTestId("stats-tile-photos")).toContainText("13");
 });
+
+test("a count opens as many cards as it says, the video included", async () => {
+  await openStats();
+  // The flag and rating filters match videos too, so the count does: the
+  // fixture's unflagged, unrated video is among the "not looked at yet".
+  const shown = Number((await w().getByTestId("stats-unreviewed-count").locator("div").first().innerText()).replace(/\D/g, ""));
+  expect(shown).toBeGreaterThan(0);
+  await w().getByTestId("stats-unreviewed-count").click();
+  await expect(w().getByTestId("stats-view")).toHaveCount(0);
+  await expect(galleryCards(w())).toHaveCount(shown, { timeout: 10_000 });
+});

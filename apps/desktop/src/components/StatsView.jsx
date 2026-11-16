@@ -29,6 +29,9 @@ import {
 } from "./statsPage";
 
 const RANGE_KEY = "stats.range";
+// The catalog changes many times a second during an import or annotation
+// run; the page recounts once it has been quiet this long.
+const REFRESH_QUIET_MS = 1500;
 const readRange = () => { try { const v = localStorage.getItem(RANGE_KEY); return STATS_RANGES.includes(v) ? v : "all"; } catch { return "all"; } };
 
 function Section({ id, title, subtitle, children }) {
@@ -74,18 +77,30 @@ export default function StatsView({ catalogRevision, onOpenGallery }) {
   const { t, i18n } = useTranslation("nav");
   const [range, setRangeState] = useState(readRange);
   const setRange = (value) => { setRangeState(value); try { localStorage.setItem(RANGE_KEY, value); } catch { /* private mode */ } };
-  const [stats, setStats] = useState(null);
-  const [failed, setFailed] = useState(false);
   const base = useMemo(() => rangeFilters(range), [range]);
+  // What was counted, and for which range: another range's numbers are never
+  // shown under this one's button, while loading or after a failed load.
+  const [loaded, setLoaded] = useState({ range: null, stats: null, failed: false });
+  const [revision, setRevision] = useState(catalogRevision);
+
+  useEffect(() => {
+    if (catalogRevision === revision) return undefined;
+    const timer = setTimeout(() => setRevision(catalogRevision), REFRESH_QUIET_MS);
+    return () => clearTimeout(timer);
+  }, [catalogRevision, revision]);
 
   useEffect(() => {
     let live = true;
-    setFailed(false);
+    // A recount of the same range that fails keeps the numbers it had.
+    const fail = () => setLoaded((prev) => (prev.range === range && prev.stats ? prev : { range, stats: null, failed: true }));
     api.catalogStats({ filters: base })
-      .then((result) => { if (!live) return; if (result) setStats(result); else setFailed(true); })
-      .catch(() => { if (live) setFailed(true); });
+      .then((result) => { if (!live) return; if (result) setLoaded({ range, stats: result, failed: false }); else fail(); })
+      .catch(() => { if (live) fail(); });
     return () => { live = false; };
-  }, [base, catalogRevision]);
+  }, [range, base, revision]);
+
+  const stats = loaded.range === range ? loaded.stats : null;
+  const failed = loaded.range === range && loaded.failed;
 
   const open = (kind, entry, status) => {
     const filters = filtersFor(kind, entry, base);
@@ -157,7 +172,9 @@ function StatsBody({ stats, open }) {
     if (months == null || months < IDLE_MONTHS) return null;
     return months >= 24 ? t("stats.gear.idleYears", { count: Math.floor(months / 12) }) : t("stats.gear.idle", { count: months });
   };
-  const photosDetail = (value, whole = photos) => t("stats.share", { share: pct(value, whole) });
+  // Shares are of everything counted: the gallery filters a number opens
+  // match videos as well as photos, and so do the counts.
+  const photosDetail = (value, whole = overview.total) => t("stats.share", { share: pct(value, whole) });
   const bytes = (value) => formatBytes(value) || "0 B";
 
   // ── rhythm ──
@@ -192,7 +209,7 @@ function StatsBody({ stats, open }) {
       const target = filtersFor("format", { format: key });
       return {
         key, label: t(`stats.formats.${key}`), value: formats[key],
-        detail: target ? photosDetail(formats[key], overview.total) : t("stats.share", { share: pct(formats[key], overview.total) }),
+        detail: photosDetail(formats[key]),
         onPick: target ? () => open("format", { format: key }) : undefined,
       };
     });
@@ -421,7 +438,7 @@ function StatsBody({ stats, open }) {
         </div>
       </Section>
 
-      <Section id="places" title={t("stats.places.title")} subtitle={t("stats.places.subtitle", { share: pct(places.located, photos), ai: pct(places.ai, photos) })}>
+      <Section id="places" title={t("stats.places.title")} subtitle={t("stats.places.subtitle", { share: pct(places.located, overview.total), ai: pct(places.ai, overview.total) })}>
         <Card testId="stats-cities">
           {places.top_cities.length ? (
             <BarRows

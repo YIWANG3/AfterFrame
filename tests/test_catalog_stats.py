@@ -130,20 +130,44 @@ class CatalogStatsTests(unittest.TestCase):
         self.assertEqual(counts["60"], 0)
         self.assertEqual(focal["unknown"], 1)
 
-    def test_culling_counts_photos_not_videos(self):
+    def test_culling_counts_what_the_gallery_filters_open(self):
+        # The flag, rating and orientation filters match videos too, so the
+        # counts that open them do as well.
         self.add("a", flag=1, rating=5)
         self.add("b", flag=-1)
         self.add("c", rating=3)
         self.add("d")
         self.add("v", asset_type="video", extension=".mov", flag=1)
+        self.add("w", asset_type="video", extension=".mov")
         stats = catalog_stats(self.connection)
         culling = stats["culling"]
-        self.assertEqual(culling["total"], 4)
-        self.assertEqual((culling["reviewed"], culling["unreviewed"]), (3, 1))
-        self.assertEqual((culling["picks"], culling["rejects"], culling["rated4"]), (1, 1, 1))
+        self.assertEqual(culling["total"], 6)
+        self.assertEqual((culling["reviewed"], culling["unreviewed"]), (4, 2))
+        self.assertEqual((culling["picks"], culling["rejects"], culling["rated4"]), (2, 1, 1))
         self.assertEqual(culling["ratings"], [0, 0, 1, 0, 1])
-        self.assertEqual((stats["overview"]["photos"], stats["overview"]["videos"]), (4, 1))
-        self.assertEqual(stats["formats"]["video"], 1)
+        self.assertEqual(sum(stats["orientation"].values()), 6)
+        self.assertEqual((stats["overview"]["photos"], stats["overview"]["videos"]), (4, 2))
+        self.assertEqual(stats["formats"]["video"], 2)
+        # The notes on photos without a camera leave videos out.
+        self.add("e", make=None, model=None, lens=None)
+        self.add("x", asset_type="video", extension=".mov", make=None, model=None, lens=None)
+        self.assertEqual(catalog_stats(self.connection)["gear"]["without_camera"], 1)
+
+    def test_formats_match_the_format_and_raw_filters(self):
+        raw = self.add_raw("r", size=1000)
+        self.add("a", raw_id=raw)
+        self.add("b", extension=".jfif")  # a JPEG, as the Format filter's JPEG opens it
+        self.add("c", extension=".hif")
+        # A RAW candidate still waiting for confirmation is not "has RAW".
+        candidate = self.add_raw("q", size=500)
+        pending = self.add("d")
+        self.connection.execute(
+            "UPDATE image_lookup_registry SET match_status = 'pending_confirmation', raw_asset_id = ? WHERE image_asset_id = ?",
+            (candidate, pending),
+        )
+        formats = catalog_stats(self.connection)["formats"]
+        self.assertEqual((formats["raw_pair"], formats["jpeg"], formats["heif"], formats["other"]), (1, 2, 1, 0))
+        self.assertEqual(catalog_stats(self.connection)["storage"]["by_kind"]["jpeg"], 30)
 
     def test_storage_counts_a_shared_raw_once(self):
         raw = self.add_raw("r", size=1000)
@@ -157,6 +181,43 @@ class CatalogStatsTests(unittest.TestCase):
         self.assertEqual(storage["by_year"], [{"year": "2026", "bytes": 1035}])
         formats = catalog_stats(self.connection)["formats"]
         self.assertEqual((formats["raw_pair"], formats["jpeg"]), (2, 1))
+
+    def test_a_raw_is_freed_only_when_every_version_goes(self):
+        raw = self.add_raw("r", size=1000)
+        self.add("a", size=10, raw_id=raw, flag=-1)
+        self.add("b", size=20, raw_id=raw)  # kept: the RAW stays
+        self.assertEqual(catalog_stats(self.connection)["storage"]["rejected"], {"count": 1, "bytes": 10})
+        self.connection.execute("UPDATE assets SET app_flag = -1 WHERE asset_id = 'image_b'")
+        self.assertEqual(catalog_stats(self.connection)["storage"]["rejected"], {"count": 2, "bytes": 1030})
+
+    def test_lookalikes_count_a_shared_raw_once_and_only_if_freed(self):
+        raw = self.add_raw("r", size=1000)
+        ids = [self.add(stem, size=size, rating=rating, raw_id=raw) for stem, size, rating in (("a", 10, 4), ("b", 20, 1))]
+        other = self.add_raw("s", size=500)
+        ids += [self.add(stem, size=size, raw_id=other) for stem, size in (("c", 30), ("d", 40))]
+        for asset_id in ids:
+            self.connection.execute("INSERT INTO asset_visual (asset_id, phash, dup_group) VALUES (?, 1, 'g1')", (asset_id,))
+        # a (picked by rating) stays, and with it RAW r; c and d both go, and
+        # RAW s with them, counted once.
+        lookalikes = catalog_stats(self.connection)["storage"]["lookalikes"]
+        self.assertEqual(lookalikes, {"groups": 1, "count": 3, "bytes": 20 + 30 + 40 + 500})
+
+    def test_cities_are_what_the_city_and_country_filters_ask_for(self):
+        def locate(asset_id, key, city, country):
+            self.connection.execute(
+                """INSERT INTO asset_locations (asset_id, latitude, longitude, min_latitude, max_latitude, min_longitude,
+                                               max_longitude, source, city_key, city_en, country_code)
+                   VALUES (?, 0, 0, 0, 0, 0, 0, 'exif', ?, ?, ?)""",
+                (asset_id, key, city, country),
+            )
+        locate(self.add("a"), "us-or-portland", "Portland", "US")
+        locate(self.add("b"), "us-me-portland", "Portland", "US")
+        locate(self.add("c"), "gb-cambridge", "Cambridge", "GB")
+        locate(self.add("d"), "us-cambridge", "Cambridge", "US")
+        places = catalog_stats(self.connection)["places"]
+        rows = {(c["city_en"], c["country"]): c["count"] for c in places["top_cities"]}
+        self.assertEqual(rows, {("Portland", "US"): 2, ("Cambridge", "GB"): 1, ("Cambridge", "US"): 1})
+        self.assertEqual(places["cities"], 3)
 
     def test_lookalike_groups_keep_their_best_photo(self):
         ids = [self.add(stem, size=size, rating=rating) for stem, size, rating in (("a", 10, 4), ("b", 20, 1), ("c", 30, 0))]

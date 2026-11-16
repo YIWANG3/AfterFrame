@@ -100,6 +100,19 @@ describe("filtersFor", () => {
     expect(filtersFor("day", { day: "2026-03-14" }, base)).toEqual({ date_from: "2026-03-14", date_to: "2026-03-14" });
   });
 
+  it("keeps a year or month inside the page's range", () => {
+    const last12 = { date_from: "2025-12-01" };
+    expect(filtersFor("year", { year: "2025" }, last12)).toEqual({ date_from: "2025-12-01", date_to: "2025-12-31" });
+    expect(filtersFor("year", { year: "2026" }, last12)).toEqual({ date_from: "2026-01-01", date_to: "2026-12-31" });
+    expect(filtersFor("month", { month: "2025-12" }, { date_from: "2025-12-15" })).toEqual({ date_from: "2025-12-15", date_to: "2025-12-31" });
+  });
+
+  it("opens a city in its country", () => {
+    expect(filtersFor("city", { city_en: "Portland", country: "US" }, base)).toEqual({ date_from: "2026-01-01", city: "Portland", country: "US" });
+    expect(filtersFor("city", { city_en: "Portland", country: null })).toEqual({ city: "Portland" });
+    expect(filtersFor("city", { city_en: null, city_key: "x" })).toBeNull();
+  });
+
   it("opens nothing for what the filter bar cannot show", () => {
     expect(filtersFor("format", { format: "video" })).toBeNull();
     expect(filtersFor("format", { format: "raw" })).toBeNull();

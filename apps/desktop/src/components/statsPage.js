@@ -112,6 +112,17 @@ export function lastDayOfMonth(month) {
   return isoDay(new Date(y, m, 0));
 }
 
+// A day, month or year inside the page's time range: the stretch both
+// cover, so a bar for a year the range starts in the middle of opens only
+// the part of it that bar counted.
+function within(base, from, to) {
+  return {
+    ...base,
+    date_from: base.date_from && base.date_from > from ? base.date_from : from,
+    date_to: base.date_to && base.date_to < to ? base.date_to : to,
+  };
+}
+
 // The gallery filters one number on the page stands for, added to the
 // page's own (its time range). Only facets the filter bar can show: a
 // filter the bar cannot draw would narrow the grid without saying so.
@@ -128,10 +139,12 @@ export function filtersFor(kind, entry, base = {}) {
     case "flag": return { ...base, flag: entry.flag };
     case "unreviewed": return { ...base, flag: "none", rating_max: 0 };
     case "orientation": return { ...base, orientation: entry.shape };
-    case "city": return { ...base, city: entry.city_en };
-    case "day": return { ...base, date_from: entry.day, date_to: entry.day };
-    case "month": return { ...base, date_from: `${entry.month}-01`, date_to: lastDayOfMonth(entry.month) };
-    case "year": return { ...base, date_from: `${entry.year}-01-01`, date_to: `${entry.year}-12-31` };
+    // The sidecar groups cities by country and English name, what these two
+    // facets can ask for, so same-named cities elsewhere stay out.
+    case "city": return entry.city_en ? { ...base, city: entry.city_en, ...(entry.country ? { country: entry.country } : {}) } : null;
+    case "day": return within(base, entry.day, entry.day);
+    case "month": return within(base, `${entry.month}-01`, lastDayOfMonth(entry.month));
+    case "year": return within(base, `${entry.year}-01-01`, `${entry.year}-12-31`);
     case "format": {
       // RAW-only and video have no facet on the bar (asset_type is not
       // one), so they open nothing.

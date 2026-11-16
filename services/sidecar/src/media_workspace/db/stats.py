@@ -6,8 +6,13 @@ pages through — narrowed by the same facet filters (`filters`, as the
 gallery's FilterBar sends them; the page's time range is date_from /
 date_to). A number on the page opens the gallery with those filters plus the
 one it stands for, so both must count the same rows: camera and lens are the
-photo's own `meta_camera_model` / `meta_lens_model`, which the camera and
-lens facets match.
+asset's own `meta_camera_model` / `meta_lens_model`, which the camera and
+lens facets match; formats use the Format facet's families and the RAW
+facet's pairing; places group by what the country and city facets can ask
+for. The facets match videos as well as photos, so everything that opens the
+gallery counts both. Only what is about photos alone and opens nothing (35 mm
+focal lengths, the notes on photos without a camera or lens) leaves videos
+out.
 
 Nothing here needs a scan: every column already exists. The set is copied
 into a temp table once and each section is a GROUP BY over it.
@@ -19,6 +24,7 @@ import sqlite3
 from collections import defaultdict
 
 from ..camera_names import camera_label, crop_factor
+from ..formats import family_sql
 from .browse import _view_where
 from .facets import _SHOWN_SHAPE
 
@@ -44,8 +50,9 @@ _ISO_LOW, _ISO_HIGH = -1, 7  # ISO 50 … 12800
 # 35 mm equivalent focal lengths, the ones lenses are named after.
 FOCAL_STOPS = (10, 12, 14, 16, 18, 20, 24, 28, 35, 40, 50, 60, 70, 85, 105, 135, 200, 300, 400, 600)
 
-_JPEG = {".jpg", ".jpeg"}
-_HEIF = {".heic", ".heif", ".hif"}
+# A paired RAW, as the RAW facet (facets._HAS_RAW) reads it: a confirmed
+# match, not a candidate still waiting for one.
+_PAIRED = "registry.match_status IN ('auto_bound', 'manual_confirmed')"
 
 
 def _nearest(value: float, stops: tuple[float, ...]) -> int:
@@ -83,7 +90,7 @@ def _histogram(connection: sqlite3.Connection, column: str, binner) -> list[dict
     bins: dict[int, dict] = {}
     for row in _rows(connection, f"""
         SELECT {column} AS v, COUNT(*) AS n, SUM(flag = 1) AS picks, SUM(flag = -1) AS rejects
-        FROM {_SCOPE} WHERE {_PHOTO} AND {column} > 0 GROUP BY {column}
+        FROM {_SCOPE} WHERE {column} > 0 GROUP BY {column}
     """):
         key, label = binner(row["v"])
         entry = bins.setdefault(key, {"label": label, "count": 0, "picks": 0, "rejects": 0, "min": row["v"], "max": row["v"]})
@@ -131,12 +138,12 @@ def _gear(connection: sqlite3.Connection, last_capture: str | None) -> dict:
     cameras = _rows(connection, f"""
         SELECT model, MAX(make) AS make, COUNT(*) AS n, SUM(flag = 1) AS picks, SUM(flag = -1) AS rejects,
                MIN(captured) AS first, MAX(captured) AS last
-        FROM {_SCOPE} WHERE {_PHOTO} AND TRIM(COALESCE(model, '')) != ''
+        FROM {_SCOPE} WHERE TRIM(COALESCE(model, '')) != ''
         GROUP BY model ORDER BY n DESC, model
     """)
     pairs = _rows(connection, f"""
         SELECT model, lens, COUNT(*) AS n FROM {_SCOPE}
-        WHERE {_PHOTO} AND TRIM(COALESCE(model, '')) != '' AND TRIM(COALESCE(lens, '')) != ''
+        WHERE TRIM(COALESCE(model, '')) != '' AND TRIM(COALESCE(lens, '')) != ''
         GROUP BY model, lens ORDER BY n DESC, model, lens
     """)
     labels = {row["model"]: camera_label(row["make"], row["model"]) or row["model"] for row in cameras}
@@ -149,7 +156,7 @@ def _gear(connection: sqlite3.Connection, last_capture: str | None) -> dict:
     if months:
         for row in _rows(connection, f"""
             SELECT model, substr(captured, 1, 7) AS month, COUNT(*) AS n FROM {_SCOPE}
-            WHERE {_PHOTO} AND TRIM(COALESCE(model, '')) != '' AND captured >= ?
+            WHERE TRIM(COALESCE(model, '')) != '' AND captured >= ?
             GROUP BY model, month
         """, (months[0],)):
             monthly[row["model"]][row["month"]] = row["n"]
@@ -165,7 +172,7 @@ def _gear(connection: sqlite3.Connection, last_capture: str | None) -> dict:
     lenses = _rows(connection, f"""
         SELECT lens, COUNT(*) AS n, SUM(flag = 1) AS picks, SUM(flag = -1) AS rejects,
                MIN(captured) AS first, MAX(captured) AS last
-        FROM {_SCOPE} WHERE {_PHOTO} AND TRIM(COALESCE(lens, '')) != ''
+        FROM {_SCOPE} WHERE TRIM(COALESCE(lens, '')) != ''
         GROUP BY lens ORDER BY n DESC, lens
     """)
     lens_camera: dict[str, str] = {}
@@ -223,16 +230,38 @@ def _focal(connection: sqlite3.Connection) -> dict:
     }
 
 
-def _file_kind(asset_type: str, extension: str) -> str:
+def _file_kind(asset_type: str, family: str) -> str:
+    """`family`: the Format facet's (formats.family_sql), so JPEG here is
+    every file the JPEG filter opens (.jpg, .jpeg, .jfif …)."""
     if asset_type == "video":
         return "video"
     if asset_type == "raw":
         return "raw"
-    if extension in _JPEG:
-        return "jpeg"
-    if extension in _HEIF:
-        return "heif"
+    if family in ("jpeg", "heif"):
+        return family
     return "other"
+
+
+def _freed_bytes(connection: sqlite3.Connection, removable: dict[str, tuple[int, str | None]]) -> int:
+    """Bytes deleting `removable` (asset_id → (own size, paired RAW)) would
+    free: each file's own size, plus a RAW only when every photo that uses
+    it is in the set (a RAW behind a kept version stays), and that RAW once."""
+    total = sum(size or 0 for size, _ in removable.values())
+    raws = sorted({raw for _, raw in removable.values() if raw})
+    users: dict[str, set[str]] = defaultdict(set)
+    for start in range(0, len(raws), 500):
+        chunk = raws[start:start + 500]
+        marks = ",".join("?" * len(chunk))
+        for raw_id, image_id in connection.execute(
+            f"SELECT raw_asset_id, image_asset_id FROM image_lookup_registry WHERE raw_asset_id IN ({marks})", chunk,
+        ):
+            users[raw_id].add(image_id)
+    freed = [raw for raw in raws if users[raw] <= removable.keys()]
+    for start in range(0, len(freed), 500):
+        chunk = freed[start:start + 500]
+        marks = ",".join("?" * len(chunk))
+        total += connection.execute(f"SELECT COALESCE(SUM(file_size), 0) FROM assets WHERE asset_id IN ({marks})", chunk).fetchone()[0]
+    return total
 
 
 def _storage(connection: sqlite3.Connection) -> dict:
@@ -242,57 +271,55 @@ def _storage(connection: sqlite3.Connection) -> dict:
     by_year: dict[str, int] = defaultdict(int)
     for row in _rows(connection, f"""
         WITH ids AS (SELECT asset_id FROM {_SCOPE} UNION SELECT raw_id FROM {_SCOPE} WHERE raw_id IS NOT NULL)
-        SELECT a.asset_type, LOWER(a.extension) AS ext, substr(a.meta_capture_time, 1, 4) AS year,
-               SUM(a.file_size) AS bytes
+        SELECT a.asset_type, {family_sql("LOWER(TRIM(a.extension, '.'))")} AS family,
+               substr(a.meta_capture_time, 1, 4) AS year, SUM(a.file_size) AS bytes
         FROM assets AS a JOIN ids ON ids.asset_id = a.asset_id
-        GROUP BY a.asset_type, ext, year
+        GROUP BY a.asset_type, family, year
     """):
-        by_kind[_file_kind(row["asset_type"], row["ext"] or "")] += row["bytes"] or 0
+        by_kind[_file_kind(row["asset_type"], row["family"] or "")] += row["bytes"] or 0
         by_year[row["year"] or ""] += row["bytes"] or 0
 
-    rejected = connection.execute(f"""
-        WITH ids AS (
-            SELECT asset_id FROM {_SCOPE} WHERE flag = -1
-            UNION SELECT raw_id FROM {_SCOPE} WHERE flag = -1 AND raw_id IS NOT NULL)
-        SELECT (SELECT COUNT(*) FROM {_SCOPE} WHERE flag = -1) AS n, SUM(a.file_size) AS bytes
-        FROM assets AS a JOIN ids ON ids.asset_id = a.asset_id
-    """).fetchone()
+    rejected = {
+        row["asset_id"]: (row["size"], row["raw_id"])
+        for row in _rows(connection, f"SELECT asset_id, size, raw_id FROM {_SCOPE} WHERE flag = -1")
+    }
 
     # Look-alike groups (asset_visual.dup_group) with two or more photos in
     # the set: keep the best of each (picked, then highest rated, then the
     # biggest file), the rest could go.
     groups: dict[str, list[sqlite3.Row]] = defaultdict(list)
     for row in _rows(connection, f"""
-        SELECT v.dup_group, s.asset_id, s.flag, s.rating, s.size + COALESCE(raw.file_size, 0) AS bytes
+        SELECT v.dup_group, s.asset_id, s.flag, s.rating, s.size, s.raw_id
         FROM {_SCOPE} AS s
         JOIN asset_visual AS v ON v.asset_id = s.asset_id
-        LEFT JOIN assets AS raw ON raw.asset_id = s.raw_id
         WHERE v.dup_group IS NOT NULL AND s.{_PHOTO}
     """):
         groups[row["dup_group"]].append(row)
-    extra = extra_bytes = group_count = 0
+    extra: dict[str, tuple[int, str | None]] = {}
+    group_count = 0
     for members in groups.values():
         if len(members) < 2:
             continue
         group_count += 1
-        members.sort(key=lambda r: (r["flag"] == 1, r["rating"], r["bytes"] or 0), reverse=True)
-        extra += len(members) - 1
-        extra_bytes += sum(r["bytes"] or 0 for r in members[1:])
+        members.sort(key=lambda r: (r["flag"] == 1, r["rating"], r["size"] or 0), reverse=True)
+        extra.update((r["asset_id"], (r["size"], r["raw_id"])) for r in members[1:])
 
     missing = connection.execute(f"SELECT COUNT(*) FROM {_SCOPE} WHERE on_disk = 0").fetchone()[0]
     return {
         "total_bytes": sum(by_kind.values()),
         "by_kind": dict(by_kind),
         "by_year": [{"year": year, "bytes": by_year[year]} for year in sorted(y for y in by_year if y)],
-        "rejected": {"count": rejected["n"] or 0, "bytes": rejected["bytes"] or 0},
-        "lookalikes": {"groups": group_count, "count": extra, "bytes": extra_bytes},
+        "rejected": {"count": len(rejected), "bytes": _freed_bytes(connection, rejected)},
+        "lookalikes": {"groups": group_count, "count": len(extra), "bytes": _freed_bytes(connection, extra)},
         "missing": missing,
     }
 
 
 def _places(connection: sqlite3.Connection) -> dict:
     """A paired RAW's location wins over its JPEG's, as the country and city
-    facets read it (facets._LOCATION_OWNER)."""
+    facets read it (facets._LOCATION_OWNER). A city is what those facets can
+    ask for — its country and English name — so a row opens exactly its
+    photos; one without an English name groups by its key and opens nothing."""
     located = f"""
         SELECT s.asset_id,
                CASE WHEN rl.location_id IS NOT NULL THEN rl.country_code ELSE il.country_code END AS country,
@@ -305,15 +332,16 @@ def _places(connection: sqlite3.Connection) -> dict:
         LEFT JOIN asset_locations AS il ON il.asset_id = s.asset_id
         WHERE rl.location_id IS NOT NULL OR il.location_id IS NOT NULL
     """
+    city = "COALESCE(country, '') || '|' || COALESCE(city_en, city_key)"
     totals = connection.execute(f"""
         SELECT COUNT(*) AS n, SUM(source = 'ai') AS ai, COUNT(DISTINCT country) AS countries,
-               COUNT(DISTINCT city_key) AS cities
+               COUNT(DISTINCT CASE WHEN city_key IS NOT NULL THEN {city} END) AS cities
         FROM ({located})
     """).fetchone()
     cities = _rows(connection, f"""
-        SELECT city_key, MAX(city_en) AS city_en, MAX(city_zh) AS city_zh, MAX(country) AS country, COUNT(*) AS n
+        SELECT {city} AS city_key, MAX(city_en) AS city_en, MAX(city_zh) AS city_zh, MAX(country) AS country, COUNT(*) AS n
         FROM ({located}) WHERE city_key IS NOT NULL
-        GROUP BY city_key ORDER BY n DESC, city_key LIMIT ?
+        GROUP BY {city} ORDER BY n DESC, {city} LIMIT ?
     """, (CITY_LIMIT,))
     return {
         "located": totals["n"] or 0,
@@ -343,10 +371,10 @@ def _culling(connection: sqlite3.Connection) -> dict:
                    OR EXISTS (
                        SELECT 1 FROM asset_links AS al
                        WHERE al.child_asset_id = s.asset_id AND al.relation_type = 'collage_source')) AS versions
-        FROM {_SCOPE} AS s WHERE {_PHOTO}
+        FROM {_SCOPE} AS s
     """).fetchone()
     ratings = {r["rating"]: r["n"] for r in _rows(connection, f"""
-        SELECT rating, COUNT(*) AS n FROM {_SCOPE} WHERE {_PHOTO} AND rating BETWEEN 1 AND 5 GROUP BY rating
+        SELECT rating, COUNT(*) AS n FROM {_SCOPE} WHERE rating BETWEEN 1 AND 5 GROUP BY rating
     """)}
     total = row["total"] or 0
     reviewed = row["reviewed"] or 0
@@ -366,9 +394,9 @@ def _culling(connection: sqlite3.Connection) -> dict:
 def _formats(connection: sqlite3.Connection) -> dict:
     out = {"raw_pair": 0, "raw": 0, "jpeg": 0, "heif": 0, "other": 0, "video": 0}
     for row in _rows(connection, f"""
-        SELECT kind, ext, raw_id IS NOT NULL AS paired, COUNT(*) AS n FROM {_SCOPE} GROUP BY kind, ext, paired
+        SELECT kind, family, paired, COUNT(*) AS n FROM {_SCOPE} GROUP BY kind, family, paired
     """):
-        kind = "raw_pair" if row["paired"] and row["kind"] != "video" else _file_kind(row["kind"], row["ext"] or "")
+        kind = "raw_pair" if row["paired"] and row["kind"] != "video" else _file_kind(row["kind"], row["family"] or "")
         out[kind] += row["n"]
     return out
 
@@ -378,8 +406,9 @@ def catalog_stats(connection: sqlite3.Connection, filters: dict | None = None) -
     connection.execute(f"DROP TABLE IF EXISTS {_SCOPE}")
     connection.execute(f"""
         CREATE TEMP TABLE stats_scope AS
-        SELECT assets.asset_id, assets.asset_type AS kind, LOWER(assets.extension) AS ext,
-               assets.file_size AS size, registry.raw_asset_id AS raw_id,
+        SELECT assets.asset_id, assets.asset_type AS kind,
+               {family_sql("LOWER(TRIM(assets.extension, '.'))")} AS family,
+               assets.file_size AS size, registry.raw_asset_id AS raw_id, {_PAIRED} AS paired,
                assets.meta_camera_model AS model,
                NULLIF(TRIM(json_extract(assets.metadata_json, '$.camera_make')), '') AS make,
                assets.meta_lens_model AS lens, assets.meta_iso AS iso, assets.meta_aperture AS aperture,
@@ -426,7 +455,7 @@ def catalog_stats(connection: sqlite3.Connection, filters: dict | None = None) -
             },
             "orientation": {
                 row["shape"] or "unknown": row["n"]
-                for row in _rows(connection, f"SELECT shape, COUNT(*) AS n FROM {_SCOPE} WHERE {_PHOTO} GROUP BY shape")
+                for row in _rows(connection, f"SELECT shape, COUNT(*) AS n FROM {_SCOPE} GROUP BY shape")
             },
             "formats": _formats(connection),
             "culling": culling,

@@ -6,7 +6,7 @@
 // Each mark that stands for photos can be clicked (the page opens the
 // gallery filtered to them) and shows its numbers on hover.
 
-import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx, Z } from "../../ui";
 
@@ -23,8 +23,11 @@ export function TipProvider({ children }) {
   const [tip, setTip] = useState(null);
   const show = useCallback((event, title, detail) => setTip({ x: event.clientX, y: event.clientY, title, detail }), []);
   const hide = useCallback(() => setTip(null), []);
+  // Stable, so moving the pointer re-renders the tip and not every chart
+  // that reads this context.
+  const value = useMemo(() => ({ show, hide }), [show, hide]);
   return (
-    <TipContext.Provider value={{ show, hide }}>
+    <TipContext.Provider value={value}>
       {children}
       {tip && createPortal(
         <div
