@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Section } from "./AnnotationsSection";
+import { blurLeftWindow, useRefocusOnWindowReturn } from "../hooks/useWindowSwitch";
 
 export default function DescriptionSection({ assetId, description, source, aiCaption, onSave }) {
   const { t } = useTranslation("annotation");
@@ -16,6 +17,8 @@ export default function DescriptionSection({ assetId, description, source, aiCap
   const savingRef = useRef(false);
   // Escape ends editing without saving, even if the box then reports a blur.
   const cancelledRef = useRef(false);
+
+  useRefocusOnWindowReturn(areaRef, editing);
 
   // Another photo: whatever was being typed belonged to the last one.
   useEffect(() => { setEditing(false); }, [assetId]);
@@ -62,7 +65,11 @@ export default function DescriptionSection({ assetId, description, source, aiCap
               value={draft}
               rows={3}
               onChange={(event) => setDraft(event.target.value)}
-              onBlur={() => void save()}
+              onBlur={(event) => {
+                // Switching to another app keeps the draft open, unsaved.
+                if (blurLeftWindow(event)) return;
+                void save();
+              }}
               onKeyDown={(event) => {
                 // Enter that ends an input method's composition picks characters.
                 if (event.nativeEvent.isComposing) return;

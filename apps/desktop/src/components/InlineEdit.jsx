@@ -1,11 +1,14 @@
 // A name being typed in place (new folder, rename). Enter or blur commits a
-// changed, non-empty value; Escape cancels.
+// changed, non-empty value; Escape cancels. Switching to another app is not a
+// blur here: the field stays open with what was typed.
 import { useEffect, useRef, useState } from "react";
+import { blurLeftWindow, useRefocusOnWindowReturn } from "../hooks/useWindowSwitch";
 
 export default function InlineEdit({ initial, onConfirm, onCancel, placeholder }) {
   const ref = useRef(null);
   const done = useRef(false);
   const [value, setValue] = useState(initial);
+  useRefocusOnWindowReturn(ref);
   useEffect(() => {
     ref.current?.focus();
     ref.current?.select();
@@ -27,7 +30,7 @@ export default function InlineEdit({ initial, onConfirm, onCancel, placeholder }
       value={value}
       placeholder={placeholder}
       onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
+      onBlur={(e) => { if (!blurLeftWindow(e)) commit(); }}
       onKeyDown={(e) => {
         if (e.key === "Enter") { e.preventDefault(); commit(); }
         if (e.key === "Escape") { e.preventDefault(); if (!done.current) { done.current = true; onCancel(); } }
