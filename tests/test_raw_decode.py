@@ -101,6 +101,45 @@ def _jpeg(size: tuple[int, int], colour: tuple[int, int, int]) -> bytes:
     return out.getvalue()
 
 
+def build_unknown_arw(order: str = "<", orientation: int = 6, raw_data: bytes = b"\x5a" * 4096, raw_compression: int = 32766) -> tuple[bytes, bytes]:
+    """A RAW laid out like the ARW of a Sony too new for LibRaw (the A7 V):
+    IFD0 points at a 160×120 JPEG thumbnail (JPEGInterchangeFormat) and a
+    SubIFD holding the raw data; the next IFD holds a 640×480 JPEG preview as
+    its one strip. Returns the file and that preview."""
+    preview = _jpeg((640, 480), (200, 60, 30))
+    blobs = {"make": b"SONY\x00", "model": b"ILCE-7M5\x00", "thumb": _jpeg((160, 120), (200, 200, 200)), "preview": preview, "raw": raw_data}
+    # (tag, kind, value): an int, ("at", blob) for its offset, ("len", blob).
+    ifds: list[list[tuple[int, int, object]]] = [
+        [(0x00FE, 4, 1), (0x0103, 3, 6), (0x010F, 2, "make"), (0x0110, 2, "model"), (0x0112, 3, orientation),
+         (0x014A, 4, ("ifd", 2)), (0x0201, 4, ("at", "thumb")), (0x0202, 4, ("len", "thumb"))],
+        [(0x00FE, 4, 1), (0x0100, 3, 640), (0x0101, 3, 480), (0x0103, 3, 7), (0x0111, 4, ("at", "preview")), (0x0117, 4, ("len", "preview"))],
+        [(0x00FE, 4, 0), (0x0100, 3, 7040), (0x0101, 3, 4688), (0x0103, 3, raw_compression), (0x0111, 4, ("at", "raw")), (0x0117, 4, ("len", "raw"))],
+    ]
+    ifd_at = [8]
+    for entries in ifds[:-1]:
+        ifd_at.append(ifd_at[-1] + 2 + 12 * len(entries) + 4)
+    blob_at, cursor = {}, ifd_at[-1] + 2 + 12 * len(ifds[-1]) + 4
+    for name, blob in blobs.items():
+        blob_at[name] = cursor
+        cursor += len(blob) + len(blob) % 2
+    out = bytearray(b"II*\x00" if order == "<" else b"MM\x00*") + struct.pack(order + "I", 8)
+    for index, entries in enumerate(ifds):
+        out += struct.pack(order + "H", len(entries))
+        for tag, kind, value in entries:
+            if kind == 2:
+                field = struct.pack(order + "HHII", tag, kind, len(blobs[value]), blob_at[value])
+            else:
+                if isinstance(value, tuple):
+                    value = {"at": lambda name: blob_at[name], "len": lambda name: len(blobs[name]), "ifd": lambda i: ifd_at[i]}[value[0]](value[1])
+                inline = struct.pack(order + "H", value).ljust(4, b"\x00") if kind == 3 else struct.pack(order + "I", value)
+                field = struct.pack(order + "HHI", tag, kind, 1) + inline
+            out += field
+        out += struct.pack(order + "I", ifd_at[1] if index == 0 else 0)
+    for blob in blobs.values():
+        out += blob + b"\x00" * (len(blob) % 2)
+    return bytes(out), preview
+
+
 class _FakeRaw:
     """rawpy.imread's result, for previews no fixture here carries."""
 
@@ -158,6 +197,42 @@ class LibRawTest(unittest.TestCase):
         assert found is not None
         self.assertEqual((found.width, found.height, found.orientation), (256, 144, 1))
         self.assertEqual(found.data[:2], b"\xff\xd8")
+
+    def test_a_camera_libraw_does_not_know_yet_gives_its_largest_embedded_jpeg(self) -> None:
+        for order in ("<", ">"):
+            data, preview = build_unknown_arw(order, orientation=8)
+            path = self.root / f"DSC0001{order == '>'}.ARW"
+            path.write_bytes(data)
+            with self.assertRaises(rawpy.LibRawFileUnsupportedError):
+                rawpy.imread(str(path))
+            found = raw_decode.embedded_preview(path)
+            assert found is not None
+            self.assertEqual((found.width, found.height, found.orientation), (640, 480, 8))
+            self.assertEqual(found.data, preview)
+
+    def test_the_raw_data_is_never_taken_for_the_preview(self) -> None:
+        # Lossless-JPEG raw data starts like a JPEG, and is the biggest blob.
+        raw_jpeg = _jpeg((2000, 1500), (0, 0, 0)) + b"\x00" * 200_000
+        path = self.root / "DSC0002.ARW"
+        path.write_bytes(build_unknown_arw(raw_data=raw_jpeg, raw_compression=7)[0])
+        found = raw_decode.embedded_preview(path)
+        assert found is not None
+        self.assertEqual((found.width, found.height), (640, 480))
+
+    def test_a_file_that_is_not_a_tiff_or_is_cut_short_has_no_preview(self) -> None:
+        data = build_unknown_arw()[0]
+        for name, content in (("notes.ARW", b"not a raw file"), ("cut.ARW", data[:60]), ("empty.ARW", b"")):
+            path = self.root / name
+            path.write_bytes(content)
+            self.assertIsNone(raw_decode.embedded_preview(path), name)
+        # An IFD chain that loops back on itself ends.
+        looped = bytearray(data)
+        looped[8 + 2 + 12 * 8 : 8 + 2 + 12 * 8 + 4] = struct.pack("<I", 8)
+        path = self.root / "loop.ARW"
+        path.write_bytes(bytes(looped))
+        found = raw_decode.embedded_preview(path)
+        assert found is not None
+        self.assertEqual((found.width, found.height), (160, 120))  # IFD1 is unreachable now
 
     def test_a_16_bit_rgb_preview_becomes_an_8_bit_image(self) -> None:
         bitmap = np.full((1080, 1440, 3), 50000, dtype=np.uint16)  # Hasselblad FFF

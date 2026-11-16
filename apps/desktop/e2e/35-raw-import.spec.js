@@ -23,7 +23,7 @@ const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, mcpCall, waitForEditor, galleryCards } = require("./helpers/app");
-const { writeSyntheticDng } = require("./helpers/images");
+const { writeSyntheticDng, writeUnknownCameraArw } = require("./helpers/images");
 
 const RAW_FIXTURES = path.resolve(__dirname, "fixtures", "raw");
 // A media:// URL into the catalog's previews / previews-hd folder; on Windows
@@ -421,4 +421,39 @@ test("editing a RAW whose embedded preview is smaller than the RAW saves the RAW
   expect(fs.readdirSync(cache).filter((name) => name.endsWith(".jpg"))).toHaveLength(1);
   await ctx.window.keyboard.press("Escape");
   await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
+});
+
+test("a RAW from a camera too new for any decoder shows the JPEG the camera embedded", async () => {
+  test.setTimeout(150_000);
+  // An A7 V ARW under LibRaw 0.22: LibRaw rejects the file and Image I/O can't
+  // render it, so the gallery waited on a preview that never came.
+  const dir = path.join(work.root, "unknown-camera");
+  fs.mkdirSync(dir);
+  const colour = { r: 40, g: 90, b: 210 };
+  await writeUnknownCameraArw(path.join(dir, "DSC00001.ARW"), { width: 2400, height: 1600, orientation: 6, colour });
+  await importAndWait({ image_dirs: [dir] });
+  const raw = (await browseByName()).get("DSC00001.ARW");
+  expect(raw, "imported").toBeTruthy();
+  expect(raw.asset_type).toBe("raw");
+
+  const detail = await tool("get_asset", { asset_id: raw.asset_id });
+  expect(detail.image_preview_path).toBeTruthy();
+  // The embedded preview, unrotated and tagged with the RAW's orientation.
+  expect(await sharp(detail.image_preview_path).metadata()).toMatchObject({ width: 512, height: 341, orientation: 6 });
+  const { channels } = await sharp(detail.image_preview_path).stats();
+  const drift = channels.slice(0, 3).map((c, i) => Math.abs(c.mean - [colour.r, colour.g, colour.b][i]));
+  expect(Math.max(...drift), `means ${channels.map((c) => Math.round(c.mean))}`).toBeLessThan(12);
+
+  await tool("show_in_app", { asset_ids: [raw.asset_id] });
+  const card = ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${raw.asset_id}"]`);
+  await expect(card.locator("img").first()).toHaveAttribute("src", PREVIEW_SRC, { timeout: 15_000 });
+  await expect(card.locator("[data-preview-pending]")).toHaveCount(0);
+
+  // The lightbox's detail layer is the embedded JPEG at its full size.
+  await card.dblclick();
+  const viewport = ctx.window.locator("[data-lightbox-viewport='true']");
+  await expect(viewport.locator("[data-lightbox-layer='detail']")).toHaveAttribute("src", PREVIEW_HD_SRC, { timeout: 60_000 });
+  const hd = (await tool("get_asset", { asset_id: raw.asset_id })).image_preview_hd_path;
+  expect(await sharp(hd).metadata()).toMatchObject({ width: 2400, height: 1600, orientation: 6 });
+  await ctx.window.keyboard.press("Escape");
 });
