@@ -156,4 +156,56 @@ async function writeSyntheticDng(file, { width = 2048, height = 1152, previewWid
   return file;
 }
 
-module.exports = { TINY_JPEG, makeImportDir, writeUniqueJpeg, tagPhotos, writeSyntheticDng };
+// A RAW laid out like the ARW of a camera too new for LibRaw and Image I/O
+// (the Sony A7 V under LibRaw 0.22): IFD0 points at a 160×120 thumbnail and
+// at a SubIFD of raw data in a compression nothing decodes; the next IFD
+// holds a full-size JPEG preview as its one strip. That preview, in `colour`,
+// is all there is to show.
+async function writeUnknownCameraArw(file, { width = 2400, height = 1600, orientation = 1, colour = { r: 40, g: 90, b: 210 } } = {}) {
+  const thumb = await sharp({ create: { width: 160, height: 120, channels: 3, background: { r: 128, g: 128, b: 128 } } }).jpeg().toBuffer();
+  const preview = await sharp({ create: { width, height, channels: 3, background: colour } }).jpeg({ quality: 90 }).toBuffer();
+  const blobs = { make: Buffer.from("SONY\0"), model: Buffer.from("ILCE-7M5\0"), thumb, preview, raw: Buffer.alloc(8192, 0x5a) };
+  // [tag, type (2 ASCII, 3 SHORT, 4 LONG), value]: a number, or [what, name] filled in below.
+  const ifds = [
+    [[254, 4, 1], [259, 3, 6], [271, 2, "make"], [272, 2, "model"], [274, 3, orientation], [330, 4, ["ifd", 2]], [513, 4, ["at", "thumb"]], [514, 4, ["len", "thumb"]]],
+    [[254, 4, 1], [256, 3, width], [257, 3, height], [259, 3, 7], [273, 4, ["at", "preview"]], [279, 4, ["len", "preview"]]],
+    [[254, 4, 0], [256, 3, 7040], [257, 3, 4688], [259, 3, 32766], [273, 4, ["at", "raw"]], [279, 4, ["len", "raw"]]],
+  ];
+  const ifdAt = [8];
+  for (const entries of ifds.slice(0, -1)) ifdAt.push(ifdAt.at(-1) + 2 + entries.length * 12 + 4);
+  let cursor = ifdAt.at(-1) + 2 + ifds.at(-1).length * 12 + 4;
+  const blobAt = {};
+  for (const [name, blob] of Object.entries(blobs)) {
+    blobAt[name] = cursor;
+    cursor += blob.length + (blob.length % 2);
+  }
+  const out = Buffer.alloc(cursor);
+  out.write("II", 0, "latin1");
+  out.writeUInt16LE(42, 2);
+  out.writeUInt32LE(8, 4);
+  const resolve = ([what, name]) => ({ at: blobAt[name], len: blobs[name]?.length, ifd: ifdAt[name] })[what];
+  ifds.forEach((entries, index) => {
+    const at = ifdAt[index];
+    out.writeUInt16LE(entries.length, at);
+    entries.forEach(([tag, type, value], i) => {
+      const entry = at + 2 + i * 12;
+      out.writeUInt16LE(tag, entry);
+      out.writeUInt16LE(type, entry + 2);
+      if (type === 2) {
+        out.writeUInt32LE(blobs[value].length, entry + 4);
+        out.writeUInt32LE(blobAt[value], entry + 8);
+        return;
+      }
+      out.writeUInt32LE(1, entry + 4);
+      const number = Array.isArray(value) ? resolve(value) : value;
+      if (type === 3) out.writeUInt16LE(number, entry + 8);
+      else out.writeUInt32LE(number, entry + 8);
+    });
+    out.writeUInt32LE(index === 0 ? ifdAt[1] : 0, at + 2 + entries.length * 12);
+  });
+  for (const [name, blob] of Object.entries(blobs)) blob.copy(out, blobAt[name]);
+  fs.writeFileSync(file, out);
+  return file;
+}
+
+module.exports = { TINY_JPEG, makeImportDir, writeUniqueJpeg, tagPhotos, writeSyntheticDng, writeUnknownCameraArw };

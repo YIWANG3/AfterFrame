@@ -11,10 +11,16 @@ that preview, not the raw data (0.03-0.25 s cold on a spinning disk). A decode
 reads and demosaics everything, and LibRaw still ships memory-safety fixes for
 hostile files, so decodes run in a child process (`decode-raw`) with a
 timeout: a crash costs one preview, not the sidecar.
+
+One parser is still hand-written, and only for what LibRaw rejects outright:
+a camera newer than the LibRaw we ship (the Sony A7 V, ILCE-7M5, under LibRaw
+0.22.1). Its RAW is still a TIFF, and the JPEGs it embeds still open, so its
+preview is the largest of those (`_tiff_embedded_preview`).
 """
 
 from __future__ import annotations
 
+import struct
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -81,7 +87,8 @@ def raw_info(path: Path) -> RawInfo | None:
 def embedded_preview(path: Path) -> EmbeddedPreview | None:
     """The largest preview the camera embedded, and the RAW's orientation;
     None when there is none LibRaw can hand over (a stitched DNG without one,
-    a CR3 shot in HEIF mode)."""
+    a CR3 shot in HEIF mode). A TIFF-based RAW LibRaw can't open at all (a
+    camera newer than it) gives the largest JPEG its IFDs point at."""
     try:
         import rawpy
 
@@ -89,7 +96,7 @@ def embedded_preview(path: Path) -> EmbeddedPreview | None:
             info = _info(raw.sizes)
             thumb = raw.extract_thumb()
     except Exception:
-        return None
+        return _tiff_embedded_preview(path)
     if thumb.format == rawpy.ThumbFormat.JPEG:
         data = bytes(thumb.data)
         try:
@@ -107,6 +114,94 @@ def embedded_preview(path: Path) -> EmbeddedPreview | None:
         bitmap.save(out, "PNG", compress_level=1)
         data = out.getvalue()
     return EmbeddedPreview(data, width, height, info.orientation)
+
+
+# The TIFF tags that locate an embedded JPEG.
+_NEW_SUBFILE_TYPE = 0x00FE
+_COMPRESSION = 0x0103
+_STRIP_OFFSETS = 0x0111
+_ORIENTATION = 0x0112
+_STRIP_BYTE_COUNTS = 0x0117
+_SUB_IFDS = 0x014A
+_JPEG_OFFSET = 0x0201  # JPEGInterchangeFormat: Sony's and Nikon's previews
+_JPEG_LENGTH = 0x0202
+_JPEG_COMPRESSIONS = (6, 7)  # old-style and new-style JPEG
+_MAX_IFDS = 32  # a loop or a corrupt chain stops here
+_MAX_JPEG_BYTES = 64 << 20
+
+
+def _read_ifd(file, at: int, order: str) -> tuple[dict[int, list[int]], int]:
+    """The integer tags of the IFD at `at` (SHORT, LONG and IFD values, up to
+    64 of each), and where the next IFD is."""
+    file.seek(at)
+    (count,) = struct.unpack(order + "H", file.read(2))
+    if count > 1000:
+        raise ValueError("not an IFD")
+    entries = file.read(count * 12 + 4)
+    tags: dict[int, list[int]] = {}
+    for index in range(count):
+        entry = entries[index * 12 : index * 12 + 12]
+        tag, kind, n = struct.unpack(order + "HHI", entry[:8])
+        if kind not in (3, 4, 13) or not 0 < n <= 64:
+            continue
+        width = 2 if kind == 3 else 4
+        if width * n <= 4:
+            blob = entry[8 : 8 + width * n]
+        else:
+            (offset,) = struct.unpack(order + "I", entry[8:])
+            file.seek(offset)
+            blob = file.read(width * n)
+        tags[tag] = list(struct.unpack(order + ("H" if kind == 3 else "I") * n, blob))
+    (next_at,) = struct.unpack(order + "I", entries[count * 12 : count * 12 + 4])
+    return tags, next_at
+
+
+def _tiff_embedded_preview(path: Path) -> EmbeddedPreview | None:
+    """The largest JPEG a TIFF-based RAW embeds (ARW, NEF, DNG…), with IFD0's
+    orientation: what macOS shows for a camera its RAW decoder doesn't know
+    yet. Walks IFD0's chain and the SubIFDs; the full-resolution image (new
+    subfile type 0) is the raw data, never a candidate."""
+    try:
+        with path.open("rb") as file:
+            head = file.read(8)
+            if head[:4] not in (b"II*\x00", b"MM\x00*"):
+                return None
+            order = "<" if head[:2] == b"II" else ">"
+            pending = [struct.unpack(order + "I", head[4:])[0]]
+            seen: set[int] = set()
+            orientation = 1
+            candidates: set[tuple[int, int]] = set()  # (length, offset)
+            while pending and len(seen) < _MAX_IFDS:
+                at = pending.pop(0)
+                if not at or at in seen:
+                    continue
+                seen.add(at)
+                tags, next_at = _read_ifd(file, at, order)
+                if len(seen) == 1 and tags.get(_ORIENTATION, [1])[0] in range(1, 9):
+                    orientation = tags.get(_ORIENTATION, [1])[0]
+                pending += [next_at, *tags.get(_SUB_IFDS, [])]
+                if _JPEG_OFFSET in tags and _JPEG_LENGTH in tags:
+                    candidates.add((tags[_JPEG_LENGTH][0], tags[_JPEG_OFFSET][0]))
+                strips, counts = tags.get(_STRIP_OFFSETS, []), tags.get(_STRIP_BYTE_COUNTS, [])
+                is_preview = tags.get(_NEW_SUBFILE_TYPE, [0])[0] & 1
+                if is_preview and tags.get(_COMPRESSION, [0])[0] in _JPEG_COMPRESSIONS and len(strips) == len(counts) == 1:
+                    candidates.add((counts[0], strips[0]))
+            for length, offset in sorted(candidates, reverse=True):
+                if not 0 < length <= _MAX_JPEG_BYTES:
+                    continue
+                file.seek(offset)
+                data = file.read(length)
+                if not data.startswith(b"\xff\xd8"):
+                    continue
+                try:
+                    with Image.open(BytesIO(data)) as image:
+                        width, height = image.size
+                except Exception:
+                    continue
+                return EmbeddedPreview(data, width, height, orientation)
+    except (OSError, ValueError, struct.error):
+        return None
+    return None
 
 
 def decode(path: Path, target: Path, long_edge: int, full: bool = False) -> None:
