@@ -124,6 +124,15 @@ def _top_of_siblings(connection: sqlite3.Connection, parent_id: str | None) -> i
     return int(row[0])
 
 
+def _bottom_of_siblings(connection: sqlite3.Connection, parent_id: str | None) -> int:
+    """The sort_order below every folder at this level."""
+    row = connection.execute(
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM collections WHERE kind = 'manual' AND parent_collection_id IS ?",
+        (parent_id,),
+    ).fetchone()
+    return int(row[0])
+
+
 def move_collection(connection: sqlite3.Connection, collection_id: str, parent_id: str | None) -> dict:
     """Put a folder inside another (or at the top level with parent_id None),
     on top of its new siblings. Refused for smart collections, for a parent
@@ -221,9 +230,12 @@ def create_collection(
     rules_json: str = "[]",
     commit: bool = True,
     parent_id: str | None = None,
+    at_end: bool = False,
 ) -> dict:
     """`parent_id` puts a new folder inside that folder; smart collections
-    never nest and refuse one."""
+    never nest and refuse one. A new folder goes on top of its siblings,
+    or below them with `at_end` (folders made from a tree on disk, which
+    keep its order)."""
     parent_id = parent_id or None
     if kind == "smart":
         rules_json = _checked_rules_json(rules_json)
@@ -235,7 +247,7 @@ def create_collection(
     # A new folder goes on top of its siblings' custom order, where the sidebar
     # opens its name field; smart collections keep going to the end of theirs.
     if kind == "manual":
-        position = _top_of_siblings(connection, parent_id)
+        position = _bottom_of_siblings(connection, parent_id) if at_end else _top_of_siblings(connection, parent_id)
     else:
         position = int(connection.execute("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM collections").fetchone()[0])
     connection.execute(
@@ -351,27 +363,74 @@ def add_collection_paths(
     collection_id: str,
     paths: list[Path],
     commit: bool = True,
+    mirror: bool = False,
 ) -> dict[str, int]:
     """Put the photos at these paths into a folder: a file, or everything
     under a folder on disk, as far as the catalog holds it. A Finder folder
     dropped on the sidebar is imported and filed in one go; the import runs
     as a job, so this is asked again as it lands and adds only what is new
-    (the photos the catalog already had go in on the first call)."""
+    (the photos the catalog already had go in on the first call).
+
+    `mirror` keeps the folders on disk: a photo in a subfolder of a dropped
+    folder goes into a folder of the same name inside this one, made the
+    first time a photo needs it (so a subfolder without photos makes none)
+    and found again by its name after that. Only the photos directly in the
+    dropped folder, and dropped files, go into this folder itself."""
     if not paths:
-        return {"matched": 0, "added": 0}
+        return {"matched": 0, "added": 0, **({"folders_created": 0} if mirror else {})}
     where, params = _under_path_clause("registry.image_path", paths)
-    asset_ids = [row[0] for row in connection.execute(
+    rows = connection.execute(
         f"""
-        SELECT assets.asset_id
+        SELECT assets.asset_id, registry.image_path
         FROM image_lookup_registry AS registry
         JOIN assets ON assets.asset_id = registry.image_asset_id
         WHERE assets.asset_type IN ('image', 'video', 'raw') AND ({where})
         ORDER BY registry.image_path
         """,
         params,
-    ).fetchall()]
-    added = add_collection_items(connection, collection_id, asset_ids, commit=commit)
-    return {"matched": len(asset_ids), "added": added}
+    ).fetchall()
+    if not mirror:
+        added = add_collection_items(connection, collection_id, [row[0] for row in rows], commit=commit)
+        return {"matched": len(rows), "added": added}
+
+    roots = [Path(path).expanduser().resolve() for path in paths]
+    folders: dict[tuple[str, ...], str] = {(): collection_id}
+    created = 0
+
+    def folder_for(parts: tuple[str, ...]) -> str:
+        nonlocal created
+        if parts in folders:
+            return folders[parts]
+        parent_id = folder_for(parts[:-1])
+        found = connection.execute(
+            "SELECT collection_id FROM collections WHERE kind = 'manual' AND parent_collection_id IS ? AND name = ? "
+            "ORDER BY sort_order, created_at LIMIT 1",
+            (parent_id, parts[-1]),
+        ).fetchone()
+        if found is None:
+            found = (create_collection(connection, parts[-1], parent_id=parent_id, at_end=True, commit=False)["collection_id"],)
+            created += 1
+        folders[parts] = found[0]
+        return found[0]
+
+    by_folder: dict[str, list[str]] = {}
+    for asset_id, image_path in rows:
+        parts: tuple[str, ...] = ()
+        image = Path(image_path)
+        # The deepest dropped folder that holds it decides where it goes.
+        for root in sorted(roots, key=lambda value: len(value.parts), reverse=True):
+            try:
+                parts = image.parent.relative_to(root).parts
+            except ValueError:
+                continue
+            break
+        by_folder.setdefault(folder_for(parts), []).append(asset_id)
+    added = 0
+    for folder_id, asset_ids in by_folder.items():
+        added += add_collection_items(connection, folder_id, asset_ids, commit=False)
+    if commit:
+        connection.commit()
+    return {"matched": len(rows), "added": added, "folders_created": created}
 
 
 def collection_contents(connection: sqlite3.Connection, collection_ids: list[str]) -> dict:

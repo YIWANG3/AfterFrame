@@ -8,6 +8,8 @@
 // they leave the library, or their files go to the Trash. A photo another
 // folder holds too is never taken. The Folders page takes the same drags as
 // the sidebar: on its background a top-level folder, on a card a subfolder.
+// A folder with subfolders asks whether to keep them; here the answer is one
+// folder (e2e/89 keeps them).
 
 const fs = require("node:fs");
 const os = require("node:os");
@@ -68,6 +70,11 @@ async function dropFromFinder(paths, target, whileOver) {
   await transfer.dispose();
 }
 
+// The question a folder with subfolders asks: all of it in one folder.
+async function oneFolder() {
+  await w().locator("[data-choice='flat']").click();
+}
+
 test.beforeAll(async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-shoot-")));
   work = {
@@ -101,6 +108,10 @@ test("a folder dragged from Finder onto the folders is imported and becomes a fo
   test.setTimeout(120_000);
   const before = await libraryCount();
   await dropFromFinder([work.wedding], section());
+  await expect(w().getByText("“Wedding” has subfolders")).toBeVisible();
+  await expect(w().locator("[data-choice='flat']")).toHaveText("Put Everything in One Folder");
+  await expect(w().locator("[data-choice='mirror']")).toHaveText("Keep the Subfolders");
+  await oneFolder();
 
   // The folder is there at once, and opens; its photos arrive as the import lands them.
   await expect(row("Wedding")).toBeVisible({ timeout: 15_000 });
@@ -117,6 +128,7 @@ test("dropping the same folder again makes neither a second folder nor a second 
   test.setTimeout(120_000);
   const before = await libraryCount();
   await dropFromFinder([work.wedding], section());
+  await oneFolder();
   // The import runs and finds everything there already.
   await expect(w().getByText("3 already in catalog").first()).toBeVisible({ timeout: 60_000 });
   expect(await rowNames()).toEqual(["0:Wedding"]);
@@ -218,6 +230,7 @@ test("the Folders page takes a folder from Finder too: on the page it is a top-l
   await expect(w().getByTestId("folders-count")).toHaveText("· 0");
 
   await dropFromFinder([work.wedding], page, () => expect(page).toHaveAttribute("data-import-drop", "true"));
+  await oneFolder();
   // One folder made: it opens, as from the sidebar, and fills as the import goes
   // (b.jpg and c.jpg left the library with the folder above, and are back).
   await expect(row("Wedding")).toHaveClass(/bg-selected/, { timeout: 15_000 });

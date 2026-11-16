@@ -45,7 +45,8 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
   };
 
   // Imports that also file what they bring in: a Finder folder dropped on
-  // the sidebar goes into a folder here ([{ collectionId, paths, finishes }]).
+  // the sidebar goes into a folder here ([{ collectionId, paths, mirror, finishes }];
+  // `mirror` makes a folder inside it for each subfolder on disk).
   // The import is a job that this hook only starts, so the photos are filed
   // by their paths as they land: once at the drop (what the catalog already
   // held), with every live refresh, and when the import ends. `finishes`
@@ -60,7 +61,7 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
     let added = 0;
     try {
       for (const filing of [...filingsRef.current]) {
-        const result = await Promise.resolve(api.collectionAddPaths(filing.collectionId, filing.paths)).catch(() => null);
+        const result = await Promise.resolve(api.collectionAddPaths(filing.collectionId, filing.paths, { mirror: Boolean(filing.mirror) })).catch(() => null);
         added += result?.added || 0;
       }
     } finally {
@@ -182,7 +183,7 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
   // `auto` marks background imports (watched dirs live + catch-up). They honor
   // delete-tombstones so a removed-but-on-disk file isn't resurrected; manual
   // imports (default) clear tombstones instead — see startIncrementalImport.
-  // `fileInto`: [{ collectionId, paths }], the folders these go into as well.
+  // `fileInto`: [{ collectionId, paths, mirror }], the folders these go into as well.
   async function addImagesFromPaths(selected, { auto = false, fileInto = [] } = {}) {
     if (!selected || !selected.length) return;
     if (!requireCatalog()) return;
