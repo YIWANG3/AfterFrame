@@ -31,6 +31,14 @@ async function flagOf(id) {
 async function idAt(index) {
   return cards().nth(index).getAttribute("data-asset-id");
 }
+// Click a photo and wait for the Inspector to show it. Until the photo's
+// detail arrives the Inspector still shows the one before, so a check both
+// pass ("no description yet", "no tags") would go on to edit the wrong photo.
+async function show(id) {
+  await card(id).click();
+  const name = (await rows()).find((row) => row.asset_id === id).image_path.split(/[\\/]/).pop();
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText(name);
+}
 // The Settings item's accelerator, from the live application menu.
 function settingsAccelerator() {
   return ctx.app.evaluate(({ Menu }) => {
@@ -172,11 +180,11 @@ test("the Inspector's Tags are there without AI, and one more is added by hand",
   const bare = (await rows()).find((row) => row.asset_type === "image" && !row.annotation && !(row.tags || []).length).asset_id;
   const tags = ctx.window.getByTestId("inspector-tags");
   // The section is there, empty.
-  await card(bare).click();
+  await show(bare);
   await expect(tags).toHaveAttribute("data-count", "0");
   await expect(tags).toContainText("No tags yet");
   // The one tagged in bulk shows those tags, and takes one more by hand.
-  await card(tagged).click();
+  await show(tagged);
   await expect(tags.locator("[data-tag='trip']")).toBeVisible();
   await expect(tags.locator("[data-tag='beach']")).toBeVisible();
   await tags.getByTestId("tag-add").click();
@@ -197,7 +205,7 @@ test("a description is written by hand; the AI's shows until one is, and comes b
   };
   // A photo with nothing: "Add a description…", typed, saved with Enter.
   const bare = (await rows()).find((row) => row.asset_type === "image" && !row.annotation && !row.description).asset_id;
-  await card(bare).click();
+  await show(bare);
   await expect(description).toHaveAttribute("data-source", "none");
   await description.getByTestId("description-add").click();
   await ctx.window.getByTestId("description-input").fill("Grandma's 80th");
@@ -210,7 +218,7 @@ test("a description is written by hand; the AI's shows until one is, and comes b
 
   // The fixture's 004-green has an AI caption: shown, badged AI.
   const green = (await rows()).find((row) => row.stem === "004-green");
-  await card(green.asset_id).click();
+  await show(green.asset_id);
   await expect(description).toHaveAttribute("data-source", "ai");
   const aiText = green.description;
   expect(aiText).toBeTruthy();
