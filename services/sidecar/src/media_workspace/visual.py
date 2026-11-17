@@ -38,6 +38,25 @@ DUPLICATE_MAX_HAMMING = 8
 # …and, when both have a feature print, the pictures must look alike too
 # (one picture's crops and flips: under 0.3; two shots of one scene: 0.8).
 DUPLICATE_MAX_DISTANCE = 0.4
+# The Inspector's Similar strip shows only photos that look close: another
+# frame of the burst, the same spot again, another crop of the picture. A
+# feature print alone can't say so: it measures what a photo shows, so two
+# different skyscrapers shot looking up, days apart, sit as close (0.37 to
+# 0.47) as two frames of one burst (median 0.28). Measured on a 6,700-photo
+# library, the strip takes a photo within SIMILAR_MAX_DISTANCE (past it:
+# the same kind of subject from elsewhere; unrelated photos at 0.85 and up)
+# when one more thing says it is the same scene:
+# - it is that close it can only be the same picture (a crop, an edit);
+SIMILAR_SAME_PICTURE_DISTANCE = 0.3
+SIMILAR_MAX_DISTANCE = 0.5
+# - its hash, the picture's layout, is close too: frames of one burst sit at
+#   a median of 8 bits, photos of a similar subject from another day at 30
+#   (unrelated ones at 32);
+SIMILAR_MAX_HAMMING = 20
+# - or the same camera took it within minutes (a recomposed shot, a portrait
+#   crop: the layout moves, the hash with it). Five minutes keeps a scene
+#   reshot while dropping the next building down the street, mostly.
+SIMILAR_SESSION_SECONDS = 300
 
 
 def _dct_matrix(n: int) -> np.ndarray:

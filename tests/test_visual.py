@@ -2,6 +2,7 @@
 visual job that stores both, and the similar / duplicate lookups."""
 from __future__ import annotations
 
+import math
 import os
 import sqlite3
 import stat
@@ -17,7 +18,14 @@ from PIL import Image, ImageDraw
 
 from media_workspace.catalog import ensure_catalog
 from media_workspace.db import connect, init_db, list_image_assets, summary, upsert_image_asset, upsert_registry
-from media_workspace.db.visual import count_duplicate_assets, find_similar, list_duplicate_groups, similar_assets, visual_status
+from media_workspace.db.visual import (
+    count_duplicate_assets,
+    find_similar,
+    list_duplicate_groups,
+    replace_asset_visual,
+    similar_assets,
+    visual_status,
+)
 from media_workspace.job_runner import run_visual_job
 from media_workspace.models import ImageCandidate, MatchDecision
 from media_workspace.preview_service import PreviewService
@@ -267,6 +275,72 @@ class VisualJobTest(unittest.TestCase):
         self.connection.commit()
         self.assertEqual(visual_status(self.connection, embedding_model="fake-fp-1")["missing"], 3)
         self.assertEqual(visual_status(self.connection)["missing"], 0)
+
+    def test_close_only_keeps_what_looks_like_the_same_scene(self):
+        self.render_previews(analyze_visual=False)
+
+        def at(distance: float, axis: int = 1) -> np.ndarray:
+            # A unit vector `distance` away from (1, 0, …), leaning along
+            # `axis` (so two of them on different axes are far apart).
+            x = 1 - distance * distance / 2
+            vector = np.zeros(4, dtype=np.float32)
+            vector[0], vector[axis] = x, math.sqrt(1 - x * x)
+            return vector
+
+        def look(asset_id: str, phash: int, vector: np.ndarray | None) -> None:
+            replace_asset_visual(self.connection, asset_id, phash=phash, embedding=vector, embedding_model="fake-fp-1")
+            if vector is None:
+                self.connection.execute("UPDATE asset_visual SET embedding = NULL, embedding_model = NULL WHERE asset_id = ?", (asset_id,))
+            self.connection.commit()
+
+        def shot(asset_id: str, camera: str, when: str) -> None:
+            self.connection.execute(
+                "UPDATE assets SET metadata_json = json_set(COALESCE(metadata_json, '{}'), '$.camera_model', ?, '$.capture_time', ?) WHERE asset_id = ?",
+                (camera, when, asset_id),
+            )
+            self.connection.commit()
+
+        def close() -> list[str]:
+            return [entry["asset_id"] for entry in find_similar(self.connection, "image_one", limit=8, close_only=True)]
+
+        far_hash = (1 << 40) - 1  # 40 bits off: as far as unrelated photos
+        # one_again: the same picture by hash, though its print is far off;
+        # two: close by print, another layout, a minute later on the same
+        # camera (a recomposed shot); three: as close by print, another
+        # layout, two days later (the same kind of subject elsewhere).
+        look("image_one", 0, at(0))
+        look("image_one_again", 0b111, at(1.2, axis=3))
+        look("image_two", far_hash, at(0.44))
+        look("image_three", far_hash << 20, at(0.46, axis=2))
+        shot("image_one", "Camera A", "2026-05-01T10:00:00")
+        shot("image_two", "Camera A", "2026-05-01T10:01:30")
+        shot("image_three", "Camera A", "2026-05-03T10:00:00")
+
+        ranked = [entry["asset_id"] for entry in find_similar(self.connection, "image_one", limit=8)]
+        self.assertEqual(ranked, ["image_one_again", "image_two", "image_three"])
+        self.assertEqual(close(), ["image_one_again", "image_two"])
+        self.assertEqual([entry["stem"] for entry in similar_assets(self.connection, self.catalog.root, "image_one", limit=8, close_only=True)], ["one_again", "two"])
+        # Another camera, or ten minutes on: no longer one session.
+        shot("image_two", "Camera B", "2026-05-01T10:01:30")
+        self.assertEqual(close(), ["image_one_again"])
+        shot("image_two", "Camera A", "2026-05-01T10:10:00")
+        self.assertEqual(close(), ["image_one_again"])
+        # A layout close by hash says it is the same scene, any day.
+        look("image_three", (1 << 15) - 1, at(0.46, axis=2))
+        self.assertEqual(close(), ["image_one_again", "image_three"])
+        # …but not past the print's limit.
+        look("image_three", (1 << 15) - 1, at(0.6, axis=2))
+        self.assertEqual(close(), ["image_one_again"])
+        # That close by print, it is the same picture, whatever the hash.
+        look("image_three", far_hash << 20, at(0.25, axis=2))
+        self.assertEqual(close(), ["image_one_again", "image_three"])
+        # Without a print, only a near-duplicate by hash counts, session or not.
+        shot("image_two", "Camera A", "2026-05-01T10:01:30")
+        look("image_two", far_hash, None)
+        look("image_three", far_hash << 20, None)
+        self.assertEqual(close(), ["image_one_again"])
+        # Nothing close: the strip has nothing to show.
+        self.assertEqual(find_similar(self.connection, "image_two", limit=8, close_only=True), [])
 
     def test_a_helper_that_cannot_read_a_file_does_not_stop_the_hashes(self):
         self.render_previews(analyze_visual=False)

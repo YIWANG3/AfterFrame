@@ -638,10 +638,12 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["visual-status"]);
     },
 
-    // The photos most like one, nearest first (the look-alike index).
-    findSimilar({ assetId, limit } = {}) {
+    // The photos most like one, nearest first (the look-alike index);
+    // `closeOnly`: only the ones that look close, possibly none.
+    findSimilar({ assetId, limit, closeOnly } = {}) {
       const argv = ["find-similar", "--asset-id", String(assetId)];
       if (limit) argv.push("--limit", String(limit));
+      if (closeOnly) argv.push("--close-only");
       return callJson(argv);
     },
 
