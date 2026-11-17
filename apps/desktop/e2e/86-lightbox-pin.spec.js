@@ -102,12 +102,24 @@ test("the arrow keys page while the bars are hidden", async () => {
 });
 
 test("unpinned, the details float over the photo and leave it where it was", async () => {
+  // The paging above leaves a photo that may not be loaded and fitted yet (an
+  // unloaded one has no size, so it "fits" trivially); read it once it is.
+  await expect.poll(() => photo().evaluate((image) => image.complete && image.naturalWidth > 0 && !!image.style.width)).toBe(true);
+  await fitsStage();
   const stage = await box(viewport());
   const transform = await photo().evaluate((image) => image.style.transform);
   await w().keyboard.press("i");
   await expect(pane()).toBeVisible();
   expect((await box(viewport())).width).toBe(stage.width);
   expect(await photo().evaluate((image) => image.style.transform)).toBe(transform);
+  // Over the photo, the pane has a dark, blurred ground of its own, so its text
+  // reads on a bright sky too.
+  const ground = await pane().evaluate((el) => {
+    const style = getComputedStyle(el);
+    return { alpha: Number(style.backgroundColor.match(/[\d.]+(?=\))/)?.[0] ?? 1), blur: style.backdropFilter };
+  });
+  expect(ground.alpha).toBeGreaterThan(0.7);
+  expect(ground.blur).toContain("blur");
   await w().keyboard.press("i");
   await expect(pane()).toHaveCount(0);
 });
