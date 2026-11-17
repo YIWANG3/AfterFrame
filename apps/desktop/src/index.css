@@ -805,7 +805,8 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
   [data-layer="lightbox"] { --lightbox-controls-fade-duration: 0ms; }
 }
 .fixed.inset-0[data-layer="lightbox"]::before, .fixed.inset-0[data-layer="lightbox"]::after {
-  content: ""; position: absolute; left: 0; right: var(--lightbox-info, 0px); z-index: 10; pointer-events: none;
+  /* 铺满整宽:详情栏四周有 8px 缝,放大的照片会从缝里露出来,压色要连这道缝一起盖住 */
+  content: ""; position: absolute; left: 0; right: 0; z-index: 10; pointer-events: none;
   /* 渐进模糊,没有清晰边缘:mask 从栏内实到栏外全透,压色也同步渐变;masked backdrop-filter 要独立合成层才会羽化 */
   transform: translateZ(0); will-change: transform;
   backdrop-filter: blur(22px) saturate(1.2); -webkit-backdrop-filter: blur(22px) saturate(1.2);
@@ -822,6 +823,10 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
   background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,.45) 55%, rgba(0,0,0,0));
   -webkit-mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); }
 .fixed.inset-0[data-layer="lightbox"].bg-white::before, .fixed.inset-0[data-layer="lightbox"].bg-white::after { display: none; }
+/* 灯箱详情栏:取消固定时它浮在照片上,--pane(3.5% 白)几乎透明,字压在亮天空上读不清,
+   头部玻璃又只画到详情栏左缘,照片上会露出一道竖向分界。给它自己的深色模糊底;
+   固定时压在黑底上,看起来和网格的检查器一样。 */
+.lightbox-info-pane { background: rgba(14, 14, 16, 0.82); backdrop-filter: blur(28px) saturate(1.2); -webkit-backdrop-filter: blur(28px) saturate(1.2); }
 
 /* ───────── 12 · 灯箱控件:Clear(媒体之上) ───────── */
 .bg-black\/42, .bg-black\/60.p-1 { background: rgba(20,20,23,.35); backdrop-filter: blur(14px) saturate(1.4); }

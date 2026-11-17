@@ -972,7 +972,7 @@ export default function Lightbox({
       {showInfo ? (
         <div
           data-testid="lightbox-info"
-          className="theme-dark absolute bottom-2 right-2 top-2 z-30 overflow-hidden rounded-[18px] bg-[var(--pane)] text-text"
+          className="lightbox-info-pane theme-dark absolute bottom-2 right-2 top-2 z-30 overflow-hidden rounded-[18px] text-text"
           style={{ width: "calc(var(--inspector-width) - 8px)" }}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
