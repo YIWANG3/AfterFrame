@@ -52,6 +52,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Photos, RAW and video in the formats photographers actually shoot — JPEG, HEIF (`.heic` / `.hif`), TIFF, PSD, 38 RAW types, AVCHD and the usual containers; the full list is in Settings → Library → Supported formats, and an import tells you which files it skipped. Anything the viewer can't decode itself is rendered on demand, so it shows at full resolution everywhere
 - Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
 - Bilingual interface (English / 简体中文) — switch live in Settings → General
+- **Interface scale** from 80 % to 125 % for the whole window, in Settings → General or with ⌘= / ⌘- / ⌘0 (Ctrl on Windows)
 - **Keyboard shortcuts you can rebind** in Settings → Shortcuts, the menu's included
 - Tools open on the settings you used last, after a restart too: text style, collage canvas and export, Split, LUT strength, AI styles, and the gallery's view and sort
 - **Backup & transfer** your settings to another Mac — AI provider configs, API keys and app preferences export to one passphrase-encrypted file (Settings → General), since keychain-encrypted keys do not survive a plain copy of the settings file
