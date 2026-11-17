@@ -13,6 +13,7 @@ app settings are the default and do not need a repeated label:
 | --- | --- | --- | --- |
 | Library | Watched directories | Current Catalog | `.afcatalog/settings.json` |
 | Library | Assets, roots, tags, collections, annotations, jobs | Current Catalog | `.afcatalog/catalog.sqlite3` |
+| Library | Merge RAW+JPG with the same name (`raw_pairs`, docs/raw-jpg-pairing-plan.md) | Current Catalog | `app_settings` in `.afcatalog/catalog.sqlite3` |
 | People | Face embeddings, groups, index progress/model version | Current Catalog | `.afcatalog/catalog.sqlite3` |
 | General | Language | Global | app `settings.json` |
 | General | Theme and panel widths | Global | renderer `localStorage` |

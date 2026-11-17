@@ -98,7 +98,8 @@ test("Library tab renders catalog/cache groups + HD preview toggle", async () =>
   await expect(ctx.window.getByText("Watched directories", { exact: true })).toBeVisible();
   await expect(ctx.window.getByText("No watched directories in this Catalog.")).toBeVisible();
   // HD previews are opt-in: the toggle exists and defaults off.
-  const hdToggle = ctx.window.getByRole("switch").first();
+  const hdToggle = ctx.window.getByText("Generate HD previews (2000px)", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class,'justify-between')][1]").getByRole("switch");
   await expect(ctx.window.getByText("Generate HD previews (2000px)")).toBeVisible();
   await expect(hdToggle).toHaveAttribute("aria-checked", "false");
 });

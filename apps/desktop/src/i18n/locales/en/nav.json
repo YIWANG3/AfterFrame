@@ -444,6 +444,8 @@
     "noAssets": "No assets in this view",
     "missing": "Missing",
     "missingTip": "Original file moved or deleted",
+    "rawPair": "RAW",
+    "rawPairTip": "Shown together with its RAW",
     "hasPerson": "Contains a detected face",
     "menu": {
       "edit": "Edit…",

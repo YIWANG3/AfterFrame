@@ -277,6 +277,7 @@ def delete_image_asset_from_catalog(
         "DELETE FROM asset_links WHERE parent_asset_id = ? OR child_asset_id = ?",
         (asset_id, asset_id),
     )
+    connection.execute("DELETE FROM raw_pairs WHERE image_asset_id = ? OR raw_asset_id = ?", (asset_id, asset_id))
     # Defensive: clear any other tables keyed by this asset_id (raw cache should
     # not hold an export asset, but stale rows must not block deletion).
     connection.execute("DELETE FROM raw_metadata_cache WHERE raw_asset_id = ?", (asset_id,))

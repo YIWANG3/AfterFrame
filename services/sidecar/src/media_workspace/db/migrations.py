@@ -510,6 +510,35 @@ def _migrate_to_14(connection: sqlite3.Connection) -> None:
         tag_entities.regroup_by_vocabulary(connection, only_ungrouped=True, commit=False)
 
 
+def _migrate_to_15(connection: sqlite3.Connection) -> None:
+    """Same-shot RAW+JPG pairs (db/raw_pairs.py). The photos already in the
+    library are paired now. A library that has pairs keeps showing them as
+    two photos, as it did: merging is offered, not done (a new library
+    merges from its first import)."""
+    from . import raw_pairs
+
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS raw_pairs (
+            image_asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+            raw_asset_id TEXT NOT NULL UNIQUE REFERENCES assets(asset_id) ON DELETE CASCADE,
+            state TEXT NOT NULL DEFAULT 'paired' CHECK (state IN ('paired', 'split')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    )
+    if not (_table_exists(connection, "assets") and _table_exists(connection, "image_lookup_registry")
+            and _table_exists(connection, "app_settings")):
+        return
+    # Separate first, so pairing does not merge what it finds.
+    connection.execute(
+        "INSERT OR REPLACE INTO app_settings (setting_key, value_json) VALUES (?, ?)",
+        (raw_pairs.SETTING_KEY, '{"mode": "separate", "noticed": false}'),
+    )
+    if not raw_pairs.pair_all(connection):
+        connection.execute("DELETE FROM app_settings WHERE setting_key = ?", (raw_pairs.SETTING_KEY,))
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     3: _migrate_to_3,
     4: _migrate_to_4,
@@ -523,6 +552,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     12: _migrate_to_12,
     13: _migrate_to_13,
     14: _migrate_to_14,
+    15: _migrate_to_15,
 }
 
 

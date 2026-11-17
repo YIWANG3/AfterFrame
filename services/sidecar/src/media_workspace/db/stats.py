@@ -27,6 +27,7 @@ from ..camera_names import camera_label, crop_factor
 from ..formats import family_sql
 from .browse import _view_where
 from .facets import _SHOWN_SHAPE
+from .raw_pairs import MERGED_RAW_ID_SQL
 
 CAMERA_LIMIT = 12
 LENS_LIMIT = 15
@@ -408,7 +409,8 @@ def catalog_stats(connection: sqlite3.Connection, filters: dict | None = None) -
         CREATE TEMP TABLE stats_scope AS
         SELECT assets.asset_id, assets.asset_type AS kind,
                {family_sql("LOWER(TRIM(assets.extension, '.'))")} AS family,
-               assets.file_size AS size, registry.raw_asset_id AS raw_id, {_PAIRED} AS paired,
+               assets.file_size AS size, COALESCE(registry.raw_asset_id, {MERGED_RAW_ID_SQL}) AS raw_id,
+               ({_PAIRED} OR {MERGED_RAW_ID_SQL} IS NOT NULL) AS paired,
                assets.meta_camera_model AS model,
                NULLIF(TRIM(json_extract(assets.metadata_json, '$.camera_make')), '') AS make,
                assets.meta_lens_model AS lens, assets.meta_iso AS iso, assets.meta_aperture AS aperture,

@@ -24,6 +24,7 @@ from .db import (
     upsert_registry,
     upsert_video_asset,
 )
+from .db.raw_pairs import pair_asset
 from .file_types import is_ignored_path
 from .metadata import (
     camera_stem_token,
@@ -387,6 +388,7 @@ def resolve_image_batch(
     already_in_catalog = 0
     skipped_deleted = 0
     deferred_files = 0
+    raw_pairs_made = 0
     changed_paths: list[str] = []
     # Auto imports (watched dirs / catch-up) respect tombstones. A manual import
     # is an explicit "bring this back" — clear any tombstone for the files it
@@ -451,6 +453,8 @@ def resolve_image_batch(
                     persist_root=False,
                     commit=False,
                 )
+            if kind != "video" and pair_asset(connection, decision.image_asset_id):
+                raw_pairs_made += 1
             counts.setdefault(decision.status, 0)
             counts[decision.status] += 1
             if decision.preexisting:
@@ -476,6 +480,7 @@ def resolve_image_batch(
         "newly_added": processed - already_in_catalog - skipped_deleted - deferred_files,
         "skipped_deleted": skipped_deleted,
         "deferred_files": deferred_files,
+        "raw_pairs_made": raw_pairs_made,
         "skipped_unsupported": skip_summary(skipped["unsupported"]),
         "skipped_companion": skip_summary(skipped["companion"]),
         "changed_paths": list(dict.fromkeys(changed_paths)),

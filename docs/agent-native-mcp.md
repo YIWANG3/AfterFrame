@@ -1,5 +1,7 @@
 # AfterFrame Agent Native 设计：内嵌 MCP Server
 
+> 状态：2026-11-17 同拍 RAW+JPG（schema 15，docs/raw-jpg-pairing-plan.md）：合并时搜索只返回 JPG，记录带 `raw_pair_path`、`has_raw: true`；update_assets / delete_assets 等写操作在 sidecar 分发处自动带上合并的 RAW，工具不变。
+
 > 状态：2026-11-09 「含 RAW」从侧栏降级为筛选项：search_assets 与 manage_collections 的 rules 加 `has_raw`（true / false；sidecar facet `has_raw`，db/facets.py），status "matched" 仍可用。
 
 > 状态：2026-11-09 标签分组（schema 14，docs/tags-redesign.md）：新增 manage_tags（建组 / 改名 / 开关 AI 填充 / 删组 / 移组 / 重命名 / 合并 / 删除 / 置顶 / 按词表归组），list_tags 按组返回（groups / ungrouped / 扁平 tags，带 count、pinned、aliases），search_assets 加 tag_group 与 tag_match: by_group，update_assets 加 tag_group；initialize 的领域模型多了 TAG / TAG GROUP 一段 —— 38 tools。

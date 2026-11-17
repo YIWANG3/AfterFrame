@@ -155,5 +155,13 @@
   },
   "compareNeedsTwo": "Select two photos to compare",
   "descriptionFailed": "Could not save the description",
-  "folderMoveFailed": "Could not move the folder"
+  "folderMoveFailed": "Could not move the folder",
+  "rawPairs": {
+    "merged_one": "{{count}} RAW+JPG pair is shown as one photo",
+    "merged_other": "{{count}} RAW+JPG pairs are shown as one photo each",
+    "separate": "Show apart",
+    "found_one": "{{count}} RAW+JPG pair can be shown as one photo",
+    "found_other": "{{count}} RAW+JPG pairs can be shown as one photo each",
+    "merge": "Merge"
+  }
 }

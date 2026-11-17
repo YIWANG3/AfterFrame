@@ -299,6 +299,15 @@ const GalleryCard = memo(function GalleryCard({
             {item.app_flag === 1 ? <Flag className="h-3 w-3 fill-current" /> : <FlagOff className="h-3 w-3" />}
           </div>
         ) : null}
+        {item.pair_raw_asset_id && item.asset_type !== "video" ? (
+          <div
+            className="pointer-events-none absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white"
+            title={t("gallery.rawPairTip")}
+            data-raw-pair-badge
+          >
+            {t("gallery.rawPair")}
+          </div>
+        ) : null}
         {item.asset_type === "video" ? (
           <div className="pointer-events-none absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
             <Play className="h-2.5 w-2.5 fill-current" />

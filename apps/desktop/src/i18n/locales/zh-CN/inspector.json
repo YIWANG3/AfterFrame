@@ -21,6 +21,9 @@
     "people": "人物"
   },
   "rows": {
+    "rawFile": "RAW 文件",
+    "splitRaw": "拆开",
+    "splitRawTip": "以后把 JPG 和 RAW 分开显示成两张",
     "rating": "评分",
     "dimensions": "尺寸",
     "duration": "时长",
@@ -74,6 +77,8 @@
     "pickerEmpty": "没有已命名的人物"
   },
   "toast": {
+    "rawPairSplit": "已分开显示成两张",
+    "rawPairSplitFailed": "没能拆开",
     "relinked": "已重新连接",
     "relinkedMsg": "原文件已重新连接。",
     "relinkFailed": "重新连接失败",

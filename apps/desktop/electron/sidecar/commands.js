@@ -203,6 +203,30 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["verify-assets", "--scope", String(scope)]);
     },
 
+    // ── Same-shot RAW+JPG pairs ──────────────────────────────────────────
+    rawPairsStatus() {
+      return callJson(["raw-pairs-status"]);
+    },
+
+    setRawPairsMode(mode) {
+      return callJson(["set-raw-pairs-mode", "--mode", String(mode)]);
+    },
+
+    noticeRawPairs() {
+      return callJson(["notice-raw-pairs"]);
+    },
+
+    splitRawPair(assetId) {
+      return callJson(["split-raw-pair", "--asset-id", String(assetId)]);
+    },
+
+    // The RAWs merged into these photos, as files ({asset_id, raw_asset_id, raw_path}).
+    rawPairFiles(assetIds) {
+      const ids = [...new Set((assetIds || []).filter(Boolean))];
+      if (!ids.length) return Promise.resolve([]);
+      return callJson(["raw-pair-files", ...ids.flatMap((id) => ["--asset-id", String(id)])]);
+    },
+
     relinkAsset({ assetId, newPath, force = false } = {}) {
       const argv = ["relink-asset", "--asset-id", String(assetId), "--new-path", String(newPath)];
       if (force) argv.push("--force");

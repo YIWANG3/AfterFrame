@@ -117,9 +117,17 @@ test("import takes the stars from the sidecar beside every format, Lightroom's n
   for (const [name, [, form, stars]] of Object.entries(FILES)) {
     expect((await assetNamed(name)).rating, `${name} with ${sidecarName(name, form)}`).toBe(stars);
   }
+  // Shot together, the RAW and the JPEG are one photo (docs/raw-jpg-pairing-plan.md);
+  // the sidecar rated both.
   const pair = await assetsNamed(PAIR.stem);
-  expect(pair.map((asset) => asset.asset_type).sort(), "the RAW and the JPEG").toEqual(["image", "raw"]);
-  for (const asset of pair) expect(asset.rating, `${asset.stem}: one sidecar for the pair`).toBe(PAIR.stars);
+  expect(pair.map((asset) => asset.asset_type), "the RAW and the JPEG, as one photo").toEqual(["image"]);
+  expect(pair[0].raw_pair_path).toMatch(new RegExp(`${PAIR.stem}\\.dng$`));
+  const ratings = await ctx.window.evaluate(async (id) => {
+    const row = (await window.mediaWorkspace.browseImages({ status: "all", limit: 500 })).find((r) => r.asset_id === id);
+    const raw = await window.mediaWorkspace.getAssetDetailById(row.pair_raw_asset_id);
+    return [row.app_rating, raw.app_rating];
+  }, pair[0].asset_id);
+  expect(ratings, "one sidecar for the pair").toEqual([PAIR.stars, PAIR.stars]);
 });
 
 test("a re-rating in the sidecar follows on re-import, unless the photo was rated here, and the Inspector shows it", async () => {

@@ -33,7 +33,9 @@ function compactAsset(row, port) {
     caption_source: row.description_source || undefined,
     // Hand-added and AI tags alike (asset_tags).
     tags: row.tags?.length ? row.tags : row.annotation?.tags?.length ? row.annotation.tags : undefined,
-    has_raw: !!row.raw_asset_id,
+    has_raw: !!(row.raw_asset_id || row.pair_raw_asset_id),
+    // The RAW shot with this JPG, shown as one photo with it (a merged RAW+JPG pair).
+    raw_pair_path: row.pair_raw_path || undefined,
     has_face: row.has_face ? true : undefined,
     // Only surfaced when something is wrong — keeps the common case compact.
     missing_original: row.exists_on_disk === false ? true : undefined,

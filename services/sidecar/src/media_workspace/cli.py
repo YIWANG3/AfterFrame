@@ -41,6 +41,7 @@ from .db import (
     locate_image_asset,
     merge_person_groups,
     move_collection,
+    raw_pairs,
     relink_asset,
     remove_collection_items,
     remove_faces_from_group,
@@ -434,6 +435,16 @@ def build_parser() -> argparse.ArgumentParser:
     delete_image = subparsers.add_parser("delete-image-assets", parents=[common])
     delete_image.add_argument("--asset-id", action="append", required=True)
 
+
+    # Same-shot RAW+JPG pairs (db/raw_pairs.py).
+    subparsers.add_parser("raw-pairs-status", parents=[common])
+    raw_pairs_mode_p = subparsers.add_parser("set-raw-pairs-mode", parents=[common])
+    raw_pairs_mode_p.add_argument("--mode", choices=["merge", "separate"], required=True)
+    subparsers.add_parser("notice-raw-pairs", parents=[common])
+    split_pair_p = subparsers.add_parser("split-raw-pair", parents=[common])
+    split_pair_p.add_argument("--asset-id", required=True)
+    pair_files_p = subparsers.add_parser("raw-pair-files", parents=[common])
+    pair_files_p.add_argument("--asset-id", action="append", required=True)
 
     verify_assets_p = subparsers.add_parser("verify-assets", parents=[common])
     verify_assets_p.add_argument("--scope", choices=["all", "image", "raw"], default="all")
@@ -1132,7 +1143,35 @@ def _cmd_get_annotation(args, connection, catalog, parser):
 def _cmd_add_asset_tag(args, connection, catalog, parser):
     from .db import tags as _tags
     payload = _tags.add_asset_tag(connection, args.asset_id, args.tag, group_id=args.group or None)
+    for raw_id in raw_pairs.merged_raws(connection, [args.asset_id]).values():
+        _tags.add_asset_tag(connection, raw_id, args.tag, group_id=args.group or None)
     print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def _cmd_raw_pairs_status(args, connection, catalog, parser):
+    print(json.dumps(raw_pairs.status(connection)))
+    return 0
+
+
+def _cmd_set_raw_pairs_mode(args, connection, catalog, parser):
+    print(json.dumps(raw_pairs.set_mode(connection, args.mode)))
+    return 0
+
+
+def _cmd_notice_raw_pairs(args, connection, catalog, parser):
+    raw_pairs.mark_noticed(connection)
+    print(json.dumps(raw_pairs.status(connection)))
+    return 0
+
+
+def _cmd_split_raw_pair(args, connection, catalog, parser):
+    print(json.dumps(raw_pairs.split_pair(connection, args.asset_id)))
+    return 0
+
+
+def _cmd_raw_pair_files(args, connection, catalog, parser):
+    print(json.dumps(raw_pairs.companion_files(connection, args.asset_id)))
     return 0
 
 
@@ -1152,6 +1191,8 @@ def _cmd_add_asset_tags(args, connection, catalog, parser):
 def _cmd_remove_asset_tag(args, connection, catalog, parser):
     from .db import tags as _tags
     payload = _tags.remove_asset_tag(connection, args.asset_id, args.tag)
+    for raw_id in raw_pairs.merged_raws(connection, [args.asset_id]).values():
+        _tags.remove_asset_tag(connection, raw_id, args.tag)
     print(json.dumps(payload, ensure_ascii=False))
     return 0
 
@@ -1662,6 +1703,8 @@ def _browse_row_payload(row, catalog) -> dict:
         "raw_asset_id": row["raw_asset_id"],
         "raw_path": row["raw_path"],
         "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
+        "pair_raw_asset_id": row["pair_raw_asset_id"],
+        "pair_raw_path": row["pair_raw_path"],
         "preview_path": preview_path,
         "preview_hd_path": preview_hd_path,
         "resource_set_id": row["resource_set_id"],
@@ -2188,6 +2231,11 @@ COMMAND_HANDLERS = {
     "verify-assets": _cmd_verify_assets,
     "relink-asset": _cmd_relink_asset,
     "delete-image-assets": _cmd_delete_image_assets,
+    "raw-pairs-status": _cmd_raw_pairs_status,
+    "set-raw-pairs-mode": _cmd_set_raw_pairs_mode,
+    "notice-raw-pairs": _cmd_notice_raw_pairs,
+    "split-raw-pair": _cmd_split_raw_pair,
+    "raw-pair-files": _cmd_raw_pair_files,
     "catalog-roots": _cmd_catalog_roots,
     "register-roots": _cmd_register_roots,
     "summary": _cmd_summary,
@@ -2210,9 +2258,20 @@ COMMAND_HANDLERS = {
 }
 
 
+# Writes that a merged RAW+JPG pair takes as one photo: the JPG's id brings
+# its RAW along (db/raw_pairs.py), whoever sends it (the app, MCP).
+PAIR_WRITE_COMMANDS = frozenset({
+    "set-asset-rating", "set-asset-flag", "set-asset-description",
+    "add-asset-tags", "remove-asset-tags",
+    "collection-remove-items", "delete-image-assets",
+})
+
+
 def _dispatch(parser, args, catalog, connection) -> int:
     handler = COMMAND_HANDLERS.get(args.command)
     if handler is None:
         parser.error(f"unsupported command: {args.command}")
         return 2
+    if args.command in PAIR_WRITE_COMMANDS and isinstance(getattr(args, "asset_id", None), list):
+        args.asset_id = raw_pairs.expand_ids(connection, args.asset_id)
     return handler(args, connection, catalog, parser)
