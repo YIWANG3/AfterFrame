@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +19,10 @@ from ..visual import (
     DUPLICATE_MAX_DISTANCE,
     DUPLICATE_MAX_HAMMING,
     HASH_VERSION,
+    SIMILAR_MAX_DISTANCE,
+    SIMILAR_MAX_HAMMING,
+    SIMILAR_SAME_PICTURE_DISTANCE,
+    SIMILAR_SESSION_SECONDS,
     distances_to_all,
     from_signed,
     hamming_to_all,
@@ -184,12 +189,17 @@ class VisualIndex:
             return None
         return self._embeddings[self._embedded_at[index]]
 
-    def similar(self, asset_id: str, limit: int) -> list[dict]:
+    def similar(self, asset_id: str, limit: int, *, close_only: bool = False) -> list[dict]:
         """The photos most like `asset_id`, nearest first. Its near-duplicates
         by hash come first (a hash is what every photo has, with or without a
         print — a library holds both when a machine without the engine adds
         to one that had it); then, by feature print, the photos that have one;
-        then the rest by hash. Each: {asset_id, distance, hamming}."""
+        then the rest by hash. Each: {asset_id, distance, hamming}.
+
+        `close_only` keeps only the near-duplicates and the photos within
+        SIMILAR_MAX_DISTANCE by feature print: the candidates find_similar
+        narrows down for the Inspector's strip. A hash alone can't tell a
+        similar photo from an unrelated one beyond a near-duplicate."""
         index = self.position(asset_id)
         if index is None:
             return []
@@ -203,6 +213,9 @@ class VisualIndex:
         tier = np.where(hamming <= DUPLICATE_MAX_HAMMING, 0, np.where(np.isfinite(distances), 1, 2))
         within = np.where(tier == 1, distances, hamming.astype(np.float32))
         order = np.lexsort((within, tier))
+        if close_only:
+            close = (tier == 0) | (distances <= SIMILAR_MAX_DISTANCE)
+            order = order[close[order]]
         results = []
         for row in order:
             row = int(row)
@@ -232,11 +245,58 @@ class VisualIndex:
         return [int(row) for row in close[keep]]
 
 
-def find_similar(connection: sqlite3.Connection, asset_id: str, *, limit: int = 24) -> list[dict]:
+def find_similar(connection: sqlite3.Connection, asset_id: str, *, limit: int = 24, close_only: bool = False) -> list[dict]:
+    """The photos most like `asset_id`, nearest first (VisualIndex.similar).
+    `close_only`: only those that look like the same scene (see
+    visual.SIMILAR_MAX_DISTANCE), so fewer than `limit`, or none."""
     row = connection.execute("SELECT asset_type FROM assets WHERE asset_id = ?", (asset_id,)).fetchone()
     if row is None or row["asset_type"] not in VISUAL_ASSET_TYPES:
         return []
-    return VisualIndex(connection, row["asset_type"]).similar(asset_id, limit)
+    index = VisualIndex(connection, row["asset_type"])
+    if not close_only:
+        return index.similar(asset_id, limit)
+    candidates = index.similar(asset_id, SIMILAR_VIEW_MAX, close_only=True)
+    together = _taken_together(connection, asset_id, [entry["asset_id"] for entry in candidates])
+    close = [
+        entry for entry in candidates
+        if entry["hamming"] <= SIMILAR_MAX_HAMMING
+        or (entry["distance"] is not None and entry["distance"] <= SIMILAR_SAME_PICTURE_DISTANCE)
+        or entry["asset_id"] in together
+    ]
+    return close[:limit]
+
+
+def _capture_moment(text: str | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(text).replace(tzinfo=None) if text else None
+    except ValueError:
+        return None
+
+
+def _taken_together(connection: sqlite3.Connection, asset_id: str, others: list[str]) -> set[str]:
+    """Of `others`, the photos the camera that took `asset_id` took within
+    SIMILAR_SESSION_SECONDS of it."""
+    if not others:
+        return set()
+    ids = [asset_id, *others]
+    rows = connection.execute(
+        f"""
+        SELECT asset_id, json_extract(metadata_json, '$.capture_time') AS capture_time,
+            json_extract(metadata_json, '$.camera_model') AS camera
+        FROM assets WHERE asset_id IN ({",".join("?" * len(ids))})
+        """,
+        ids,
+    ).fetchall()
+    shot = {row["asset_id"]: (row["camera"], _capture_moment(row["capture_time"])) for row in rows}
+    camera, moment = shot.get(asset_id, (None, None))
+    if not camera or moment is None:
+        return set()
+    together = set()
+    for other in others:
+        other_camera, other_moment = shot.get(other, (None, None))
+        if other_camera == camera and other_moment is not None and abs((other_moment - moment).total_seconds()) <= SIMILAR_SESSION_SECONDS:
+            together.add(other)
+    return together
 
 
 class VisualAnalyzer:
@@ -310,10 +370,12 @@ class VisualAnalyzer:
         self.helper_path = None
 
 
-def similar_assets(connection: sqlite3.Connection, catalog_root: Path, asset_id: str, *, limit: int = 24) -> list[dict]:
+def similar_assets(
+    connection: sqlite3.Connection, catalog_root: Path, asset_id: str, *, limit: int = 24, close_only: bool = False
+) -> list[dict]:
     """find_similar with what a strip of thumbnails needs: stem, path and
     preview of each photo."""
-    ranked = find_similar(connection, asset_id, limit=limit)
+    ranked = find_similar(connection, asset_id, limit=limit, close_only=close_only)
     if not ranked:
         return []
     placeholders = ",".join("?" * len(ranked))

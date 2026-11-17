@@ -133,9 +133,11 @@ function PaletteStrip({ colors, onPick }) {
   );
 }
 
-// The photos that look most like the shown one (the look-alike index): a
-// strip of up to eight, nearest first. Nothing while the index has not seen
-// the photo yet (it fills in after the visual job runs).
+// The photos that look like the shown one (the look-alike index): a strip
+// of up to eight, nearest first, only those that look close (another frame
+// of the burst, the same spot again), so often fewer and sometimes none.
+// Nothing while the index has not seen the photo yet (it fills in after the
+// visual job runs).
 function SimilarStrip({ assetId, onSelect }) {
   const { t } = useTranslation("inspector");
   const [items, setItems] = useState([]);
@@ -143,7 +145,7 @@ function SimilarStrip({ assetId, onSelect }) {
     let live = true;
     setItems([]);
     if (!assetId || !api.has("findSimilar")) return undefined;
-    api.findSimilar({ assetId, limit: 8 })
+    api.findSimilar({ assetId, limit: 8, closeOnly: true })
       .then((result) => { if (live) setItems(result?.similar || []); })
       .catch(() => { if (live) setItems([]); });
     return () => { live = false; };

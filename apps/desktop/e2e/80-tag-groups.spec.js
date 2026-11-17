@@ -171,6 +171,50 @@ test("the picker lists the library's tags by group; a click puts one on the phot
   expect(await tagsOf(id)).toEqual([]);
 });
 
+test("a tag put on from the picker at the bottom of the Inspector keeps the picker in view", async () => {
+  // A photo's first tag of a group adds a row above the input. With the
+  // input on the Inspector's bottom edge that pushed it out of view, and the
+  // picker above it hid while in use (it hides when the input is scrolled
+  // away). A short window puts Add below the fold, then on the edge.
+  const id = photos[1];
+  const windowSize = (size) => ctx.app.evaluate(({ BrowserWindow }, [width, height]) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    const before = win.getSize();
+    win.setMinimumSize(800, 500);
+    win.setSize(width, height);
+    return before;
+  }, size);
+  const before = await windowSize([1024, 600]);
+  try {
+    await show(id);
+    const tags = ctx.window.getByTestId("inspector-tags");
+    const add = tags.getByTestId("tag-add");
+    const input = tags.getByTestId("tag-add-input");
+    const picker = ctx.window.getByTestId("tag-picker");
+    const suggestion = (tag) => picker.locator(`[data-tag-suggestion='${tag}']`);
+    await expect(tags).toHaveAttribute("data-count", "0");
+    await expect.poll(() => add.evaluate((button) => {
+      const scroller = button.closest(".overflow-y-auto");
+      scroller.scrollTop += button.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom;
+      return Math.abs(scroller.getBoundingClientRect().bottom - button.getBoundingClientRect().bottom);
+    })).toBeLessThan(1);
+
+    await add.click();
+    await suggestion("city").click();
+    await expect(tags.locator("[data-tag-group='place'] [data-tag='city']")).toBeAttached();
+    await expect(picker).toBeVisible();
+    await expect(input).toBeInViewport();
+    await expect(suggestion("city")).toHaveAttribute("aria-pressed", "true");
+    // And the next click still reaches it: the tag comes off again.
+    await suggestion("city").click();
+    await expect(tags).toHaveAttribute("data-count", "0");
+    await ctx.window.keyboard.press("Escape");
+    expect(await tagsOf(id)).toEqual([]);
+  } finally {
+    await windowSize(before);
+  }
+});
+
 test("the Tags facet lists tags by group, matches by group and by 'any tag of the group'", async () => {
   // A: sunny + street, B: cloudy + street, C: sunny, D: street + trip (ungrouped).
   await bridge(async (ids) => {

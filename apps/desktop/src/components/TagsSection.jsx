@@ -124,9 +124,19 @@ function TagAdder({ onAdd, onRemove, existing, empty, groups, index, labelOf, gr
       panel.style.maxHeight = `${Math.max(0, Math.min(320, room))}px`;
     }
 
+    // A tag put on from the picker can add a row above the input (its
+    // group's first tag) and push it past the bottom: scroll it back into
+    // view, or the picker would hide while in use. Scrolling the Inspector
+    // away yourself still hides it (place on scroll).
+    function follow() {
+      const below = anchor.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom;
+      if (below > 0) scroller.scrollTop += below;
+      place();
+    }
+
     inputRef.current.focus({ preventScroll: true });
     place();
-    const observer = new ResizeObserver(place);
+    const observer = new ResizeObserver(follow);
     observer.observe(anchor.parentElement);
     observer.observe(scroller);
     scroller.addEventListener("scroll", place, { passive: true });

@@ -14,6 +14,7 @@ const { devPython } = require("../electron/sidecar/transport");
 
 const ORIGINAL = "image_1f9dab80c352819829ab31a8";
 const COPY = "image_lookalike_copy";
+const LONER = "image_771e6f50a43a51f6ae68ba70";
 
 test.describe.configure({ mode: "serial" });
 
@@ -60,10 +61,31 @@ test.describe("Look-alikes", () => {
     await expect(card(ORIGINAL)).toHaveAttribute("data-selected", "true");
     await expect(window.getByTestId("inspector-similar")).toBeVisible();
     await expect(window.locator("[data-testid='similar-asset']").first()).toHaveAttribute("data-similar-asset-id", COPY);
+    // Only photos that look close: the copy, none of the merely ranked rest.
+    await expect(window.locator("[data-testid='similar-asset']")).toHaveCount(1);
     // Show in All Assets is offered: this is a narrower view.
     await card(COPY).click({ button: "right" });
     await expect(window.getByRole("button", { name: "Show in All Assets", exact: true })).toBeVisible();
     await window.keyboard.press("Escape");
+  });
+
+  test("the Inspector has no Similar strip for a photo nothing looks close to", async () => {
+    // The nearest to this one is another city altogether (0.8 by print, far by hash).
+    await window.getByRole("button", { name: /^All Assets/ }).click();
+    await expect(title()).toHaveText("All Assets");
+    await card(ORIGINAL).click();
+    await expect(window.locator("[data-testid='similar-asset']")).toHaveCount(1);
+    await card(LONER).click();
+    // Wait for the Inspector to show it: until then it still shows the original.
+    const { image_path: lonerPath } = await callToolOk(mcpPort, "get_asset", { asset_id: LONER });
+    await expect(window.getByTestId("inspector-asset-title")).toHaveText(path.basename(lonerPath));
+    // What the strip asks for comes back empty, and the strip stays away.
+    const strip = await window.evaluate((id) => window.mediaWorkspace.findSimilar({ assetId: id, limit: 8, closeOnly: true }), LONER);
+    expect(strip.similar).toEqual([]);
+    await expect(window.getByTestId("inspector-similar")).toHaveCount(0);
+    // The ranked list (MCP, Find Similar) still has neighbours for it.
+    const ranked = await callToolOk(mcpPort, "find_similar", { asset_id: LONER, limit: 3 });
+    expect(ranked.similar.length).toBeGreaterThan(0);
   });
 
   test("MCP: find_similar, list_lookalikes and search_assets similar_to see the same group", async () => {

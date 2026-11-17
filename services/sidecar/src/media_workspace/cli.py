@@ -578,6 +578,7 @@ def build_parser() -> argparse.ArgumentParser:
     find_similar_parser = subparsers.add_parser("find-similar", parents=[common])
     find_similar_parser.add_argument("--asset-id", required=True)
     find_similar_parser.add_argument("--limit", type=int, default=24)
+    find_similar_parser.add_argument("--close-only", action="store_true", help="only near-duplicates and photos that look close (the Inspector's strip)")
 
     list_lookalikes_parser = subparsers.add_parser("list-lookalikes", parents=[common])
     list_lookalikes_parser.add_argument("--limit", type=int, default=100)
@@ -1509,7 +1510,7 @@ def _cmd_visual_status(args, connection, catalog, parser):
 def _cmd_find_similar(args, connection, catalog, parser):
     from .db.visual import similar_assets
 
-    print(json.dumps({"asset_id": args.asset_id, "similar": similar_assets(connection, catalog.root, args.asset_id, limit=max(1, min(200, args.limit)))}))
+    print(json.dumps({"asset_id": args.asset_id, "similar": similar_assets(connection, catalog.root, args.asset_id, limit=max(1, min(200, args.limit)), close_only=args.close_only)}))
     return 0
 
 
