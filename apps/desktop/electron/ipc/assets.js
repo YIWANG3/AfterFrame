@@ -54,6 +54,31 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, media: { ad
     return outcome;
   });
 
+  // The Missing view's batch relink: the given assets, looked for under a
+  // folder the user picks (or `folder`, when the caller has one). Returns the
+  // sidecar's counts, or {status:"cancelled"}.
+  ipcMain.handle("workspace:relink-from-folder", withCatalog(getCatalogState, null, async (_event, options) => {
+    const opts = options || {};
+    const assetIds = [...new Set((opts.assetIds || []).filter(Boolean).map(String))];
+    if (!assetIds.length) return null;
+    let folder = opts.folder;
+    if (!folder) {
+      const translate = tr();
+      const result = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow(), {
+        title: translate("dialog.relinkFolderTitle"),
+        properties: ["openDirectory"],
+        message: translate("dialog.relinkFolderMessage"),
+      });
+      if (result.canceled || !result.filePaths?.length) return { status: "cancelled" };
+      folder = result.filePaths[0];
+    }
+    const outcome = await commands.relinkFromFolder({ folder, assetIds });
+    for (const dir of new Set((outcome?.items || []).filter((item) => item.new_path).map((item) => path.dirname(item.new_path)))) {
+      addAllowedMediaDir(dir);
+    }
+    return outcome;
+  }));
+
   // The picture the editor edits a RAW from (../rawEditSource.js): its HD
   // preview when that is the RAW's full size, else a full-size render.
   // `neutral`: always the full render, never the camera's embedded JPEG — the

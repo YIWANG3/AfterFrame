@@ -36,7 +36,7 @@ adoptLegacyPref("afterframe-theme", "theme");
 adoptLegacyPref("afterframe-sidebar-width", "sidebarWidth", Number);
 adoptLegacyPref("afterframe-inspector-width", "inspectorWidth", Number);
 
-export default function useWorkspace({ pushToast } = {}) {
+export default function useWorkspace({ pushToast, onShowMissing } = {}) {
   const { t } = useTranslation("app");
   const [theme, setTheme] = usePref("theme", "dark", oneOf(THEMES));
   const [sidebarWidth, setSidebarWidth] = usePref("sidebarWidth", 240, intIn(...SIDEBAR_WIDTH_RANGE));
@@ -674,8 +674,13 @@ export default function useWorkspace({ pushToast } = {}) {
   // filters; the flag condition becomes "rejected"), every page of them —
   // what "Delete Rejected Photos…" acts on. Only ids and paths.
   async function collectRejected() {
+    return collectView(rejectedFilters(scopeRef.current.filters));
+  }
+
+  // Every photo of the view on screen, every page of it (the Missing view's
+  // actions with nothing selected). `filters`: the view's own unless given.
+  async function collectView(filters = scopeRef.current.filters) {
     const scope = scopeRef.current;
-    const filters = rejectedFilters(scope.filters);
     const search = scope.query.trim() || undefined;
     const rows = [];
     for (let offset = 0; ; offset += 500) {
@@ -895,6 +900,7 @@ export default function useWorkspace({ pushToast } = {}) {
                   message: t("verifyMissingMsg", { checked }),
                   ttl: 7000,
                   tone: "error",
+                  ...(onShowMissing ? { actions: [{ label: t("verifyView"), primary: true, onClick: () => onShowMissing() }] } : {}),
                 }
               : {
                   title: t("verifyAllPresent"),
@@ -1026,5 +1032,6 @@ export default function useWorkspace({ pushToast } = {}) {
     addTagsToAssets: assetMutations.addTagsToAssets,
     removeTagsFromAssets: assetMutations.removeTagsFromAssets,
     collectRejected,
+    collectView,
   };
 }

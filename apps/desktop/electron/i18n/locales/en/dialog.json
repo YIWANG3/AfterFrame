@@ -1,6 +1,8 @@
 {
   "relinkTitle": "Relink to file",
   "relinkMessage": "Choose the moved or renamed original file",
+  "relinkFolderTitle": "Relink from folder",
+  "relinkFolderMessage": "Choose the folder the missing originals were moved to",
   "importTitle": "Import files or folders",
   "importFilesTitle": "Import files",
   "importFoldersTitle": "Import folders",

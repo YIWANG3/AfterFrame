@@ -8,7 +8,25 @@
     "rated": "已评分",
     "matched": "有配对 RAW",
     "lookalikes": "近似重复",
+    "missing": "缺失的原文件",
     "similar": "相似照片"
+  },
+  "missingView": {
+    "relinkAll": "全部从文件夹重新连接…",
+    "relinkSome_other": "从文件夹重新连接 {{count}} 张…",
+    "removeAll": "全部从图库移除…",
+    "removeSome_other": "从图库移除 {{count}} 张…",
+    "removeTitle": "从图库移除",
+    "removeMsg_other": "从图库移除这 {{count}} 张缺失的照片？",
+    "removeDetail": "它们的评分、标签和所在文件夹会一起去掉。磁盘上的文件不受影响。",
+    "removeConfirm": "移除",
+    "removed_other": "已从图库移除 {{count}} 张",
+    "relinked_other": "重新连接了 {{count}} 张",
+    "relinkedNone": "没有连接上任何照片",
+    "notFound_other": "{{count}} 张没找到",
+    "mismatch_other": "{{count}} 张同名文件内容不符，没有连接",
+    "inUse_other": "{{count}} 张已作为图库里的另一项存在",
+    "failed": "重新连接失败"
   },
   "toolbar": {
     "search": "搜索",

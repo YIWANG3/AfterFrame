@@ -39,7 +39,7 @@ module.exports = (ctx) => {
         properties: {
           similar_to: { type: "string", description: "An asset id: that photo first, then the ones that look like it, nearest first (the look-alike index; see find_similar). Sort is ignored." },
           query: { type: "string", description: "Free-text search across name, path, camera, lens, caption, OCR text, tags" },
-          status: { type: "string", enum: ["all", "matched", "unmatched", "rated", "recent"], description: "Asset subset; 'recent' = imported in the last 7 days. Default all" },
+          status: { type: "string", enum: ["all", "matched", "unmatched", "rated", "recent", "missing"], description: "Asset subset; 'recent' = imported in the last 7 days; 'missing' = originals moved or deleted on disk (checks the whole library first). Default all" },
           sort: { type: "string", enum: ["name-asc", "name-desc", "imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc"], description: "Default name-asc" },
           limit: { type: "number", description: "Max results, default 24" },
           offset: { type: "number" },

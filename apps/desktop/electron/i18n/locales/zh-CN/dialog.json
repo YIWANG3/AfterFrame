@@ -1,6 +1,8 @@
 {
   "relinkTitle": "重新连接文件",
   "relinkMessage": "选择被移动或重命名的原始文件",
+  "relinkFolderTitle": "从文件夹重新连接",
+  "relinkFolderMessage": "选择缺失的原文件被移到的文件夹",
   "importTitle": "导入文件或文件夹",
   "importFilesTitle": "导入文件",
   "importFoldersTitle": "导入文件夹",

@@ -16,7 +16,8 @@ async function browseImages({ status = "all", limit = 180, offset = 0, search, s
   // A smart collection's rules are the base set and carry their own status.
   if (base) list = list.filter((a) => matchesRules(a, base));
   else if (status === "rated") list = list.filter((a) => a.app_rating > 0);
-  else if (status === "matched") list = [];
+  // No RAW pairs, and a photo kept in the browser is never missing.
+  else if (status === "matched" || status === "missing") list = [];
   if (search) list = list.filter((a) => matchesSearch(a, search));
   if (filters) list = list.filter((a) => matchesFacetFilters(a, filters));
   return sortAssets(list, sort).slice(offset, offset + limit);
@@ -170,7 +171,7 @@ export const catalogMethods = {
       list = list.filter((a) => member.has(a.asset_id));
     } else if (base) list = list.filter((a) => matchesRules(a, base));
     else if (status === "rated") list = list.filter((a) => a.app_rating > 0);
-    else if (status === "matched") list = [];
+    else if (status === "matched" || status === "missing") list = [];
     const limit = 50;
     const seen = new Set();
     const found = [];
@@ -200,7 +201,7 @@ export const catalogMethods = {
       const member = new Set(folderAssetIds(collectionId, includeDescendants));
       list = list.filter((a) => member.has(a.asset_id));
     } else if (!base && status === "rated") list = list.filter((a) => a.app_rating > 0);
-    else if (!base && status === "matched") list = [];
+    else if (!base && (status === "matched" || status === "missing")) list = [];
     // A folder is narrowed by search and facets like any other scope.
     if (search) list = list.filter((a) => matchesSearch(a, search));
     if (filters) {

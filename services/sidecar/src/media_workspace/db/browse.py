@@ -186,6 +186,8 @@ def _status_only_clause(status: str) -> str:
         return "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND assets.created_at >= datetime('now', '-7 days')"
     if status == "all":
         return "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation')"
+    if status == "missing":
+        return "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND assets.exists_on_disk = 0"
     if status == "lookalikes":
         from .visual import LOOKALIKES_CLAUSE
 

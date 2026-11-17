@@ -43,6 +43,7 @@ from .db import (
     move_collection,
     raw_pairs,
     relink_asset,
+    relink_assets_from_folder,
     remove_collection_items,
     remove_faces_from_group,
     remove_raw_from_resource_sets,
@@ -220,7 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_assets.add_argument("--path", type=Path, action="append", dest="paths", required=True)
 
     browse = subparsers.add_parser("browse-images", parents=[common])
-    browse.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes"], required=True)
+    browse.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes", "missing"], required=True)
     browse.add_argument("--limit", type=int, default=120)
     browse.add_argument("--offset", type=int, default=0)
     browse.add_argument("--search", default=None)
@@ -246,7 +247,7 @@ def build_parser() -> argparse.ArgumentParser:
     # collection's --base, or a folder).
     find_kw = subparsers.add_parser("find-by-keywords", parents=[common])
     find_kw.add_argument("--keywords", required=True, help="JSON array of keywords")
-    find_kw.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes"], default="all")
+    find_kw.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes", "missing"], default="all")
     find_kw.add_argument("--collection-id", default=None)
     find_kw.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
     find_kw.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed")
@@ -255,7 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
     # (status/collection/search/facets) but ignores filters.geo — the map needs
     # points outside the current viewport to stay navigable.
     map_points = subparsers.add_parser("browse-map-points", parents=[common])
-    map_points.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes"], default="all")
+    map_points.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes", "missing"], default="all")
     map_points.add_argument("--collection-id", default=None)
     map_points.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
     map_points.add_argument("--search", default=None)
@@ -454,6 +455,11 @@ def build_parser() -> argparse.ArgumentParser:
     relink_asset_p.add_argument("--new-path", type=Path, required=True)
     relink_asset_p.add_argument("--force", action="store_true",
                                 help="Relink even if the new file's fingerprint differs from the original")
+
+    relink_folder_p = subparsers.add_parser("relink-from-folder", parents=[common])
+    relink_folder_p.add_argument("--folder", type=Path, required=True)
+    relink_folder_p.add_argument("--asset-id", action="append",
+                                 help="Assets to look for; none: every asset the catalog holds as missing")
 
     subparsers.add_parser("catalog-roots", parents=[common])
     register_roots_parser = subparsers.add_parser("register-roots", parents=[common])
@@ -1728,6 +1734,11 @@ def _cmd_browse_images(args, connection, catalog, parser):
     # it must stay read-only — reconciling assets.exists_on_disk is left to the
     # explicit verify-assets sweep. The live `present` value below is what the
     # UI badges/blocks read; the DB flag only gates preview/export batches.
+    # The one exception is the Missing view, whose membership IS the flag:
+    # its first page sweeps the library first, so opening or refreshing it
+    # shows what is missing now (files put back drop out, new ones come in).
+    if args.status == "missing" and not args.offset:
+        verify_assets(connection)
     for row in list_image_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters, base=json.loads(args.base) if args.base else None, similar_to=args.similar_to):
         payload.append(_browse_row_payload(row, catalog))
     print(json.dumps(payload, indent=2))
@@ -1946,6 +1957,12 @@ def _cmd_verify_assets(args, connection, catalog, parser):
 
 def _cmd_relink_asset(args, connection, catalog, parser):
     payload = relink_asset(connection, args.asset_id, args.new_path, force=args.force)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_relink_from_folder(args, connection, catalog, parser):
+    payload = relink_assets_from_folder(connection, args.folder, args.asset_id)
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -2230,6 +2247,7 @@ COMMAND_HANDLERS = {
     "export-assets": _cmd_export_assets,
     "verify-assets": _cmd_verify_assets,
     "relink-asset": _cmd_relink_asset,
+    "relink-from-folder": _cmd_relink_from_folder,
     "delete-image-assets": _cmd_delete_image_assets,
     "raw-pairs-status": _cmd_raw_pairs_status,
     "set-raw-pairs-mode": _cmd_set_raw_pairs_mode,

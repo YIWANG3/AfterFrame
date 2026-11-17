@@ -30,6 +30,8 @@ import EditorOverlay from "./components/EditorOverlay";
 import SettingsOverlay from "./components/SettingsOverlay";
 import WelcomeOverlay from "./components/WelcomeOverlay";
 import SampleCatalogBanner from "./components/SampleCatalogBanner";
+import MissingFilesBar from "./components/MissingFilesBar";
+import useMissingFiles from "./hooks/useMissingFiles";
 import GalleryCompare from "./components/GalleryCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import DiscoverView, { prefetchDiscover } from "./components/DiscoverView";
@@ -81,7 +83,10 @@ export default function App() {
   const { t } = useTranslation("app");
   const { t: tNav } = useTranslation("nav");
   const { t: tInspector } = useTranslation("inspector");
-  const workspace = useWorkspace({ pushToast });
+  // The Verify Files toast's View button opens the Missing Originals view,
+  // which App owns (openDiscoverTarget, defined further down).
+  const showMissingRef = useRef(null);
+  const workspace = useWorkspace({ pushToast, onShowMissing: () => showMissingRef.current?.() });
   // Fresh-closure handle for the test backdoor, whose effect must NOT depend on
   // `workspace` (a new object each render) — re-running would clobber the
   // methods EditorOverlay merges into window.__afterframeTest.
@@ -228,6 +233,9 @@ export default function App() {
     setShowFilters(Object.keys(filters).length > 0);
     mapDrawer.showMapFor(map);
   };
+  // Opening it sweeps the library first (the sidecar's first page of the
+  // "missing" status), so it shows what is missing now.
+  showMissingRef.current = () => openDiscoverTarget({ status: "missing" });
 
   const openPersonGroup = (group) => {
     if (!group?.group_id) return;
@@ -1166,6 +1174,19 @@ export default function App() {
   const activeSmartCollection = workspace.activeSmartCollectionId
     ? (workspace.collections || []).find((c) => c.collection_id === workspace.activeSmartCollectionId) || null
     : null;
+  // The Missing Originals view: the "missing" status as a place of its own,
+  // not narrowed to a folder, a smart collection, a person or similar photos.
+  const missingView = viewMode === "assets" && workspace.status === "missing" && !workspace.activeCollectionId
+    && !activeSmartCollection && !workspace.similarTo && !peopleGroup;
+  const missingFiles = useMissingFiles({ workspaceRef, pushToast });
+  // What its bar acts on: a multi-selection of photos still in the view (a
+  // relinked one has just left it), else the whole view. One photo is always
+  // selected (the Inspector's); it has the Inspector's Relink and the context
+  // menu's Delete from Catalog of its own.
+  const missingTargets = () => {
+    const picked = selectedIds.filter((id) => itemById.has(id));
+    return picked.length > 1 ? picked : [];
+  };
   // The folders a filter can name ("in / not in"), and the dialog that edits
   // the bar's "any of these groups".
   // Folders nest: the pickers list them depth-first with their depth, so a
@@ -1715,6 +1736,14 @@ export default function App() {
                 />
                 </div>
               </div>
+              {missingView && currentItems.length ? (
+                <MissingFilesBar
+                  selected={missingTargets().length}
+                  busy={missingFiles.busy}
+                  onRelink={api.has("relinkFromFolder") ? () => missingFiles.relink(missingTargets()) : undefined}
+                  onRemove={() => missingFiles.remove(missingTargets())}
+                />
+              ) : null}
               {dropActive && (
                 <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-app/85 backdrop-blur-sm">
                   <div className="rounded-xl border-2 border-dashed border-[rgb(var(--accent-color))] bg-chrome/90 px-8 py-6 text-center shadow-overlay">
