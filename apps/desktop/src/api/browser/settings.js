@@ -1,6 +1,13 @@
-// Settings kept in this browser: the locale, rebound shortcuts, preview
-// settings, the watermark profile (author, brand logos, camera names).
+// Settings kept in this browser: the locale, the interface scale, rebound
+// shortcuts, preview settings, the watermark profile (author, brand logos,
+// camera names).
 
+const UI_SCALE_KEY = "afterframe.uiScale";
+// The saved interface scale applies as soon as the web build loads.
+try {
+  const saved = Number(localStorage.getItem(UI_SCALE_KEY));
+  if (saved && saved !== 1) document.documentElement.style.zoom = String(saved);
+} catch { /* private mode: 100% */ }
 const SHORTCUTS_KEY = "afterframe.shortcuts";
 const WATERMARK_KEY = "afterframe.watermarkProfile";
 
@@ -34,6 +41,17 @@ export const settingsMethods = {
   getInitialLocale,
   setLocale: (locale) => {
     try { localStorage.setItem("afterframe.locale", String(locale)); } catch { /* session-only */ }
+  },
+
+  // ── interface scale: the page zoomed as one (Electron uses its page zoom) ──
+  getUiScale: async () => {
+    try { return Number(localStorage.getItem(UI_SCALE_KEY)) || 1; } catch { return 1; }
+  },
+  setUiScale: async (scale) => {
+    const value = Number(scale) || 1;
+    document.documentElement.style.zoom = value === 1 ? "" : String(value);
+    try { localStorage.setItem(UI_SCALE_KEY, String(value)); } catch { /* session-only */ }
+    return value;
   },
 
   // ── previews ──

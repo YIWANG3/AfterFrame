@@ -21,7 +21,9 @@
     "themeHint": "Color theme. Takes effect immediately.",
     "themeDark": "Dark",
     "themeLight": "Light",
-    "themeSystem": "Follow system"
+    "themeSystem": "Follow system",
+    "uiScale": "Interface scale",
+    "uiScaleHint": "Scales the whole interface. Takes effect immediately."
   },
   "annotation": {
     "loading": "Loading settings…",

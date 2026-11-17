@@ -44,7 +44,7 @@ test("General tab — theme selector flips the applied theme live", async () => 
     };
   });
   expect(styles).toEqual({ card: "26px", select: "8px", selectBorder: "0px" });
-  // Two selects on this tab: language (0), theme (1).
+  // Three selects on this tab: language (0), theme (1), interface scale (2).
   const themeSelect = ctx.window.getByRole("combobox").nth(1);
   await themeSelect.selectOption("light");
   await expect

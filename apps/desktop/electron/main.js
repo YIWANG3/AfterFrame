@@ -60,6 +60,7 @@ const { registerFeatures } = require("./features");
 const { createHost, createServices } = require("./host");
 const { claimSingleInstance, launchPaths } = require("./singleInstance");
 const { createLocale } = require("./locale");
+const { createUiScale } = require("./uiScale");
 const { loadDevEnv } = require("./devEnv");
 const clipboardIpc = require("./ipc/clipboard");
 
@@ -151,6 +152,13 @@ const { scratchCatalogPath } = catalog;
 // The UI language — see ./locale.js. Setting it rebuilds the menu.
 const locale = createLocale({ ipcMain, readAppSettings, updateAppSettings, onChange: () => appShell.installMenu() });
 const t = () => makeT(locale.current());
+
+// Interface scale (Settings ▸ General) — see ./uiScale.js. Each window takes
+// it once its page has loaded; a reload or a new window keeps it.
+const uiScale = createUiScale({ ipcMain, readAppSettings, updateAppSettings, getWindows: () => BrowserWindow.getAllWindows() });
+app.on("browser-window-created", (_event, window) => {
+  window.webContents.on("did-finish-load", () => uiScale.applyTo(window));
+});
 
 const readCatalogSettings = (catalogPath = catalog.path()) => settingsStore.readCatalogSettings(catalogPath);
 const updateCatalogSettings = (mutateFn, catalogPath = catalog.path()) => settingsStore.updateCatalogSettings(catalogPath, mutateFn);
