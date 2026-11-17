@@ -37,6 +37,9 @@
   "view": "视图",
   "refresh": "刷新",
   "toggleTheme": "切换主题",
+  "zoomIn": "放大界面",
+  "zoomOut": "缩小界面",
+  "actualSize": "实际大小",
   "toggleFullscreen": "切换全屏",
   "window": "窗口"
 }

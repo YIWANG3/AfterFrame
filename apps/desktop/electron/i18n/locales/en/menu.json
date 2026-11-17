@@ -37,6 +37,9 @@
   "view": "View",
   "refresh": "Refresh",
   "toggleTheme": "Toggle Theme",
+  "zoomIn": "Zoom In",
+  "zoomOut": "Zoom Out",
+  "actualSize": "Actual Size",
   "toggleFullscreen": "Toggle Full Screen",
   "window": "Window"
 }

@@ -405,6 +405,9 @@
         "thumbLarger": "Larger Thumbnails",
         "thumbSmaller": "Smaller Thumbnails",
         "refresh": "Refresh",
+        "zoomIn": "Zoom in (interface scale)",
+        "zoomOut": "Zoom out (interface scale)",
+        "zoomReset": "Actual size (interface scale 100%)",
         "fullscreen": "Toggle Full Screen"
       },
       "app": {

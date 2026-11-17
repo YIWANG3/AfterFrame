@@ -57,3 +57,36 @@ test("applyTo zooms a new window to the current scale and skips a closed one", (
   uiScale.applyTo(closed);
   assert.deepEqual(closed.zooms, []);
 });
+
+test("step moves one notch along the list, stays put at either end, and 0 goes back to 100%", async () => {
+  const window = fakeWindow();
+  const { uiScale, settings } = setup({ uiScale: 1 }, [window]);
+  assert.equal(await uiScale.step(-1), 0.9);
+  assert.equal(await uiScale.step(-1), 0.8);
+  assert.equal(await uiScale.step(-1), 0.8, "already the smallest");
+  assert.equal(await uiScale.step(0), 1);
+  assert.equal(await uiScale.step(1), 1.1);
+  assert.equal(await uiScale.step(1), 1.25);
+  assert.equal(await uiScale.step(1), 1.25, "already the largest");
+  assert.equal(settings().uiScale, 1.25);
+  assert.deepEqual(window.zooms, [0.9, 0.8, 1, 1.1, 1.25], "no zoom call when nothing changes");
+});
+
+test("the number pad's + / - / 0 with the platform's modifier step the scale; other keys pass through", async () => {
+  const { uiScale } = setup({ uiScale: 1 });
+  const press = (input, platform) => {
+    let prevented = false;
+    uiScale.handleNumpad({ preventDefault: () => { prevented = true; } }, { type: "keyDown", ...input }, platform);
+    return prevented;
+  };
+  assert.equal(press({ code: "NumpadSubtract", meta: true }, "darwin"), true);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(uiScale.current(), 0.9);
+  assert.equal(press({ code: "NumpadAdd", control: true }, "win32"), true);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(uiScale.current(), 1);
+  assert.equal(press({ code: "NumpadAdd", control: true }, "darwin"), false, "Ctrl is not the modifier on macOS");
+  assert.equal(press({ code: "NumpadAdd" }, "win32"), false, "no modifier: the key types");
+  assert.equal(press({ code: "KeyA", control: true }, "win32"), false);
+  assert.equal(uiScale.current(), 1);
+});

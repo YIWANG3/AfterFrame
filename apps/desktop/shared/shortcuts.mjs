@@ -74,6 +74,9 @@ export const SHORTCUT_ACTIONS = [
   { id: "catalog.open", group: "app", scope: "global", defaults: ["Mod+KeyO"], menu: "catalog:open", desktop: true },
   { id: "import.run", group: "app", scope: "global", defaults: ["Mod+KeyI"], menu: "import:start", desktop: true },
   { id: "view.refresh", group: "app", scope: "global", defaults: ["Mod+KeyR"], menu: "view:refresh", desktop: true },
+  { id: "view.zoomIn", group: "app", scope: "global", defaults: ["Mod+Equal"], menu: "view:zoom-in", desktop: true },
+  { id: "view.zoomOut", group: "app", scope: "global", defaults: ["Mod+Minus"], menu: "view:zoom-out", desktop: true },
+  { id: "view.zoomReset", group: "app", scope: "global", defaults: ["Mod+Digit0"], menu: "view:zoom-reset", desktop: true },
   {
     id: "view.fullscreen", group: "app", scope: "global", menu: "toggle-fullscreen", desktop: true,
     defaults: { darwin: ["Mod+Ctrl+KeyF"], other: ["F11"] },

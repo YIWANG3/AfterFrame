@@ -18,8 +18,12 @@ export default function GeneralSettings({ theme = "dark", setTheme }) {
   const [uiScale, setUiScaleState] = useState(1);
   useEffect(() => {
     let alive = true;
-    Promise.resolve(api.getUiScale?.()).then((v) => { if (alive && v) setUiScaleState(Number(v)); }).catch(() => {});
-    return () => { alive = false; };
+    const read = () => Promise.resolve(api.getUiScale?.()).then((v) => { if (alive && v) setUiScaleState(Number(v)); }).catch(() => {});
+    read();
+    // ⌘= / ⌘- / ⌘0 change the zoom from the menu while this row is open; a
+    // zoom change resizes the page, so re-read it then.
+    window.addEventListener("resize", read);
+    return () => { alive = false; window.removeEventListener("resize", read); };
   }, []);
 
   async function changeUiScale(value) {

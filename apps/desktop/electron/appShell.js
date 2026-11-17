@@ -12,6 +12,7 @@
 //   platform              process.platform (a parameter so tests can pick)
 //   getShortcuts          the user's shortcut overrides (shared/shortcuts.mjs);
 //                         the menu's accelerators follow them
+//   stepUiScale           View ▸ Zoom In / Out / Actual Size: +1, -1, 0 (uiScale.js)
 
 const { windowChromeOptions, WIN_SYMBOL_COLOR } = require("./windowChrome");
 const { splitsImport } = require("./importDialog");
@@ -40,6 +41,7 @@ function isReloadOf(currentUrl, targetUrl) {
 function createAppShell({
   BrowserWindow, Menu, makeT, getLocale, devServerUrl, preloadPath, indexHtml,
   screen, nativeTheme, platform = process.platform, getShortcuts = () => ({}),
+  stepUiScale = () => {},
 }) {
   const anyWindow = () => BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
   // The menu's rebindable accelerators are off while Settings records a new
@@ -246,6 +248,11 @@ function createAppShell({
         submenu: [
           { label: t("menu.refresh"), accelerator: keys("view:refresh"), click: () => sendMenuAction("view:refresh") },
           { label: t("menu.toggleTheme"), click: () => sendMenuAction("view:toggle-theme") },
+          { type: "separator" },
+          // Interface scale, like VS Code's ⌘= / ⌘- / ⌘0 (Ctrl elsewhere).
+          { id: "view-zoom-in", label: t("menu.zoomIn"), accelerator: keys("view:zoom-in"), click: () => stepUiScale(1) },
+          { id: "view-zoom-out", label: t("menu.zoomOut"), accelerator: keys("view:zoom-out"), click: () => stepUiScale(-1) },
+          { id: "view-zoom-reset", label: t("menu.actualSize"), accelerator: keys("view:zoom-reset"), click: () => stepUiScale(0) },
           { type: "separator" },
           { label: t("menu.devTools"), role: "toggleDevTools", accelerator: "Alt+CommandOrControl+I" },
           { type: "separator" },

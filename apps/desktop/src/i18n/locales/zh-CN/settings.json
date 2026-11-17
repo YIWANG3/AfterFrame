@@ -405,6 +405,9 @@
         "thumbLarger": "放大缩略图",
         "thumbSmaller": "缩小缩略图",
         "refresh": "刷新",
+        "zoomIn": "放大界面",
+        "zoomOut": "缩小界面",
+        "zoomReset": "界面恢复 100%",
         "fullscreen": "切换全屏"
       },
       "app": {

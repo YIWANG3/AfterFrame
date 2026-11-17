@@ -158,6 +158,7 @@ const t = () => makeT(locale.current());
 const uiScale = createUiScale({ ipcMain, readAppSettings, updateAppSettings, getWindows: () => BrowserWindow.getAllWindows() });
 app.on("browser-window-created", (_event, window) => {
   window.webContents.on("did-finish-load", () => uiScale.applyTo(window));
+  window.webContents.on("before-input-event", (event, input) => uiScale.handleNumpad(event, input));
 });
 
 const readCatalogSettings = (catalogPath = catalog.path()) => settingsStore.readCatalogSettings(catalogPath);
@@ -250,6 +251,7 @@ const appShell = createAppShell({
   indexHtml: path.join(__dirname, "..", "dist", "index.html"),
   screen, nativeTheme,
   getShortcuts: () => readAppSettings()?.shortcuts || {},
+  stepUiScale: (direction) => uiScale.step(direction),
 });
 const getMainWindow = () => BrowserWindow.getAllWindows()[0] || null;
 
