@@ -93,7 +93,7 @@ export default function CollagePanel({
               title={t("centerInCell")}
             >
               <Crosshair className="h-3 w-3" />
-              Center
+              {t("center")}
             </button>
             <button
               type="button"
@@ -102,7 +102,7 @@ export default function CollagePanel({
               title={t("resetPosZoom")}
             >
               <RotateCcw className="h-3 w-3" />
-              Reset
+              {t("reset")}
             </button>
           </div>
           <div className="mt-2 text-[10px] leading-relaxed text-muted2">

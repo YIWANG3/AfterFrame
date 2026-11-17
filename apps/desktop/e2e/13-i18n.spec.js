@@ -51,3 +51,21 @@ test("the Edit submenu labels follow the app language", async () => {
   expect(editItems).toContain("撤销");
   expect(editItems).toContain("全选");
 });
+
+test("the collage cell panel's Center and Reset are in 中文 too", async () => {
+  // They were hard-coded English while the rest of the cell panel followed the app language.
+  await ctx.window.keyboard.press("Escape"); // the Settings window from the first test
+  await expect(ctx.window.locator("[data-layer='settings']")).toHaveCount(0);
+  const cards = galleryCards(ctx.window);
+  await cards.nth(0).click();
+  await cards.nth(1).click({ modifiers: ["Shift"] });
+  await cards.nth(0).click({ button: "right" });
+  await ctx.window.getByText(/^拼图$/).click();
+  const canvas = ctx.window.getByTestId("collage-canvas");
+  await expect(canvas).toBeVisible({ timeout: 10_000 });
+  const box = await canvas.boundingBox();
+  await canvas.click({ position: { x: box.width * 0.25, y: box.height * 0.5 } });
+  await expect(ctx.window.getByRole("button", { name: "居中", exact: true })).toBeVisible();
+  await expect(ctx.window.getByRole("button", { name: "重置", exact: true })).toBeVisible();
+  await expect(ctx.window.getByRole("button", { name: "Center", exact: true })).toHaveCount(0);
+});
