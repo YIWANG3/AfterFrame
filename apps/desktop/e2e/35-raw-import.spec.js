@@ -451,6 +451,10 @@ test("a RAW from a camera too new for any decoder shows the JPEG the camera embe
 
   // The lightbox's detail layer is the embedded JPEG at its full size.
   await card.dblclick();
+  // Upright (orientation 6) over a 7040 × 4688 sensor: the header gives the size as
+  // the photo shows, like the grid card, not the stored landscape matrix.
+  await expect(card).toContainText("4688 × 7040");
+  await expect(ctx.window.locator("[data-layer='lightbox']")).toContainText("4688 × 7040");
   const viewport = ctx.window.locator("[data-lightbox-viewport='true']");
   await expect(viewport.locator("[data-lightbox-layer='detail']")).toHaveAttribute("src", PREVIEW_HD_SRC, { timeout: 60_000 });
   const hd = (await tool("get_asset", { asset_id: raw.asset_id })).image_preview_hd_path;

@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Flag, FlagOff, ImageOff, Info, Minus, Pencil, Pin, Plus, Star, SwatchBook, X } from "lucide-react";
 import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { clamp, fileName, localFileUrl, httpMediaUrl } from "../utils/format";
+import { clamp, displaySize, fileName, localFileUrl, httpMediaUrl } from "../utils/format";
 import { buildLightboxSources, resolveLightboxLogicalSize } from "./lightboxView";
 import { useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
 import { usePref } from "../hooks/usePref";
@@ -238,6 +238,9 @@ export default function Lightbox({
 
   const metaWidth = Number(currentItem?.image_metadata?.width || 0);
   const metaHeight = Number(currentItem?.image_metadata?.height || 0);
+  // The header reads like the grid and the Inspector: as the photo shows, so an
+  // upright shot stored as landscape pixels says portrait.
+  const shownSize = displaySize(currentItem);
   const showInfo = Boolean(infoOpen && info && !proofMode);
   // The native video surface sits above the DOM and needs its reserved space.
   const floatingControls = !controlsPinned && !proofMode && !isVideo;
@@ -718,7 +721,7 @@ export default function Lightbox({
           <div className="truncate text-[15px] font-medium text-white">{title}</div>
           <div className="mt-1 text-[12px] text-white/60">
             {items.length > 0 ? `${clampedIndex + 1} / ${items.length}` : ""}
-            {(metaWidth > 0 && metaHeight > 0) ? ` · ${metaWidth} × ${metaHeight}` : ""}
+            {(shownSize.width > 0 && shownSize.height > 0) ? ` · ${shownSize.width} × ${shownSize.height}` : ""}
           </div>
           {/* What culling keys set (P / X / U, 0-5): there is no grid badge to
               see in here. */}
