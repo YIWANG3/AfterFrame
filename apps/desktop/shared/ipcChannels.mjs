@@ -63,6 +63,9 @@ export const CORE_IPC_METHODS = [
   ["verifyAssets", "workspace:verify-assets", 1],
   ["relinkAsset", "workspace:relink-asset", 1],
   ["setLocale", "app:set-locale", 1],
+  // Interface scale: the window's page zoom (electron/uiScale.js).
+  ["getUiScale", "app:get-ui-scale", 0],
+  ["setUiScale", "app:set-ui-scale", 1],
   // Windows title strip (WindowTitleBar.jsx); answer false on macOS.
   ["popupAppMenu", "window:popup-app-menu", 2],
   ["setTitleBarTheme", "window:set-titlebar-theme", 1],

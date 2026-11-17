@@ -21,7 +21,9 @@
     "themeHint": "配色主题,立即生效。",
     "themeDark": "深色",
     "themeLight": "浅色",
-    "themeSystem": "跟随系统"
+    "themeSystem": "跟随系统",
+    "uiScale": "界面缩放",
+    "uiScaleHint": "整个界面一起缩放,立即生效。"
   },
   "annotation": {
     "loading": "正在加载设置…",
@@ -403,6 +405,9 @@
         "thumbLarger": "放大缩略图",
         "thumbSmaller": "缩小缩略图",
         "refresh": "刷新",
+        "zoomIn": "放大界面",
+        "zoomOut": "缩小界面",
+        "zoomReset": "界面恢复 100%",
         "fullscreen": "切换全屏"
       },
       "app": {
