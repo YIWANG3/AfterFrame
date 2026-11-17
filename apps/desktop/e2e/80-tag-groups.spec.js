@@ -28,6 +28,15 @@ const tagInfo = async (tag) => {
   const loose = all.ungrouped.find((entry) => entry.tag === tag);
   return loose ? { ...loose, group_id: null } : null;
 };
+// Click a photo and wait for the Inspector to show it. Until the photo's
+// detail arrives the Inspector still shows the one before, so a tag added
+// straight after the click would go on that photo.
+const show = async (id) => {
+  await card(id).click();
+  const rows = await bridge(() => window.mediaWorkspace.browseImages({ status: "all", limit: 1000 }));
+  const name = rows.find((row) => row.asset_id === id).image_path.split(/[\\/]/).pop();
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText(name);
+};
 
 async function restart() {
   await collectCoverage(ctx.app);
@@ -60,7 +69,7 @@ test("the catalog's tags got their groups when it was opened", async () => {
 
 test("the Inspector shows tags by group; a concept's other spelling is the same tag; the picker places a new one", async () => {
   const id = photos[0];
-  await card(id).click();
+  await show(id);
   const tags = ctx.window.getByTestId("inspector-tags");
   await expect(tags).toHaveAttribute("data-count", "0");
 
@@ -95,7 +104,7 @@ test("the Inspector shows tags by group; a concept's other spelling is the same 
 
 test("the picker lists the library's tags by group; a click puts one on the photo and another takes it off; typing narrows it; it closes and stays closed", async () => {
   const id = photos[1];
-  await card(id).click();
+  await show(id);
   const tags = ctx.window.getByTestId("inspector-tags");
   const add = tags.getByTestId("tag-add");
   const input = tags.getByTestId("tag-add-input");
@@ -220,7 +229,7 @@ test("the Tags facet lists tags by group, matches by group and by 'any tag of th
 });
 
 test("Shift+T takes tags off every selected photo", async () => {
-  await card(photos[0]).click();
+  await show(photos[0]);
   await card(photos[1]).click({ modifiers: ["ControlOrMeta"] });
   await ctx.window.keyboard.press("Shift+T");
   const dialog = ctx.window.getByTestId("tag-batch-dialog");
@@ -347,6 +356,6 @@ test("a restart keeps the groups, aliases, pins and the merge", async () => {
   expect(await tagInfo("cloudy")).toBeNull();
   expect(await tagsOf(photos[1])).toEqual(["sunny"]);
   await allAssets();
-  await card(photos[1]).click();
+  await show(photos[1]);
   await expect(ctx.window.getByTestId("inspector-tags").locator("[data-tag-group='weather'] [data-tag='sunny']")).toBeVisible();
 });
