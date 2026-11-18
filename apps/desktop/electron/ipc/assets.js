@@ -22,6 +22,12 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, media: { ad
   // Full-library missing-file sweep (File ▸ Verify Files menu action).
   ipcMain.handle("workspace:verify-assets", withCatalog(getCatalogState, null, (_event, options) => commands.verifyAssets(options || {})));
 
+  // Same-shot RAW+JPG pairs: shown as one photo or two (a catalog setting).
+  ipcMain.handle("workspace:raw-pairs-status", withCatalog(getCatalogState, null, () => commands.rawPairsStatus()));
+  ipcMain.handle("workspace:set-raw-pairs-mode", withCatalog(getCatalogState, null, (_event, mode) => commands.setRawPairsMode(mode)));
+  ipcMain.handle("workspace:notice-raw-pairs", withCatalog(getCatalogState, null, () => commands.noticeRawPairs()));
+  ipcMain.handle("workspace:split-raw-pair", withCatalog(getCatalogState, null, (_event, assetId) => commands.splitRawPair(assetId)));
+
   // Relink a missing asset to a new on-disk location. With no newPath we open a
   // native file picker. Returns the sidecar result verbatim, including the
   // {status:"fingerprint_mismatch"} case so the renderer can confirm + retry.
@@ -132,7 +138,9 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, media: { ad
   ipcMain.handle("workspace:delete-image-assets-from-disk", async (_event, payload) => {
     const ids = [...new Set((payload?.assetIds || []).filter(Boolean))];
     if (!ids.length) return { deleted: [], trashed: 0, failed: [] };
-    const paths = [...new Set((payload?.paths || []).filter(Boolean))];
+    // A merged RAW+JPG pair is one photo: its RAW goes to the trash with it.
+    const pairs = await commands.rawPairFiles(ids).catch(() => []);
+    const paths = [...new Set([...(payload?.paths || []), ...(pairs || []).map((pair) => pair.raw_path)].filter(Boolean))];
     const failed = [];
     let trashed = 0;
     for (const p of paths) {

@@ -21,6 +21,9 @@
     "people": "People"
   },
   "rows": {
+    "rawFile": "RAW file",
+    "splitRaw": "Split",
+    "splitRawTip": "Show the JPG and the RAW as two photos from now on",
     "rating": "Rating",
     "dimensions": "Dimensions",
     "duration": "Duration",
@@ -74,6 +77,8 @@
     "pickerEmpty": "No named people yet"
   },
   "toast": {
+    "rawPairSplit": "Shown as two photos",
+    "rawPairSplitFailed": "Couldn't split the pair",
     "relinked": "Relinked",
     "relinkedMsg": "Original file reconnected.",
     "relinkFailed": "Relink failed",

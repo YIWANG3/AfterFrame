@@ -15,6 +15,7 @@ from .. import formats
 from .collection_scope import members_join, members_subquery, scope_collection_ids
 from .facets import _LOCATION_OWNER, LOCATION_SOURCES, _facet_clauses, _values
 from .facets import FACET_OWN_KEYS as _FACET_OWN_KEYS
+from .raw_pairs import HIDDEN_RAW_CLAUSE, MERGED_RAW_ID_SQL
 from .tags import list_tag_groups
 
 # How many of a group's tags the filter bar lists before "N more" (the rest
@@ -62,6 +63,8 @@ _BROWSE_SELECT_COLUMNS = f"""\
             registry.raw_asset_id,
             raw_assets.canonical_path AS raw_path,
             raw_assets.metadata_json AS raw_metadata_json,
+            pair_raw.asset_id AS pair_raw_asset_id,
+            pair_raw.canonical_path AS pair_raw_path,
             preview_entries.relative_path AS preview_relative_path,
             preview_hd_entries.relative_path AS preview_hd_relative_path,
 {_RESOURCE_SET_COLUMNS},
@@ -76,9 +79,11 @@ _BROWSE_SELECT_COLUMNS = f"""\
             anno.updated_at AS anno_updated_at,
             EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id) AS has_face"""
 
-_RESOURCE_SET_JOINS = """\
+_RESOURCE_SET_JOINS = f"""\
         LEFT JOIN assets AS raw_assets
             ON raw_assets.asset_id = registry.raw_asset_id
+        LEFT JOIN assets AS pair_raw
+            ON pair_raw.asset_id = {MERGED_RAW_ID_SQL}
         LEFT JOIN resource_set_items AS rsi
             ON rsi.asset_id = assets.asset_id
         LEFT JOIN resource_sets AS rs
@@ -164,7 +169,13 @@ def _base_clause(base: dict | None, depth: int = 0) -> tuple[str, list[object]]:
 
 def _status_clause(status: str) -> str:
     """Status → WHERE clause on registry/assets. Shared between the gallery
-    browse and the map-points query so the two scopes can never drift."""
+    browse and the map-points query so the two scopes can never drift. The
+    RAW of a merged RAW+JPG pair is in none of them (db/raw_pairs.py); a
+    folder needs no such clause, as that RAW is in no folder."""
+    return f"({_status_only_clause(status)}) AND {HIDDEN_RAW_CLAUSE}"
+
+
+def _status_only_clause(status: str) -> str:
     if status == "matched":
         return "registry.match_status IN ('auto_bound', 'manual_confirmed')"
     if status == "unmatched":
@@ -765,6 +776,9 @@ def _detail_select_columns(image_path: str) -> str:
             registry.candidate_json,
             raw_assets.canonical_path AS raw_path,
             raw_assets.metadata_json AS raw_metadata_json,
+            pair_raw.asset_id AS pair_raw_asset_id,
+            pair_raw.canonical_path AS pair_raw_path,
+            pair_raw.file_size AS pair_raw_file_size,
             image_preview.relative_path AS image_preview_relative_path,
             raw_preview.relative_path AS raw_preview_relative_path,
             image_preview_hd.relative_path AS image_preview_hd_relative_path,

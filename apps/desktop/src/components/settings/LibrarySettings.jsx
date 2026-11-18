@@ -6,6 +6,7 @@ import { baseName, fileName } from "../../utils/format";
 import { Group, FieldRow, Toggle, SecondaryButton, IconActionButton } from "./SettingsPrimitives";
 import { settingsGroups } from "../../../features/index.js";
 import { FORMATS } from "../../../shared/formats.mjs";
+import { setRawPairsMode } from "../../hooks/rawPairsNotice";
 
 // What the import takes, from the format registry (the sidecar's
 // media_workspace/formats.py through shared/formats.generated.mjs): one line
@@ -59,6 +60,33 @@ function ColorAnalysisRow() {
       <SecondaryButton onClick={() => start(true)} disabled={!status || status.running || total === 0}>
         {t("library.colorsReanalyze")}
       </SecondaryButton>
+    </FieldRow>
+  );
+}
+
+// Same-shot RAW+JPG pairs shown as one photo or two (a catalog setting;
+// docs/raw-jpg-pairing-plan.md). Switching redraws the library.
+function RawPairsRow() {
+  const { t } = useTranslation("settings");
+  const [status, setStatus] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve(api.rawPairsStatus()).then((next) => { if (!cancelled) setStatus(next || null); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const change = async (merge) => {
+    setStatus((current) => (current ? { ...current, mode: merge ? "merge" : "separate" } : current));
+    try {
+      setStatus(await setRawPairsMode(merge ? "merge" : "separate"));
+    } catch {
+      setStatus(await Promise.resolve(api.rawPairsStatus()).catch(() => null));
+    }
+  };
+  return (
+    <FieldRow label={t("library.rawPairs")} hint={status?.pairs > 0 ? t("library.rawPairsCount", { count: status.pairs }) : undefined}>
+      <span data-testid="raw-pairs-setting" data-mode={status?.mode || ""} className="contents">
+        <Toggle on={(status?.mode || "merge") === "merge"} onChange={change} />
+      </span>
     </FieldRow>
   );
 }
@@ -173,6 +201,7 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
             {t("library.catalogStats", { assets: totalAssets, photos: imageAssets, videos: videoAssets })}
           </span>
         </FieldRow>
+        {api.has?.("rawPairsStatus") ? <RawPairsRow /> : null}
         <FieldRow label={t("library.switchCatalog")} hint={t("library.switchCatalogHint")}>
           <SecondaryButton onClick={openCatalog} disabled={switching}>
             <span className="inline-flex items-center gap-1.5">

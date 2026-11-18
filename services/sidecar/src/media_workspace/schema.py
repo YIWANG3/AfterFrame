@@ -1,6 +1,6 @@
 # Catalog schema version. This is the only authoritative version declaration;
 # migration code and the public db package both import it from here.
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 
 SCHEMA_STATEMENTS = [
@@ -241,6 +241,16 @@ SCHEMA_STATEMENTS = [
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (asset_id, tag),
         FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+    )
+    """,
+    # Same-shot RAW+JPG (db/raw_pairs.py): the JPG is the photo a merged pair
+    # shows as; 'split' is a pair the user took apart, never made again.
+    """
+    CREATE TABLE IF NOT EXISTS raw_pairs (
+        image_asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+        raw_asset_id TEXT NOT NULL UNIQUE REFERENCES assets(asset_id) ON DELETE CASCADE,
+        state TEXT NOT NULL DEFAULT 'paired' CHECK (state IN ('paired', 'split')),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag)",

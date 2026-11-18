@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { filterTitle, fileName } from "./utils/format";
 import { importTargets } from "./utils/importTargets";
+import { maybeNoticeRawPairs, RAW_PAIRS_CHANGED } from "./hooks/rawPairsNotice";
 
 // Web save targets are blob URLs — show the human filename (carried in the
 // URL fragment) instead of the raw URL in toasts.
@@ -398,8 +399,8 @@ export default function App() {
   };
 
   // What ⌘C / Edit › Copy copies: in the lightbox the photo on screen, else
-  // the selection. (A RAW pair is one item; its image_path is the file the
-  // user sees.)
+  // the selection. (A RAW pair is one item; a merged RAW+JPG pair copies
+  // both files.)
   const copyTargetIds = () => (lightboxOpen && workspace.selectedAssetId ? [workspace.selectedAssetId] : targetAssetIds());
 
   // The photos as files on the clipboard — what Finder's Copy does: ⌘V in
@@ -410,7 +411,8 @@ export default function App() {
     const items = [...new Set((ids || []).filter(Boolean))].map((id) => itemById.get(id)).filter(Boolean);
     if (!items.length) return;
     const gone = items.filter((item) => item.exists_on_disk === false).length;
-    const paths = items.filter((item) => item.exists_on_disk !== false).map((item) => item.image_path).filter(Boolean);
+    // A merged RAW+JPG pair is one photo, two files: both go.
+    const paths = items.filter((item) => item.exists_on_disk !== false).flatMap((item) => [item.image_path, item.pair_raw_path]).filter(Boolean);
     let result = { copied: [], missing: [] };
     try {
       if (paths.length) result = (await api.copyFiles(paths)) || result;
@@ -604,6 +606,19 @@ export default function App() {
   useEffect(() => {
     if (catalogPath) catchUpWatchedDirs(catalogPath);
   }, [catalogPath]);
+
+  // Same-shot RAW+JPG pairs: an upgraded catalog is told it has some once;
+  // merging or separating them (here or in Settings) redraws everything.
+  const noticeRawPairs = useEffectEvent(() => maybeNoticeRawPairs({ t, pushToast }));
+  useEffect(() => {
+    if (catalogPath) void noticeRawPairs();
+  }, [catalogPath]);
+  const refreshAfterRawPairs = useEffectEvent(() => workspace.refreshAll());
+  useEffect(() => {
+    const onChanged = () => refreshAfterRawPairs();
+    window.addEventListener(RAW_PAIRS_CHANGED, onChanged);
+    return () => window.removeEventListener(RAW_PAIRS_CHANGED, onChanged);
+  }, []);
 
   // Native menu → Settings (⌘,). onMenuAction is a multi-listener ipcRenderer
   // channel, so this coexists with useWorkspace's own menu handler.

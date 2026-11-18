@@ -15,6 +15,7 @@ import { describeSkippedExtensions } from "../utils/skippedFiles";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import api from "../api";
 import { collapseRootPaths, determineImportMode, fileName, mergeRoots } from "../utils/format";
+import { maybeNoticeRawPairs } from "./rawPairsNotice";
 
 const LIVE_IMPORT_REFRESH_MS = 4000;
 const NO_QUEUED_IMPORT = { rawDirs: [], imageDirs: [], auto: false };
@@ -333,6 +334,8 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
         }],
       });
     }
+    // The first pairs a catalog gets are said once (hooks/rawPairsNotice.js).
+    if (resolve?.result?.raw_pairs_made > 0) void maybeNoticeRawPairs({ t, pushToast });
     // One toast per finished import; the bridge (a stable ref) only formats it.
   }, [lastFinishedJob, bridgeRef]);
 

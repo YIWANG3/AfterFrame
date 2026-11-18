@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 
 from .. import formats
 from .collection_scope import subtree_members_subquery
+from .raw_pairs import MERGED_RAW_ID_SQL
 
 Clause = tuple[str, list[object]]
 
@@ -303,12 +304,13 @@ def _annotated(filters: dict) -> list[Clause]:
     return []
 
 
-# A photo with its RAW file bound to it (the pairing the import makes, or
-# one confirmed by hand). The sidebar used to offer this as a place of its own
+# A photo with its RAW file bound to it: the export Add RAW Sources matched
+# (or one confirmed by hand), or the JPG of a merged RAW+JPG pair. The sidebar used to offer this as a place of its own
 # ("With Raw", status "matched"); now it is a condition like any other.
 _HAS_RAW = (
-    "EXISTS (SELECT 1 FROM image_lookup_registry AS reg WHERE reg.image_asset_id = assets.asset_id"
+    "(EXISTS (SELECT 1 FROM image_lookup_registry AS reg WHERE reg.image_asset_id = assets.asset_id"
     " AND reg.match_status IN ('auto_bound', 'manual_confirmed'))"
+    f" OR {MERGED_RAW_ID_SQL} IS NOT NULL)"
 )
 _TRUE_WORDS = {"true", "yes", "1", "with"}
 _FALSE_WORDS = {"false", "no", "0", "without"}

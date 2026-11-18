@@ -76,6 +76,10 @@ def asset_detail(
         "raw_asset_id": row["raw_asset_id"],
         "raw_path": row["raw_path"],
         "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
+        # The RAW shot with this JPG, shown as one photo with it (db/raw_pairs.py).
+        "pair_raw_asset_id": row["pair_raw_asset_id"],
+        "pair_raw_path": row["pair_raw_path"],
+        "pair_raw_file_size": row["pair_raw_file_size"],
         "feature_vector": json.loads(row["feature_vector_json"] or "{}"),
         "candidates": json.loads(row["candidate_json"] or "[]"),
         "colors": get_asset_colors(connection, asset_id),

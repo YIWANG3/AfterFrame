@@ -427,6 +427,8 @@
     "noAssets": "此视图中没有素材",
     "missing": "缺失",
     "missingTip": "原文件已移动或删除",
+    "rawPair": "RAW",
+    "rawPairTip": "和同名 RAW 合并为一张",
     "hasPerson": "包含已检测到的人脸",
     "menu": {
       "edit": "编辑…",

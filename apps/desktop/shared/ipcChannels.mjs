@@ -62,6 +62,11 @@ export const CORE_IPC_METHODS = [
   ["dirsWithSubfolders", "app:dirs-with-subfolders", 1],
   ["verifyAssets", "workspace:verify-assets", 1],
   ["relinkAsset", "workspace:relink-asset", 1],
+  // Same-shot RAW+JPG pairs (docs/raw-jpg-pairing-plan.md).
+  ["rawPairsStatus", "workspace:raw-pairs-status", 0],
+  ["setRawPairsMode", "workspace:set-raw-pairs-mode", 1],
+  ["noticeRawPairs", "workspace:notice-raw-pairs", 0],
+  ["splitRawPair", "workspace:split-raw-pair", 1],
   ["setLocale", "app:set-locale", 1],
   // Interface scale: the window's page zoom (electron/uiScale.js).
   ["getUiScale", "app:get-ui-scale", 0],

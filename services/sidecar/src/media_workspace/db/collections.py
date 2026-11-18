@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from .browse import count_image_assets
 from .collection_scope import subtree_ids
+from .raw_pairs import hidden_raw_ids
 from .smart_rules import normalize_rules, parse_rules
 
 
@@ -334,8 +335,12 @@ def add_collection_items(
     kind = connection.execute("SELECT kind FROM collections WHERE collection_id = ?", (collection_id,)).fetchone()
     if kind is not None and kind[0] == "smart":
         raise ValueError("A smart collection fills itself from its rules; photos cannot be added to it")
+    # The RAW of a merged RAW+JPG pair is in no folder: its JPG is (raw_pairs).
+    hidden = hidden_raw_ids(connection, asset_ids)
     added = 0
     for asset_id in asset_ids:
+        if asset_id in hidden:
+            continue
         added += connection.execute(
             "INSERT OR IGNORE INTO collection_items (collection_id, asset_id) VALUES (?, ?)",
             (collection_id, asset_id),
