@@ -76,7 +76,7 @@ test.afterAll(async () => {
   if (dir) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("a RAW+JPG shot is one photo, badged RAW, and the import says so once", async () => {
+test("a RAW+JPG shot is one photo, badged JPG+RAW, and the import says so once", async () => {
   test.setTimeout(150_000);
   await importAndWait();
   const rows = await shoot();
@@ -86,6 +86,8 @@ test("a RAW+JPG shot is one photo, badged RAW, and the import says so once", asy
   expect(rows.get("DSC_0002.DNG").pair_raw_asset_id).toBeNull();
 
   await expect(card(jpg.asset_id).locator("[data-raw-pair-badge]")).toBeVisible({ timeout: 20_000 });
+  // "JPG+RAW", not "RAW": a RAW shot on its own is RAW too, and has no badge.
+  await expect(card(jpg.asset_id).locator("[data-raw-pair-badge]")).toHaveText("JPG+RAW");
   await expect(card(rows.get("DSC_0002.DNG").asset_id).locator("[data-raw-pair-badge]")).toHaveCount(0);
   await expect(ctx.window.getByText("1 RAW+JPG pair is shown as one photo")).toBeVisible({ timeout: 10_000 });
   expect(await ctx.window.evaluate(() => window.mediaWorkspace.rawPairsStatus())).toEqual({ mode: "merge", pairs: 1, noticed: true });
