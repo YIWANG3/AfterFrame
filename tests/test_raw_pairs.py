@@ -57,8 +57,10 @@ class RawPairsTest(unittest.TestCase):
         return sorted(Path(row["image_path"]).name for row in list_image_assets(self.connection, status="all"))
 
     def asset_id(self, name: str) -> str:
-        row = self.connection.execute("SELECT asset_id FROM assets WHERE canonical_path LIKE ?", (f"%/{name}",)).fetchone()
-        return str(row[0])
+        rows = self.connection.execute("SELECT asset_id, canonical_path FROM assets").fetchall()
+        matches = [str(row[0]) for row in rows if Path(str(row[1])).name == name]
+        self.assertEqual(len(matches), 1, f"{name}: {matches}")
+        return matches[0]
 
     def run_cli(self, *argv: str):
         out = io.StringIO()
