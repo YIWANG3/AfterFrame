@@ -185,7 +185,7 @@ class RawPairsTest(unittest.TestCase):
         with_raw = list_image_assets(self.connection, status="all", filters={"has_raw": True})
         self.assertEqual([Path(row["image_path"]).name for row in with_raw], ["DSC_0001.JPG"])
 
-    # ── separate, split ──
+    # ── separate ──
     def test_separate_shows_both_with_what_they_were_given(self) -> None:
         image_id, raw_id = self.pair()
         folder = create_collection(self.connection, "Picks")["collection_id"]
@@ -201,9 +201,12 @@ class RawPairsTest(unittest.TestCase):
         self.run_cli("set-asset-rating", "--asset-id", image_id, "--rating", "1")
         self.assertEqual(self.column("DSC_0001.dng", "app_rating"), 3)
 
-    def test_a_split_pair_stays_two_photos(self) -> None:
+    def test_a_pair_split_by_an_earlier_build_stays_two_photos(self) -> None:
+        # No command splits a pair any more; a catalog from a pre-release
+        # build may still hold one.
         image_id, raw_id = self.pair()
-        self.assertTrue(self.run_cli("split-raw-pair", "--asset-id", image_id)["ok"])
+        self.connection.execute("UPDATE raw_pairs SET state = 'split' WHERE image_asset_id = ?", (image_id,))
+        self.connection.commit()
         self.assertEqual(len(self.names()), 2)
         self.assertEqual(raw_pairs.pair_all(self.connection), 0)
         self.imported(self.shoot)

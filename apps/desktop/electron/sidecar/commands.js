@@ -216,10 +216,6 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["notice-raw-pairs"]);
     },
 
-    splitRawPair(assetId) {
-      return callJson(["split-raw-pair", "--asset-id", String(assetId)]);
-    },
-
     // The RAWs merged into these photos, as files ({asset_id, raw_asset_id, raw_path}).
     rawPairFiles(assetIds) {
       const ids = [...new Set((assetIds || []).filter(Boolean))];

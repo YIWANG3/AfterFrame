@@ -199,20 +199,6 @@ export default function Inspector({ variant = "panel", detail, onRatingChange, o
     }
   }
 
-  // A merged RAW+JPG pair that is wrong (two cameras' DSC_0001): two photos from now on.
-  async function handleSplitRawPair() {
-    if (!detail?.asset_id) return;
-    try {
-      const res = await api.splitRawPair(detail.asset_id);
-      if (res?.ok) {
-        pushToast?.({ title: t("toast.rawPairSplit"), ttl: 3000 });
-        onRelinked?.();
-      }
-    } catch (err) {
-      pushToast?.({ title: t("toast.rawPairSplitFailed"), message: err?.message || String(err), ttl: 6000, tone: "error" });
-    }
-  }
-
   async function handleRelink() {
     if (!detail?.asset_id || relinking) return;
     setRelinking(true);
@@ -411,26 +397,15 @@ export default function Inspector({ variant = "panel", detail, onRatingChange, o
       </DetailRow>
       {detail.pair_raw_path ? (
         <DetailRow label={t("rows.rawFile")}>
-          <span className="inline-flex max-w-full items-start justify-end gap-1.5">
-            <button
-              type="button"
-              className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
-              onClick={() => void api.revealPath(detail.pair_raw_path)}
-              title={t("reveal")}
-              data-testid="inspector-raw-pair"
-            >
-              {escapePathLabel(detail.pair_raw_path)}
-            </button>
-            <button
-              type="button"
-              className="shrink-0 rounded px-1 text-[11px] text-muted2 transition-colors hover:bg-hover hover:text-text"
-              onClick={() => void handleSplitRawPair()}
-              title={t("rows.splitRawTip")}
-              data-testid="inspector-split-raw-pair"
-            >
-              {t("rows.splitRaw")}
-            </button>
-          </span>
+          <button
+            type="button"
+            className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+            onClick={() => void api.revealPath(detail.pair_raw_path)}
+            title={t("reveal")}
+            data-testid="inspector-raw-pair"
+          >
+            {escapePathLabel(detail.pair_raw_path)}
+          </button>
         </DetailRow>
       ) : null}
       {detail.pair_raw_path && !detail.raw_path ? null : (
