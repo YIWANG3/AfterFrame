@@ -233,6 +233,14 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(argv);
     },
 
+    // Look for missing originals by name under a folder (recursively); only
+    // a file whose fingerprint matches is linked. No ids: every missing asset.
+    relinkFromFolder({ folder, assetIds = [] } = {}) {
+      const argv = ["relink-from-folder", "--folder", String(folder)];
+      for (const id of assetIds) argv.push("--asset-id", String(id));
+      return callJson(argv);
+    },
+
     // The view the counts are taken inside (folder or status, search text, the
     // other active filters). No arguments: the whole library.
     facetValues(view = {}) {

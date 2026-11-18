@@ -168,18 +168,19 @@ module.exports = (ctx) => {
         "Library housekeeping. Actions: 'verify_assets' — sweep for missing/changed originals (scope all|missing); " +
         "'refresh_from_disk' (asset_ids) — re-read metadata and regenerate previews after files changed on disk; " +
         "'relink' (asset_id, new_path) — point a missing asset at its moved file; " +
+        "'relink_from_folder' (dir, asset_ids optional) — look for missing originals by file name under a folder, recursively, and relink those whose content matches (none forced; without asset_ids: every missing asset); " +
         "'scan_new_media' (dirs) — one-shot import sweep of folders; " +
         "'list_watched_dirs' / 'add_watched_dir' / 'remove_watched_dir' (dir) — folders the app auto-imports from.",
       inputSchema: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["verify_assets", "refresh_from_disk", "relink", "scan_new_media", "list_watched_dirs", "add_watched_dir", "remove_watched_dir"] },
+          action: { type: "string", enum: ["verify_assets", "refresh_from_disk", "relink", "relink_from_folder", "scan_new_media", "list_watched_dirs", "add_watched_dir", "remove_watched_dir"] },
           scope: { type: "string", enum: ["all", "missing"], description: "For verify_assets, default all" },
-          asset_ids: { type: "array", items: { type: "string" }, description: "For refresh_from_disk" },
+          asset_ids: { type: "array", items: { type: "string" }, description: "For refresh_from_disk; optional for relink_from_folder" },
           asset_id: { type: "string", description: "For relink" },
           new_path: { type: "string", description: "For relink" },
           dirs: { type: "array", items: { type: "string" }, description: "For scan_new_media" },
-          dir: { type: "string", description: "For add_watched_dir/remove_watched_dir" },
+          dir: { type: "string", description: "For add_watched_dir/remove_watched_dir/relink_from_folder" },
         },
         required: ["action"],
       },
@@ -209,6 +210,15 @@ module.exports = (ctx) => {
           if (!fs.existsSync(String(args.new_path))) throw new Error(`Path does not exist: ${args.new_path}`);
           const result = await commands.relinkAsset({ assetId: String(args.asset_id), newPath: String(args.new_path) });
           deps.broadcastCatalogChanged?.("assets", { ids: [String(args.asset_id)] });
+          return result;
+        }
+        if (action === "relink_from_folder") {
+          if (!args.dir) throw new Error("dir is required for relink_from_folder.");
+          if (!fs.existsSync(String(args.dir))) throw new Error(`Path does not exist: ${args.dir}`);
+          const assetIds = (args.asset_ids || []).map(String).filter(Boolean);
+          const result = await commands.relinkFromFolder({ folder: String(args.dir), assetIds });
+          const ids = (result?.items || []).filter((item) => item.status === "relinked").map((item) => item.asset_id);
+          deps.broadcastCatalogChanged?.("assets", { ids });
           return result;
         }
         if (action === "scan_new_media") {

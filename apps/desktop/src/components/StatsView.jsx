@@ -534,7 +534,7 @@ function StatsBody({ stats, open }) {
               {[
                 { key: "rejected", count: storage.rejected.count, size: storage.rejected.bytes, onPick: () => open("flag", { flag: "reject" }) },
                 { key: "lookalikes", count: storage.lookalikes.count, size: storage.lookalikes.bytes, groups: storage.lookalikes.groups, onPick: () => onOpenLookalikes(open) },
-                { key: "missing", count: storage.missing, size: null },
+                { key: "missing", count: storage.missing, size: null, onPick: () => open("range", {}, "missing") },
               ].map((row) => (
                 <button
                   key={row.key}

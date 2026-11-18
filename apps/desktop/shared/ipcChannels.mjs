@@ -67,6 +67,7 @@ export const CORE_IPC_METHODS = [
   ["setRawPairsMode", "workspace:set-raw-pairs-mode", 1],
   ["noticeRawPairs", "workspace:notice-raw-pairs", 0],
   ["splitRawPair", "workspace:split-raw-pair", 1],
+  ["relinkFromFolder", "workspace:relink-from-folder", 1],
   ["setLocale", "app:set-locale", 1],
   // Interface scale: the window's page zoom (electron/uiScale.js).
   ["getUiScale", "app:get-ui-scale", 0],

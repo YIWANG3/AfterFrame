@@ -155,6 +155,96 @@ def relink_asset(
         "forced": actual_fp != expected_fp,
     }
 
+def relink_assets_from_folder(
+    connection: sqlite3.Connection,
+    folder: Path,
+    asset_ids: list[str] | None = None,
+    *,
+    commit: bool = True,
+) -> dict[str, object]:
+    """Find moved originals under `folder` (recursively) and relink them in place.
+
+    A file is a candidate when its name matches the original's (ignoring
+    case); it is relinked only when its fingerprint matches too, the rule
+    relink_asset applies without force. Nothing is forced: a same-named file
+    with other content is reported, not linked. asset_ids None: every asset
+    the catalog holds as missing.
+
+    Returns {relinked, not_found, mismatch, in_use, present, items}: the
+    counts, and per asset {asset_id, status, new_path?}. `present` are assets
+    whose original is back at its old path (their flag is put right);
+    `in_use` found their file, but another record of the catalog holds it.
+    """
+    from ..metadata import quick_fingerprint
+
+    root = Path(folder)
+    if not root.is_dir():
+        raise ValueError(f"not a folder: {root}")
+    if asset_ids is None:
+        rows = connection.execute(
+            "SELECT asset_id, fingerprint, canonical_path, exists_on_disk FROM assets WHERE exists_on_disk = 0"
+        ).fetchall()
+    else:
+        rows = []
+        for asset_id in dict.fromkeys(asset_ids):
+            row = connection.execute(
+                "SELECT asset_id, fingerprint, canonical_path, exists_on_disk FROM assets WHERE asset_id = ?",
+                (asset_id,),
+            ).fetchone()
+            if row is not None:
+                rows.append(row)
+
+    # Only the names asked for are collected, so a big folder costs one walk.
+    wanted = {os.path.basename(str(row["canonical_path"])).lower() for row in rows}
+    found: dict[str, list[str]] = {}
+    for dirpath, dirnames, filenames in os.walk(root.resolve()):
+        dirnames.sort()
+        for name in sorted(filenames):
+            key = name.lower()
+            if key in wanted:
+                found.setdefault(key, []).append(os.path.join(dirpath, name))
+
+    fingerprints: dict[str, str | None] = {}
+
+    def fingerprint_of(path: str) -> str | None:
+        if path not in fingerprints:
+            try:
+                fingerprints[path] = quick_fingerprint(Path(path), mode="head-tail")
+            except OSError:
+                fingerprints[path] = None
+        return fingerprints[path]
+
+    counts = {"relinked": 0, "not_found": 0, "mismatch": 0, "in_use": 0, "present": 0}
+    items: list[dict[str, object]] = []
+    for row in rows:
+        asset_id = str(row["asset_id"])
+        old_path = str(row["canonical_path"])
+        if os.path.exists(old_path):
+            if not int(row["exists_on_disk"]):
+                connection.execute(
+                    "UPDATE assets SET exists_on_disk = 1, updated_at = CURRENT_TIMESTAMP WHERE asset_id = ?",
+                    (asset_id,),
+                )
+            counts["present"] += 1
+            items.append({"asset_id": asset_id, "status": "present"})
+            continue
+        candidates = [path for path in found.get(os.path.basename(old_path).lower(), []) if path != old_path]
+        matching = [path for path in candidates if fingerprint_of(path) == str(row["fingerprint"])]
+        status, new_path = ("mismatch" if candidates else "not_found"), None
+        for path in matching:
+            outcome = relink_asset(connection, asset_id, Path(path), commit=False)
+            if outcome["status"] == "relinked":
+                status, new_path = "relinked", str(outcome["new_path"])
+                break
+            status = "in_use"
+        counts[status] += 1
+        items.append({"asset_id": asset_id, "status": status, **({"new_path": new_path} if new_path else {})})
+
+    if commit:
+        connection.commit()
+    return {**counts, "items": items}
+
+
 def _record_tombstone(connection: sqlite3.Connection, paths: list[str]) -> None:
     """Remember files removed from the catalog while still on disk, so a watched
     directory's catch-up scan won't auto-re-import them. We only tombstone paths

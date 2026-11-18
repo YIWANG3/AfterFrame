@@ -179,6 +179,7 @@ export function filterTitle(status) {
   if (status === "recent") return "Recently Added";
   if (status === "rated") return "Rated";
   if (status === "lookalikes") return "Look-alikes";
+  if (status === "missing") return "Missing Originals";
   return "All Assets";
 }
 
