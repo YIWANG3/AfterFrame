@@ -453,8 +453,6 @@ def build_parser() -> argparse.ArgumentParser:
     raw_pairs_mode_p = subparsers.add_parser("set-raw-pairs-mode", parents=[common])
     raw_pairs_mode_p.add_argument("--mode", choices=["merge", "separate"], required=True)
     subparsers.add_parser("notice-raw-pairs", parents=[common])
-    split_pair_p = subparsers.add_parser("split-raw-pair", parents=[common])
-    split_pair_p.add_argument("--asset-id", required=True)
     pair_files_p = subparsers.add_parser("raw-pair-files", parents=[common])
     pair_files_p.add_argument("--asset-id", action="append", required=True)
 
@@ -1179,11 +1177,6 @@ def _cmd_set_raw_pairs_mode(args, connection, catalog, parser):
 def _cmd_notice_raw_pairs(args, connection, catalog, parser):
     raw_pairs.mark_noticed(connection)
     print(json.dumps(raw_pairs.status(connection)))
-    return 0
-
-
-def _cmd_split_raw_pair(args, connection, catalog, parser):
-    print(json.dumps(raw_pairs.split_pair(connection, args.asset_id)))
     return 0
 
 
@@ -2263,7 +2256,6 @@ COMMAND_HANDLERS = {
     "raw-pairs-status": _cmd_raw_pairs_status,
     "set-raw-pairs-mode": _cmd_set_raw_pairs_mode,
     "notice-raw-pairs": _cmd_notice_raw_pairs,
-    "split-raw-pair": _cmd_split_raw_pair,
     "raw-pair-files": _cmd_raw_pair_files,
     "catalog-roots": _cmd_catalog_roots,
     "register-roots": _cmd_register_roots,

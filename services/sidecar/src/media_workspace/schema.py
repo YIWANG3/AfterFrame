@@ -244,7 +244,8 @@ SCHEMA_STATEMENTS = [
     )
     """,
     # Same-shot RAW+JPG (db/raw_pairs.py): the JPG is the photo a merged pair
-    # shows as; 'split' is a pair the user took apart, never made again.
+    # shows as; 'split' is a pair taken apart in a pre-release build (there is
+    # no per-photo split now), never made again.
     """
     CREATE TABLE IF NOT EXISTS raw_pairs (
         image_asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,

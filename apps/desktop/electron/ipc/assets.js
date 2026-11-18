@@ -26,7 +26,6 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, media: { ad
   ipcMain.handle("workspace:raw-pairs-status", withCatalog(getCatalogState, null, () => commands.rawPairsStatus()));
   ipcMain.handle("workspace:set-raw-pairs-mode", withCatalog(getCatalogState, null, (_event, mode) => commands.setRawPairsMode(mode)));
   ipcMain.handle("workspace:notice-raw-pairs", withCatalog(getCatalogState, null, () => commands.noticeRawPairs()));
-  ipcMain.handle("workspace:split-raw-pair", withCatalog(getCatalogState, null, (_event, assetId) => commands.splitRawPair(assetId)));
 
   // Relink a missing asset to a new on-disk location. With no newPath we open a
   // native file picker. Returns the sidecar result verbatim, including the

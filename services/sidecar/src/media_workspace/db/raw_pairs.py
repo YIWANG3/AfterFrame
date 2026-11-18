@@ -151,7 +151,7 @@ def pair_asset(connection: sqlite3.Connection, asset_id: str) -> bool:
     """Pair this photo with its other half, if it has exactly one: same
     folder, same name but for the case and the extension, one RAW and one
     JPG/HEIF, shot within MAX_CAPTURE_GAP_SECONDS when both say when. A photo
-    already in a pair, or in one the user split, is left alone. True when a
+    already in a pair, or in one split by an earlier build, is left alone. True when a
     pair was made. Does not commit."""
     row = connection.execute(
         "SELECT asset_id, asset_type, canonical_path, stem, stem_key, meta_capture_time FROM assets WHERE asset_id = ?",
@@ -332,23 +332,6 @@ def companion_files(connection: sqlite3.Connection, asset_ids: list[str]) -> lis
         {"asset_id": image_id, "raw_asset_id": raw_id, "raw_path": paths.get(raw_id)}
         for image_id, raw_id in raws.items()
     ]
-
-
-def split_pair(connection: sqlite3.Connection, image_asset_id: str, *, commit: bool = True) -> dict:
-    """Show a pair as two photos from now on, for good (a wrong pair: two
-    cameras' DSC_0001). The RAW gets the JPG's folders, as when separating
-    them all."""
-    row = connection.execute(
-        "SELECT raw_asset_id, state FROM raw_pairs WHERE image_asset_id = ?", (image_asset_id,),
-    ).fetchone()
-    if row is None or row["state"] != "paired":
-        return {"ok": False, "asset_id": image_asset_id}
-    if is_merged(connection):
-        _copy_folders(connection, image_asset_id, str(row["raw_asset_id"]))
-    connection.execute("UPDATE raw_pairs SET state = 'split' WHERE image_asset_id = ?", (image_asset_id,))
-    if commit:
-        connection.commit()
-    return {"ok": True, "asset_id": image_asset_id, "raw_asset_id": str(row["raw_asset_id"])}
 
 
 def forget_assets(connection: sqlite3.Connection, asset_ids: list[str]) -> None:

@@ -1,7 +1,8 @@
 // Same-shot RAW+JPG pairs (docs/raw-jpg-pairing-plan.md): a camera's RAW and
 // JPG of one shot, imported from the same folder, are one photo. Rating it
 // rates both; Settings ▸ Library shows them as two again, with the stars
-// they were given; a wrong pair is split from the Inspector for good.
+// they were given, and merging folds them again. There is no per-photo split
+// (as in Lightroom): a wrong pair is fixed by showing pairs separately.
 // One app launch; the tests build on each other in order.
 
 const fs = require("node:fs");
@@ -90,10 +91,11 @@ test("a RAW+JPG shot is one photo, badged RAW, and the import says so once", asy
   expect(await ctx.window.evaluate(() => window.mediaWorkspace.rawPairsStatus())).toEqual({ mode: "merge", pairs: 1, noticed: true });
 });
 
-test("rating the photo rates the RAW too; the Inspector names the RAW file", async () => {
+test("rating the photo rates the RAW too; the Inspector names the RAW file, with no Split", async () => {
   const jpg = (await shoot()).get("DSC_0001.JPG");
   await selectCard(jpg.asset_id);
   await expect(ctx.window.getByTestId("inspector-raw-pair")).toContainText("DSC_0001.DNG");
+  await expect(ctx.window.getByTestId("inspector-split-raw-pair")).toHaveCount(0);
   await ctx.window.keyboard.press("4");
   await expect.poll(() => ratingOf(jpg.asset_id)).toBe(4);
   expect(await ratingOf(jpg.pair_raw_asset_id), "the hidden RAW").toBe(4);
@@ -118,16 +120,4 @@ test("shown separately, both photos are there with their stars, and merging fold
   await setMergedInSettings(true);
   await expect(card(rawId)).toHaveCount(0, { timeout: 15_000 });
   expect(await ratingOf(rawId)).toBe(2);
-});
-
-test("a pair split from the Inspector stays two photos", async () => {
-  const { pair_raw_asset_id: rawId, asset_id: jpgId } = (await shoot()).get("DSC_0001.JPG");
-  await selectCard(jpgId);
-  await ctx.window.getByTestId("inspector-split-raw-pair").click();
-  await expect(card(rawId)).toBeVisible({ timeout: 15_000 });
-  expect([...(await shoot()).keys()].sort()).toEqual(["DSC_0001.DNG", "DSC_0001.JPG", "DSC_0002.DNG"]);
-  // Importing the folder again does not pair them again.
-  await importAndWait();
-  expect([...(await shoot()).keys()].sort()).toEqual(["DSC_0001.DNG", "DSC_0001.JPG", "DSC_0002.DNG"]);
-  expect(await ctx.window.evaluate(() => window.mediaWorkspace.rawPairsStatus())).toMatchObject({ mode: "merge", pairs: 0 });
 });
