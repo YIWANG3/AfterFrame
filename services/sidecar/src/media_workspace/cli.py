@@ -89,6 +89,17 @@ JOB_RUNNER_COMMAND = re.compile(r"^run-[a-z-]+-job$")
 JOB_BUSY_TIMEOUT_MS = 60_000
 
 
+def _clip_error(text: str, limit: int = 2000) -> str:
+    """A failed command's stderr, cut to what says what went wrong. An argparse
+    error is its "prog: error: …" line, kept from the start: the usage before
+    it and the "(choose from …)" list after the bad value only grow with every
+    command. Anything else keeps its tail, where a traceback ends."""
+    errors = [line for line in text.splitlines() if re.match(r"^\S+: error: ", line)]
+    if errors:
+        return errors[-1][:limit]
+    return text[-limit:]
+
+
 def _serve_loop(args) -> int:
     """Resident mode: amortize interpreter startup across many commands.
 
@@ -130,7 +141,7 @@ def _serve_loop(args) -> int:
             code = 1
             error = traceback.format_exc(limit=8)
         if code != 0 and not error and errbuf.getvalue():
-            error = errbuf.getvalue()[-2000:]
+            error = _clip_error(errbuf.getvalue())
         response = {"id": request.get("id"), "code": code, "stdout": buf.getvalue(), "error": error}
         sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
         sys.stdout.flush()
