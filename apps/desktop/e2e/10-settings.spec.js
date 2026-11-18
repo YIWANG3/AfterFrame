@@ -102,6 +102,32 @@ test("Library tab renders catalog/cache groups + HD preview toggle", async () =>
     .locator("xpath=ancestor::div[contains(@class,'justify-between')][1]").getByRole("switch");
   await expect(ctx.window.getByText("Generate HD previews (2000px)")).toBeVisible();
   await expect(hdToggle).toHaveAttribute("aria-checked", "false");
+
+  // A switch that is on shows its knob against the track in both themes, at
+  // the 3:1 WCAG asks of a control. The accent is monochrome (white in the
+  // dark theme), and a white knob on it was 1.1:1.
+  const colorsToggle = ctx.window.getByText("Analyse colours automatically", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class,'justify-between')][1]").getByRole("switch");
+  await expect(colorsToggle).toHaveAttribute("aria-checked", "true");
+  const contrast = (theme) => colorsToggle.evaluate((el, next) => {
+    // The track and knob ease between colours: read them with that off, or a
+    // read right after the switch gets the previous theme's colour.
+    for (const node of [el, el.firstElementChild]) node.style.transition = "none";
+    document.documentElement.dataset.theme = next;
+    const luminance = (css) => {
+      const [r, g, b] = css.match(/\d+(\.\d+)?/g).slice(0, 3).map((v) => {
+        const c = Number(v) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const [a, b] = [getComputedStyle(el).backgroundColor, getComputedStyle(el.firstElementChild).backgroundColor].map(luminance);
+    for (const node of [el, el.firstElementChild]) node.style.transition = "";
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  }, theme);
+  for (const theme of ["light", "dark"]) {
+    expect(await contrast(theme), `${theme} theme`).toBeGreaterThanOrEqual(3);
+  }
 });
 
 test("Integrations tab shows the live MCP endpoint and copies a working config", async () => {
