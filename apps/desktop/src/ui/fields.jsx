@@ -33,10 +33,13 @@ export function Toggle({ on, onChange, disabled }) {
         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
       ].join(" ")}
     >
+      {/* The accent is monochrome (white in the dark theme, near-black in the
+          light one), so the knob on it is accent-ink: a white knob on a white
+          track all but vanished. Off, the knob stays white on the fill. */}
       <span
         className={[
-          "absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white transition-all",
-          on ? "left-[14px]" : "left-[2px]",
+          "absolute top-[2px] h-[14px] w-[14px] rounded-full shadow-[0_1px_2px_rgb(0_0_0/0.25)] transition-all",
+          on ? "left-[14px] bg-[rgb(var(--accent-ink))]" : "left-[2px] bg-white",
         ].join(" ")}
       />
     </button>
