@@ -91,6 +91,8 @@
   "importAllExisting": "{{already}} 个已在库中",
   "importMixedMsg_other": "{{count}} 个所选文件已导入过,已跳过。",
   "importAllExistingMsg": "所有所选文件都已导入过，没有新增。",
+  "importClaimed_other": "接回了 {{count}} 个挪过位置的文件",
+  "importClaimedMsg": "沿用了它们原来的记录，评分、标签和所在文件夹都还在。",
   "importSkippedUnsupported_one": "已跳过 1 个不支持的文件",
   "importSkippedUnsupported_other": "已跳过 {{count}} 个不支持的文件",
   "importSkippedUnsupportedMsg": "不是图库能导入的照片、RAW 或视频格式：{{kinds}}。",

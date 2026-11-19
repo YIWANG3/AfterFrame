@@ -137,12 +137,20 @@ def relink_asset(
         (new_str, asset_id, old_path),
     )
     # The gallery reads image_path from the registry, not assets.canonical_path,
-    # so the registry's path (its PRIMARY KEY) has to move too.
-    if str(row["asset_type"]) == "image":
+    # so the registry's path (its PRIMARY KEY) has to move too. Imported RAWs
+    # and videos ride the registry like photos do, so this is any type's.
+    connection.execute(
+        "UPDATE image_lookup_registry SET image_path = ?, updated_at = CURRENT_TIMESTAMP "
+        "WHERE image_asset_id = ? AND image_path = ?",
+        (new_str, asset_id, old_path),
+    )
+    # A RAW added as a source is a matching candidate under its path too
+    # (raw_metadata_cache.path is UNIQUE: a row already there keeps it).
+    if str(row["asset_type"]) == "raw":
         connection.execute(
-            "UPDATE image_lookup_registry SET image_path = ?, updated_at = CURRENT_TIMESTAMP "
-            "WHERE image_asset_id = ? AND image_path = ?",
-            (new_str, asset_id, old_path),
+            "UPDATE raw_metadata_cache SET path = ? WHERE raw_asset_id = ? AND path = ? "
+            "AND NOT EXISTS (SELECT 1 FROM raw_metadata_cache WHERE path = ?)",
+            (new_str, asset_id, old_path, new_str),
         )
 
     if commit:
@@ -154,6 +162,56 @@ def relink_asset(
         "new_path": new_str,
         "forced": actual_fp != expected_fp,
     }
+
+def claim_moved_original(
+    connection: sqlite3.Connection,
+    asset_type: str,
+    path: Path,
+    fingerprint: str,
+) -> str | None:
+    """An import met a file the catalog doesn't know by its path: if it is a
+    record's original that was moved (same type, same content, the record's
+    own path gone), relink that record here instead of making a second one,
+    so its rating, tags, folders and versions follow the file.
+
+    Only a sure match is claimed: the old path must be gone now (stat'ed
+    here, not the exists_on_disk flag, which a watcher's delete event may not
+    have set yet), and of several such records only the one with the same
+    file name. A copy (old file still there) is not a move: it stays a new
+    record. Returns the claimed asset_id, or None."""
+    new_str = str(path)
+    if connection.execute("SELECT 1 FROM asset_files WHERE path = ?", (new_str,)).fetchone():
+        return None
+    rows = connection.execute(
+        "SELECT asset_id, canonical_path FROM assets WHERE fingerprint = ? AND asset_type = ? AND canonical_path != ?",
+        (fingerprint, asset_type, new_str),
+    ).fetchall()
+    gone = [row for row in rows if not os.path.exists(str(row["canonical_path"]))]
+    if len(gone) > 1:
+        name = os.path.basename(new_str).lower()
+        gone = [row for row in gone if os.path.basename(str(row["canonical_path"])).lower() == name]
+    if len(gone) != 1:
+        return None
+    asset_id = str(gone[0]["asset_id"])
+    outcome = relink_asset(connection, asset_id, path, commit=False)
+    return asset_id if outcome["status"] == "relinked" else None
+
+
+def _with_paired_raws(connection: sqlite3.Connection, asset_ids: list[str]) -> list[str]:
+    """The ids, each photo followed by the RAW paired with it. The gallery
+    shows a pair as its photo, so a view's ids leave the RAW out; its original
+    was moved along with the photo's and is looked for too."""
+    out: list[str] = []
+    for asset_id in dict.fromkeys(asset_ids):
+        out.append(asset_id)
+        row = connection.execute(
+            "SELECT raw_asset_id FROM raw_pairs WHERE image_asset_id = ? AND state = 'paired'",
+            (asset_id,),
+        ).fetchone()
+        if row is not None:
+            out.append(str(row["raw_asset_id"]))
+    return list(dict.fromkeys(out))
+
 
 def relink_assets_from_folder(
     connection: sqlite3.Connection,
@@ -168,10 +226,13 @@ def relink_assets_from_folder(
     case); it is relinked only when its fingerprint matches too, the rule
     relink_asset applies without force. Nothing is forced: a same-named file
     with other content is reported, not linked. asset_ids None: every asset
-    the catalog holds as missing.
+    the catalog holds as missing. A photo paired with a RAW brings the RAW
+    along (the gallery's ids are the photos only).
 
     Returns {relinked, not_found, mismatch, in_use, present, items}: the
-    counts, and per asset {asset_id, status, new_path?}. `present` are assets
+    counts, and per asset {asset_id, status, new_path?, paired_raw?}. A
+    paired RAW brought along is in `items` (paired_raw) but not in the counts,
+    which are photos as the gallery shows them. `present` are assets
     whose original is back at its old path (their flag is put right);
     `in_use` found their file, but another record of the catalog holds it.
     """
@@ -184,15 +245,23 @@ def relink_assets_from_folder(
         rows = connection.execute(
             "SELECT asset_id, fingerprint, canonical_path, exists_on_disk FROM assets WHERE exists_on_disk = 0"
         ).fetchall()
+        ids = {str(row["asset_id"]) for row in rows}
+        # A missing pair is one photo: its RAW is looked for, not counted.
+        companions = {
+            str(row["raw_asset_id"])
+            for row in connection.execute("SELECT image_asset_id, raw_asset_id FROM raw_pairs WHERE state = 'paired'")
+            if str(row["image_asset_id"]) in ids and str(row["raw_asset_id"]) in ids
+        }
     else:
         rows = []
-        for asset_id in dict.fromkeys(asset_ids):
+        for asset_id in _with_paired_raws(connection, asset_ids):
             row = connection.execute(
                 "SELECT asset_id, fingerprint, canonical_path, exists_on_disk FROM assets WHERE asset_id = ?",
                 (asset_id,),
             ).fetchone()
             if row is not None:
                 rows.append(row)
+        companions = {str(row["asset_id"]) for row in rows} - set(asset_ids)
 
     # Only the names asked for are collected, so a big folder costs one walk.
     wanted = {os.path.basename(str(row["canonical_path"])).lower() for row in rows}
@@ -225,8 +294,9 @@ def relink_assets_from_folder(
                     "UPDATE assets SET exists_on_disk = 1, updated_at = CURRENT_TIMESTAMP WHERE asset_id = ?",
                     (asset_id,),
                 )
-            counts["present"] += 1
-            items.append({"asset_id": asset_id, "status": "present"})
+            if asset_id not in companions:
+                counts["present"] += 1
+            items.append({"asset_id": asset_id, "status": "present", **({"paired_raw": True} if asset_id in companions else {})})
             continue
         candidates = [path for path in found.get(os.path.basename(old_path).lower(), []) if path != old_path]
         matching = [path for path in candidates if fingerprint_of(path) == str(row["fingerprint"])]
@@ -237,8 +307,14 @@ def relink_assets_from_folder(
                 status, new_path = "relinked", str(outcome["new_path"])
                 break
             status = "in_use"
-        counts[status] += 1
-        items.append({"asset_id": asset_id, "status": status, **({"new_path": new_path} if new_path else {})})
+        if asset_id not in companions:
+            counts[status] += 1
+        items.append({
+            "asset_id": asset_id,
+            "status": status,
+            **({"new_path": new_path} if new_path else {}),
+            **({"paired_raw": True} if asset_id in companions else {}),
+        })
 
     if commit:
         connection.commit()

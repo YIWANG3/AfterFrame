@@ -24,6 +24,7 @@ from .db import (
     upsert_registry,
     upsert_video_asset,
 )
+from .db.maintenance import claim_moved_original
 from .db.raw_pairs import pair_asset
 from .file_types import is_ignored_path
 from .metadata import (
@@ -251,8 +252,9 @@ def resolve_image(
     commit: bool = True,
 ) -> MatchDecision:
     thresholds = thresholds or Thresholds()
-    previous_signature = _previous_asset_signature(connection, image_path)
     export = extract_image_candidate(image_path)
+    claimed = claim_moved_original(connection, "image", export.path, export.fingerprint) is not None
+    previous_signature = _previous_asset_signature(connection, image_path)
     content_changed = _content_changed(
         previous_signature, export.fingerprint, export.file_size, export.modified_time
     )
@@ -277,6 +279,7 @@ def resolve_image(
             ranked_candidates=json.loads(row["candidate_json"]),
             preexisting=preexisting,
             content_changed=content_changed,
+            claimed=claimed,
         )
 
     if existing and existing["match_status"] == "manual_confirmed":
@@ -327,6 +330,7 @@ def resolve_image(
         ranked_candidates=ranked[:5],
         preexisting=preexisting,
         content_changed=content_changed,
+        claimed=claimed,
     )
     upsert_registry(connection, decision, commit=False)
     if commit:
@@ -386,6 +390,7 @@ def resolve_image_batch(
     }
     processed = 0
     already_in_catalog = 0
+    claimed_moved = 0
     skipped_deleted = 0
     deferred_files = 0
     raw_pairs_made = 0
@@ -457,7 +462,11 @@ def resolve_image_batch(
                 raw_pairs_made += 1
             counts.setdefault(decision.status, 0)
             counts[decision.status] += 1
-            if decision.preexisting:
+            # A claimed file was not in the catalog under this path, but it
+            # is not new either: its record came along.
+            if decision.claimed:
+                claimed_moved += 1
+            elif decision.preexisting:
                 already_in_catalog += 1
             if decision.content_changed:
                 changed_paths.append(str(path.resolve()))
@@ -477,7 +486,8 @@ def resolve_image_batch(
         "total": total,
         "status_counts": {key: value for key, value in counts.items() if value > 0},
         "already_in_catalog": already_in_catalog,
-        "newly_added": processed - already_in_catalog - skipped_deleted - deferred_files,
+        "newly_added": processed - already_in_catalog - claimed_moved - skipped_deleted - deferred_files,
+        "claimed_moved": claimed_moved,
         "skipped_deleted": skipped_deleted,
         "deferred_files": deferred_files,
         "raw_pairs_made": raw_pairs_made,
@@ -497,13 +507,14 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
     (rendered by macOS) is the stand-in everywhere; see the preview pipeline.
     Mirrors index_video_file: rides the registry-based browse as 'unmatched'."""
     resolved = path.resolve()
+    # Its size is LibRaw's, cropped to the image the camera delivers.
+    metadata = extract_raw_metadata(resolved, fingerprint_mode="head-tail", metadata_profile="full")
+    claimed = claim_moved_original(connection, "raw", resolved, metadata.fingerprint) is not None
     previous_signature = _previous_asset_signature(connection, resolved)
     existing = connection.execute(
         "SELECT asset_id FROM asset_files WHERE path = ?", (str(resolved),)
     ).fetchone()
     preexisting = existing is not None
-    # Its size is LibRaw's, cropped to the image the camera delivers.
-    metadata = extract_raw_metadata(resolved, fingerprint_mode="head-tail", metadata_profile="full")
     # A photo is one file, so key it by path like images and videos. Keyed by
     # content alone, byte-identical copies (a re-downloaded "x (1).3FR") were
     # one asset whose size and mtime matched only one of them: the other card
@@ -526,6 +537,7 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
         content_changed=_content_changed(
             previous_signature, metadata.fingerprint, metadata.file_size, metadata.modified_time
         ),
+        claimed=claimed,
     )
     upsert_registry(connection, decision, commit=commit)
     return decision
@@ -534,14 +546,15 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
 def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecision:
     """Index a video as asset_type='video' — probe metadata, no RAW matching."""
     resolved = path.resolve()
+    stat = resolved.stat()
+    with resolved.open("rb") as handle:
+        fingerprint = quick_fingerprint_from_handle(handle, stat.st_size, mode="head-tail")
+    claimed = claim_moved_original(connection, "video", resolved, fingerprint) is not None
     previous_signature = _previous_asset_signature(connection, resolved)
     existing = connection.execute(
         "SELECT asset_id FROM asset_files WHERE path = ?", (str(resolved),)
     ).fetchone()
     preexisting = existing is not None
-    stat = resolved.stat()
-    with resolved.open("rb") as handle:
-        fingerprint = quick_fingerprint_from_handle(handle, stat.st_size, mode="head-tail")
     asset_id = str(existing["asset_id"]) if existing else stable_asset_id("video", fingerprint, str(resolved))
     metadata = probe_video(resolved) or {}
     # Lightroom can't write stars into a clip, so a rated video has a sidecar.
@@ -575,6 +588,7 @@ def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecisi
         content_changed=_content_changed(
             previous_signature, fingerprint, stat.st_size, iso_mtime(resolved, stat)
         ),
+        claimed=claimed,
     )
     upsert_registry(connection, decision, commit=commit)
     return decision
