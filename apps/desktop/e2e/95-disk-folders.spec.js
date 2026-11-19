@@ -22,7 +22,10 @@ test.describe("folders on disk", () => {
   let ctx, root, year;
 
   const w = () => ctx.window;
-  const folderRow = (dir) => w().locator(`[data-disk-folder="${dir}"]`);
+  // A backslash starts a CSS escape: a Windows path has its own doubled, as
+  // byImagePath() does.
+  const css = (value) => value.replace(/[\\"]/g, "\\$&");
+  const folderRow = (dir) => w().locator(`[data-disk-folder="${css(dir)}"]`);
   const menuItem = (key) => w().getByTestId("sidebar-disk-folder-menu").locator(`[data-menu-item='${key}']`);
   const rows = async () => (await w().evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 1000 })))
     .filter((row) => String(row.image_path || "").startsWith(root));
@@ -32,7 +35,7 @@ test.describe("folders on disk", () => {
   ).toBe(false);
   // The dev build's Design System button floats over the sidebar's bottom
   // left, where a folder's chevron can sit: the toggle is clicked as an event.
-  const expand = (dir) => w().locator(`[data-disk-folder-toggle="${dir}"]`).dispatchEvent("click");
+  const expand = (dir) => w().locator(`[data-disk-folder-toggle="${css(dir)}"]`).dispatchEvent("click");
   const openMenu = async (dir) => {
     await folderRow(dir).scrollIntoViewIfNeeded();
     await folderRow(dir).click({ button: "right" });
