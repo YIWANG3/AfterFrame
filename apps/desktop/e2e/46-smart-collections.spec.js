@@ -436,7 +436,7 @@ test("each section folds to its heading, and a folded section marks what is show
   // (28px apart: the section's own bottom margin plus the sidebar's gap.)
   expect(foldersBox.y - (smartBox.y + smartBox.height)).toBeLessThanOrEqual(32);
   // The folder tools stay on the folded heading; "new folder" unfolds it to show the field.
-  await window.getByTitle("New folder").click();
+  await window.getByTitle("New collection").click();
   await expect(folders).toHaveAttribute("data-open", "true");
   await expect(window.getByTestId("sidebar-folder-scroll").locator("input")).toBeVisible();
   await window.keyboard.press("Escape");

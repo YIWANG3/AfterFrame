@@ -7,7 +7,7 @@
   "showInAllAssets": {
     "failed": "Could not show this photo in All Assets"
   },
-  "folderOrderFailed": "Could not save folder order",
+  "folderOrderFailed": "Could not save collection order",
   "ratingFailed": "Could not save rating",
   "drop": {
     "title": "Drop to import",
@@ -100,7 +100,7 @@
   "importAllExistingMsg": "Every selected file was already imported — nothing new added.",
   "importClaimed_one": "Found 1 moved file",
   "importClaimed_other": "Found {{count}} moved files",
-  "importClaimedMsg": "Their records came along: ratings, tags and folders are kept.",
+  "importClaimedMsg": "Their records came along: ratings, tags and collections are kept.",
   "importSkippedUnsupported_one": "Skipped 1 unsupported file",
   "importSkippedUnsupported_other": "Skipped {{count}} unsupported files",
   "importSkippedUnsupportedMsg": "Not a photo, RAW or video format the catalog imports: {{kinds}}.",
@@ -126,8 +126,8 @@
   "targetFolder": {
     "added_one": "Added {{count}} photo to “{{name}}”",
     "added_other": "Added {{count}} photos to “{{name}}”",
-    "none": "No target folder yet",
-    "noneHint": "Make a folder, or add to one from the menu once; {{key}} then adds there.",
+    "none": "No target collection yet",
+    "noneHint": "Make a collection, or add to one from the menu once; {{key}} then adds there.",
     "failed": "Adding to “{{name}}” failed"
   },
   "smartCollectionRulesLost": "Its conditions were not stored. Quit and reopen AfterFrame, then save it again.",
@@ -159,7 +159,7 @@
   },
   "compareNeedsTwo": "Select two photos to compare",
   "descriptionFailed": "Could not save the description",
-  "folderMoveFailed": "Could not move the folder",
+  "folderMoveFailed": "Could not move the collection",
   "rawPairs": {
     "merged_one": "{{count}} RAW+JPG pair is shown as one photo",
     "merged_other": "{{count}} RAW+JPG pairs are shown as one photo each",

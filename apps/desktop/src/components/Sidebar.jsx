@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Fragment } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Copy, FolderPlus, FolderCog, Folder, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, ChevronDown, ChevronRight, X, Tags, BarChart3 } from "lucide-react";
+import { Images, Clock, Star, Copy, FolderPlus, FolderCog, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, ChevronDown, ChevronRight, X, Tags, BarChart3, Album } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
@@ -489,20 +489,15 @@ export default function Sidebar({
           )}
         </div>
 
-        <SmartCollections
-          collections={collections}
-          activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode || statsMode ? null : activeSmartCollectionId}
-          view={folderView}
-          grow={!foldersOpen}
-          onOpen={onOpenSmartCollection}
-          onEditRules={onEditSmartCollection}
-          onRename={onRenameCollection}
-          onDelete={onDeleteCollection}
-          onSnapshot={onSnapshotSmartCollection}
-        />
 
-        {/* Open, the folders keep at least a few rows however short the window:
-            the smart collections above give way first (they may shrink). */}
+        {/* Collections: the manual ones (a tree the user arranges) and the
+            smart ones (saved filters), two groups under one heading. Folders
+            on disk are a section of their own below. */}
+        <div className="shrink-0 px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2" data-sidebar-collections-heading="true">
+          {t("sidebar.collections")}
+        </div>
+        {/* Open, the manual collections keep at least a few rows however short
+            the window: the smart ones below give way first (they may shrink). */}
         <div
           className={[
             foldersOpen ? "flex min-h-[180px] flex-1 flex-col" : "shrink-0",
@@ -537,7 +532,8 @@ export default function Sidebar({
         >
           <SectionHeading
             id="folders"
-            label={t("sidebar.folders")}
+            variant="group"
+            label={t("sidebar.manualCollections")}
             open={foldersOpen}
             onToggle={toggleFolders}
             holdsActive={manualCollections.some((c) => c.collection_id === activeCollectionId)}
@@ -731,7 +727,7 @@ export default function Sidebar({
                             <img src={localFileUrl(coverOf(col))} alt="" draggable={false} className="h-10 w-10 shrink-0 rounded-[8px] object-cover" />
                           ) : (
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--fill-2)]">
-                              <Folder className="h-4 w-4 stroke-[1.6] text-muted2" />
+                              <Album className="h-4 w-4 stroke-[1.6] text-muted2" />
                             </span>
                           )}
                           <span className="min-w-0 flex-1">
@@ -881,7 +877,7 @@ export default function Sidebar({
                         />
                       ) : (
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--fill-2)]">
-                          <Folder className="h-4 w-4 stroke-[1.6] text-muted2" />
+                          <Album className="h-4 w-4 stroke-[1.6] text-muted2" />
                         </span>
                       )}
                       <span className="min-w-0">
@@ -892,7 +888,7 @@ export default function Sidebar({
                     </span>
                   ) : (
                     <span className="flex min-w-0 items-center gap-2.5 overflow-hidden">
-                      <Folder className={`h-4 w-4 shrink-0 stroke-[1.6] ${active ? "text-accent" : ""}`} />
+                      <Album className={`h-4 w-4 shrink-0 stroke-[1.6] ${active ? "text-accent" : ""}`} />
                       <span className="min-w-0">
                         <span className="block truncate text-[13px]">{col.name}</span>
                         {meta}
@@ -955,6 +951,17 @@ export default function Sidebar({
           </div>
           </>)}
         </div>
+        <SmartCollections
+          collections={collections}
+          activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode || statsMode ? null : activeSmartCollectionId}
+          view={folderView}
+          grow={!foldersOpen}
+          onOpen={onOpenSmartCollection}
+          onEditRules={onEditSmartCollection}
+          onRename={onRenameCollection}
+          onDelete={onDeleteCollection}
+          onSnapshot={onSnapshotSmartCollection}
+        />
       </nav>
 
       {rowMenu && <FaceMenu testId="sidebar-folder-menu" position={rowMenu} items={folderMenuItems(rowMenu.col)} onClose={() => setRowMenu(null)} />}

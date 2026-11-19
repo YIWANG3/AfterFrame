@@ -15,7 +15,7 @@ test.beforeAll(async () => {
   ctx = await launchApp({ testName: "folder-filters" });
   await expect(cards().first()).toBeVisible({ timeout: 15_000 });
   // The folder is made the way a user makes one: the sidebar's New folder button.
-  await ctx.window.getByTitle("New folder").click();
+  await ctx.window.getByTitle("New collection").click();
   const nameInput = ctx.window.getByRole("navigation").locator("input");
   await nameInput.fill("Filter me");
   await nameInput.press("Enter");

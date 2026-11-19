@@ -43,7 +43,7 @@ const inLibrary = (file) => w().evaluate((p) => window.mediaWorkspace.getAssetDe
 
 // Made the way a user makes one: the sidebar's New folder button.
 async function newFolder(name) {
-  await w().getByTitle("New folder", { exact: true }).click();
+  await w().getByTitle("New collection", { exact: true }).click();
   const field = scroll().locator("input");
   await field.fill(name);
   await field.press("Enter");
@@ -109,8 +109,8 @@ test("a folder dragged from Finder onto the folders is imported and becomes a fo
   const before = await libraryCount();
   await dropFromFinder([work.wedding], section());
   await expect(w().getByText("“Wedding” has subfolders")).toBeVisible();
-  await expect(w().locator("[data-choice='flat']")).toHaveText("Put Everything in One Folder");
-  await expect(w().locator("[data-choice='mirror']")).toHaveText("Keep the Subfolders");
+  await expect(w().locator("[data-choice='flat']")).toHaveText("Put Everything in One Collection");
+  await expect(w().locator("[data-choice='mirror']")).toHaveText("Group by Subfolder");
   await oneFolder();
 
   // The folder is there at once, and opens; its photos arrive as the import lands them.
@@ -153,8 +153,8 @@ test("deleting a folder asks what becomes of its photos; Cancel changes nothing"
   await w().locator("[data-menu-item='delete']").click();
   await expect(w().getByText("Delete “Wedding”?")).toBeVisible();
   await expect(w().getByText("It holds 5 photos.")).toBeVisible();
-  await expect(w().getByText("Its 1 subfolder goes with it.")).toBeVisible();
-  await expect(w().locator("[data-choice='folder']")).toHaveText("Delete Folder Only");
+  await expect(w().getByText("The 1 collection inside it goes too.")).toBeVisible();
+  await expect(w().locator("[data-choice='folder']")).toHaveText("Delete Collection Only");
   await expect(w().locator("[data-choice='library']")).toHaveText("Also Remove 5 Photos from Library");
   await expect(w().locator("[data-choice='trash']")).toHaveText("Also Move 5 Files to Trash");
   // The dialog's own Cancel: the import's card may still be in the job dock, with a Cancel of its own.
@@ -176,11 +176,11 @@ test("…out of the library: only the photos no other folder holds, and the file
 
   await row("Wedding").click({ button: "right" });
   await w().locator("[data-menu-item='delete']").click();
-  await expect(w().getByText("1 of them is in another folder too and stays in the library.")).toBeVisible();
+  await expect(w().getByText("1 of them is in another collection too and stays in the library.")).toBeVisible();
   await w().locator("[data-choice='library']", { hasText: "Also Remove 4 Photos from Library" }).click();
 
   await expect.poll(rowNames, { timeout: 15_000 }).toEqual(["0:Portfolio"]);
-  await expect(w().getByText("Folder deleted, 4 photos removed from the library")).toBeVisible();
+  await expect(w().getByText("Collection deleted, 4 photos removed from the library")).toBeVisible();
   await expect.poll(libraryCount, { timeout: 15_000 }).toBe(before - 4);
   expect(await inLibrary(path.join(work.wedding, "a.jpg"))).toBe(true);
   expect(await inLibrary(path.join(work.wedding, "b.jpg"))).toBe(false);

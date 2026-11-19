@@ -152,7 +152,7 @@ test("the Inspector's stars follow the keys, down to 0", async () => {
 });
 
 test("folders: create, add from the menu, open, remove, rename, delete", async () => {
-  await ctx.window.getByTitle("New folder", { exact: true }).click();
+  await ctx.window.getByTitle("New collection", { exact: true }).click();
   const editor = ctx.window.getByTestId("sidebar-folder-scroll").locator("input");
   await editor.fill("Trip");
   await editor.press("Enter");
@@ -162,7 +162,7 @@ test("folders: create, add from the menu, open, remove, rename, delete", async (
   const assetId = await cards().nth(0).getAttribute("data-asset-id");
   await cards().nth(0).click();
   await cards().nth(0).click({ button: "right" });
-  await ctx.window.getByText("Add to Folder", { exact: true }).hover();
+  await ctx.window.getByText("Add to Collection", { exact: true }).hover();
   await ctx.window.getByRole("button", { name: "Trip", exact: true }).click();
   await expect(ctx.window.getByText("Copy File Path", { exact: true })).toHaveCount(0);
 
@@ -170,7 +170,7 @@ test("folders: create, add from the menu, open, remove, rename, delete", async (
   await expect(cards()).toHaveCount(1, { timeout: 10_000 });
   await expect(cards().first()).toHaveAttribute("data-asset-id", assetId);
   await cards().first().click({ button: "right" });
-  await ctx.window.getByText("Remove from Folder", { exact: true }).click();
+  await ctx.window.getByText("Remove from Collection", { exact: true }).click();
   await expect(cards()).toHaveCount(0, { timeout: 10_000 });
 
   const row = folder().locator("xpath=ancestor::*[@data-collection-id][1]");

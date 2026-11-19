@@ -16,7 +16,7 @@ const sidebarRows = () => w().getByTestId("sidebar-folder-scroll").locator("[dat
 
 async function openFoldersPage() {
   await w().getByTestId("sidebar-manage-folders").click();
-  await expect(w().getByRole("heading", { name: "Folders", exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(w().getByRole("heading", { name: "Collections", exact: true })).toBeVisible({ timeout: 10_000 });
 }
 
 test.beforeAll(async () => {
@@ -78,11 +78,11 @@ test("the page lists every folder, newest addition first, with cover and count",
 });
 
 test("search and sort narrow and reorder the wall", async () => {
-  const search = w().getByPlaceholder("Search folders");
+  const search = w().getByPlaceholder("Search collections");
   await search.fill("trip");
   await expect.poll(names).toEqual(["Trip Kyoto", "Trip Tokyo"]);
   await search.fill("zzz");
-  await expect(w().getByText("No folders match “zzz”")).toBeVisible();
+  await expect(w().getByText("No collections match “zzz”")).toBeVisible();
   await search.press("Escape");
   await expect(search).toHaveValue("");
   await expect(cards()).toHaveCount(3);
@@ -133,11 +133,11 @@ test("a shift-click range deletes after one confirm; the sidebar follows", async
   await row("Scratch").click();
   await row("Trip Kyoto").click({ modifiers: ["Shift"] });
   const bar = w().getByTestId("folders-selection-bar");
-  await expect(bar).toContainText("2 folders selected · 1 photos");
+  await expect(bar).toContainText("2 collections selected · 1 photos");
   await w().getByTestId("folders-delete-selected").click();
-  await expect(w().getByText("Delete 2 folders?")).toBeVisible();
+  await expect(w().getByText("Delete 2 collections?")).toBeVisible();
   // One of the two holds a photo: the question is also what becomes of it.
-  await w().getByRole("button", { name: "Delete Folders Only", exact: true }).click();
+  await w().getByRole("button", { name: "Delete Collections Only", exact: true }).click();
   await expect(cards()).toHaveCount(1);
   await expect.poll(names).toEqual(["Trip Tokyo"]);
   await expect(bar).toHaveCount(0);
@@ -159,8 +159,8 @@ test("Escape clears the selection; Enter opens the folder in the gallery", async
 
 test("Discover's Albums row links to the page, and it survives a reload", async () => {
   await w().getByRole("navigation").first().getByRole("button", { name: "Discover" }).click();
-  await w().getByRole("button", { name: "All folders ›" }).click();
-  await expect(w().getByRole("heading", { name: "Folders", exact: true })).toBeVisible();
+  await w().getByRole("button", { name: "All collections ›" }).click();
+  await expect(w().getByRole("heading", { name: "Collections", exact: true })).toBeVisible();
   await expect(cards()).toHaveCount(1);
   await w().reload();
   await expect(galleryCards(w()).first()).toBeVisible({ timeout: 15_000 });

@@ -24,7 +24,7 @@ const folders = async () => {
 let assets;
 
 async function newTopLevelFolder(name) {
-  await w().getByTitle("New folder", { exact: true }).click();
+  await w().getByTitle("New collection", { exact: true }).click();
   const field = scroll().locator("input");
   await field.fill(name);
   await field.press("Enter");
@@ -194,14 +194,14 @@ test("the right-click submenu and the folder page reach nested folders", async (
   const second = w().locator(`[data-asset-id="${assets[1].asset_id}"]`);
   await second.click();
   await second.click({ button: "right" });
-  await w().getByText("Add to Folder", { exact: true }).hover();
+  await w().getByText("Add to Collection", { exact: true }).hover();
   const kyoto = w().getByRole("button", { name: "Kyoto", exact: true });
   await expect(kyoto).toHaveAttribute("data-folder-depth", "2");
   await kyoto.click();
   await expect(row("Kyoto").locator("span.tabular-nums")).toHaveText("2", { timeout: 10_000 });
 
   await w().getByTestId("sidebar-manage-folders").click();
-  await expect(w().getByRole("heading", { name: "Folders", exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(w().getByRole("heading", { name: "Collections", exact: true })).toBeVisible({ timeout: 10_000 });
   const card = (name) => w().locator("[data-folder-id]").filter({ has: w().locator("[data-folder-name]", { hasText: new RegExp(`^${name}$`) }) });
   await expect(card("Kyoto").locator("[data-folder-location]")).toHaveText("Trips / Japan");
   await expect(card("Trips").locator("[data-folder-location]")).toHaveCount(0);
@@ -278,8 +278,8 @@ test("deleting a folder takes the folders under it; the photos stay", async () =
   await row("Japan").click({ button: "right" });
   await w().locator("[data-menu-item='delete']").click();
   await expect(w().getByText("Delete “Japan”?")).toBeVisible();
-  await expect(w().getByText(/Its 1 subfolder goes with it/)).toBeVisible();
-  await w().getByRole("button", { name: "Delete Folder Only", exact: true }).click();
+  await expect(w().getByText(/The 1 collection inside it goes too/)).toBeVisible();
+  await w().getByRole("button", { name: "Delete Collection Only", exact: true }).click();
   await expect.poll(rowNames, { timeout: 10_000 }).toEqual(["0:Trips", "0:Europe"]);
   const tree = await folders();
   expect(Object.keys(tree).sort()).toEqual(["Europe", "Trips"]);
@@ -294,8 +294,8 @@ test("deleting a folder takes the folders under it; the photos stay", async () =
   const card = (name) => w().locator("[data-folder-id]").filter({ has: w().locator("[data-folder-name]", { hasText: new RegExp(`^${name}$`) }) });
   await card("Trips").click();
   await w().getByTestId("folders-delete-selected").click();
-  await expect(w().getByText("Their subfolders go with them. The photos stay in the library.")).toBeVisible();
-  await w().getByRole("button", { name: "Delete folder", exact: true }).click();
+  await expect(w().getByText("The collections inside them go too. The photos stay in the library.")).toBeVisible();
+  await w().getByRole("button", { name: "Delete collection", exact: true }).click();
   await expect.poll(async () => Object.keys(await folders()).sort(), { timeout: 10_000 }).toEqual(["Europe"]);
 });
 

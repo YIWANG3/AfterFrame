@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Check, ChevronDown, CornerDownRight, Folder, FolderCog, FolderPlus, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X,
+  Check, ChevronDown, CornerDownRight, FolderCog, FolderPlus, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X, Album,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import api from "../api";
@@ -151,7 +151,7 @@ function MoveToMenu({ position, collections, sourceIds, onPick, onClose }) {
       <div className="popover-scroll max-h-[300px] overflow-y-auto">
         {row("root", 0, <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted2" />, t("folders.topLevel"), () => onPick(null), "root")}
         {options.map(({ folder, depth }) => row(
-          folder.collection_id, depth, <Folder className="h-3.5 w-3.5 shrink-0 text-muted2" />, folder.name, () => onPick(folder.collection_id), folder.collection_id,
+          folder.collection_id, depth, <Album className="h-3.5 w-3.5 shrink-0 text-muted2" />, folder.name, () => onPick(folder.collection_id), folder.collection_id,
         ))}
       </div>
     </div>,
@@ -166,7 +166,7 @@ function CoverMosaic({ paths, className = "" }) {
   if (!n) {
     return (
       <div className={cx("flex items-center justify-center bg-[var(--fill-2)] text-muted2", className)}>
-        <Folder className="h-6 w-6 stroke-[1.4]" />
+        <Album className="h-6 w-6 stroke-[1.4]" />
       </div>
     );
   }
@@ -334,7 +334,7 @@ export default function FoldersView({
     const single = targets.length === 1;
     return [
       ...(single ? [
-        { key: "open", icon: Folder, label: t("folders.open"), onClick: () => onOpenFolder?.(folder.collection_id) },
+        { key: "open", icon: Album, label: t("folders.open"), onClick: () => onOpenFolder?.(folder.collection_id) },
         { key: "rename", icon: Pencil, label: t("folders.rename"), onClick: () => setEditingId(folder.collection_id) },
         { key: "subfolder", icon: FolderPlus, label: t("folders.newSubfolder"), onClick: () => { setCreating({ parentId: folder.collection_id }); scrollRef.current?.scrollTo({ top: 0 }); } },
       ] : []),
@@ -533,7 +533,7 @@ export default function FoldersView({
 
         {!manual.length && !creating ? (
           <div className="flex h-[260px] flex-col items-center justify-center gap-3 rounded-[18px] bg-[var(--fill)] text-center">
-            <Folder className="h-8 w-8 stroke-[1.4] text-muted2" />
+            <Album className="h-8 w-8 stroke-[1.4] text-muted2" />
             <div className="text-[13px] text-text">{t("folders.noFolders")}</div>
             <div className="max-w-[360px] text-[12px] text-muted2">{t("folders.noFoldersHint")}</div>
             <Button variant="secondary" size="sm" onClick={() => setCreating({ parentId: null })}>{t("folders.newFolder")}</Button>

@@ -66,7 +66,7 @@ test.beforeAll(async () => {
     await window.mediaWorkspace.setAiProviderToken("p_mock", "mock-token");
   });
 
-  await ctx.window.getByTitle("New folder").click();
+  await ctx.window.getByTitle("New collection").click();
   const nameInput = ctx.window.getByRole("navigation").locator("input");
   await nameInput.fill(FOLDER);
   await nameInput.press("Enter");
