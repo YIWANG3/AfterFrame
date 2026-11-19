@@ -85,7 +85,8 @@
   "discover": {
     "recentTitle": "Recently Added",
     "empty": "No photos yet. Import some and the latest will show up here.",
-    "folderMeta": "{{count}} items",
+    "folderMeta_one": "{{count}} item",
+    "folderMeta_other": "{{count}} items",
     "peopleTitle": "People",
     "placesTitle": "Places",
     "memories": "Memories",
@@ -202,7 +203,8 @@
     "targetFolder": "{{keys}} adds the selected photos here",
     "viewCovers": "Show covers",
     "viewList": "Show as list",
-    "folderMeta": "{{count}} items",
+    "folderMeta_one": "{{count}} item",
+    "folderMeta_other": "{{count}} items",
     "rename": "Rename",
     "delete": "Delete",
     "annotateFolder": "Annotate un-annotated in this collection",
@@ -793,6 +795,10 @@
     }
   },
   "manager": {
+    "noSmart": "No smart collections yet",
+    "noSmartHint": "Set conditions in the filter bar and save them as a smart collection.",
+    "noFolders": "No folders yet",
+    "noFoldersHint": "Import a folder and the folders your photos are in show here.",
     "tabs": "Smart collections, collections and folders",
     "sort": "Sort",
     "sorts": {

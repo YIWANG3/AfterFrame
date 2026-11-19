@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderInput, FolderX, LayoutGrid, List, ListFilter, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, Folder } from "lucide-react";
+import { ManagerEmptyState, ToolbarIconButton as IconButton, ToolbarSortDropdown } from "./managerChrome";
 import api from "../api";
 import { cx } from "../ui";
 import { usePref } from "../hooks/usePref";
@@ -15,14 +16,10 @@ import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import ManagerTabs from "./ManagerTabs";
 import { diskFolderMenu } from "./DiskFolders";
-import { isSynced } from "./diskFolderTree";
+import { ancestorsOf, isSynced } from "./diskFolderTree";
 
 // How many cards fetch a cover photo; past that they show the icon.
 const COVER_LIMIT = 120;
-
-function IconButton({ className = "", ...props }) {
-  return <button type="button" className={cx("flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text", className)} {...props} />;
-}
 
 // The first photo each card's place shows, fetched once per key.
 function useCovers(entries) {
@@ -59,7 +56,8 @@ function Cover({ path, icon: Icon }) {
   );
 }
 
-// The toolbar both tabs share: the tabs, a search field, a sort, grid or list.
+// The toolbar both tabs share, in the collections tab's markup (FoldersView):
+// new, the tabs, a search field, the sort button, grid or list.
 function ManagerToolbar({ tabs, onNew, newLabel, query, setQuery, placeholder, sort, setSort, sorts, view, setView, extra = null }) {
   const { t } = useTranslation("nav");
   return (
@@ -69,7 +67,7 @@ function ManagerToolbar({ tabs, onNew, newLabel, query, setQuery, placeholder, s
           <Plus className="h-4 w-4 stroke-[1.8]" />
         </IconButton>
       )}
-      <div className="ml-1 mr-2 flex min-w-0 flex-1 items-center">{tabs}</div>
+      <div className="ml-2 mr-2 min-w-0 flex-1">{tabs}</div>
       <label className="relative block min-w-[96px] max-w-[176px] flex-1">
         <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
         <input
@@ -82,20 +80,15 @@ function ManagerToolbar({ tabs, onNew, newLabel, query, setQuery, placeholder, s
           className="h-8 w-full rounded-md border border-border/70 bg-app py-0 pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
         />
       </label>
-      <label className="relative ml-1 flex items-center">
-        <SlidersHorizontal className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted" />
-        <select
-          value={sort}
-          onChange={(event) => setSort(event.target.value)}
-          aria-label={t("manager.sort")}
-          data-testid="manager-sort"
-          className="h-8 appearance-none rounded-md border border-border/70 bg-app pl-7 pr-2 text-[12px] text-text outline-none"
-        >
-          {sorts.map((value) => <option key={value} value={value}>{t(`manager.sorts.${value}`)}</option>)}
-        </select>
-      </label>
+      <ToolbarSortDropdown
+        value={sort}
+        onChange={setSort}
+        options={sorts.map((value) => ({ value, label: t(`manager.sorts.${value}`) }))}
+        title={t("manager.sort")}
+        testId="manager-sort"
+      />
       {extra}
-      <div className="ml-1 flex items-center gap-0.5">
+      <div className="toolbar-group flex items-center gap-0.5">
         <IconButton title={t("folders.viewGrid")} aria-label={t("folders.viewGrid")} aria-pressed={view === "grid"} className={view === "grid" ? "bg-selected text-accent" : ""} onClick={() => setView("grid")}>
           <LayoutGrid className="h-3.5 w-3.5 stroke-[1.6]" />
         </IconButton>
@@ -120,6 +113,7 @@ export function SmartCollectionsPage({ collections, tab, onTab, counts, onOpen, 
   const [view, setView] = usePref("manager.smartView", "grid", oneOf(["grid", "list"]));
   const [menu, setMenu] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const smartCount = (collections || []).filter((c) => c.kind === "smart").length;
   const smart = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const list = (collections || []).filter((c) => c.kind === "smart" && (!needle || String(c.name).toLowerCase().includes(needle)));
@@ -139,7 +133,7 @@ export function SmartCollectionsPage({ collections, tab, onTab, counts, onOpen, 
   ) : <div className="truncate text-[13px] text-text" title={c.name}>{c.name}</div>);
 
   return (
-    <div data-testid="manager-smart" className="library-view relative flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div data-testid="workspace-split" data-manager-page="smart" className="library-view relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <ManagerToolbar
         tabs={<ManagerTabs tab={tab} onTab={onTab} counts={counts} />}
         onNew={onNew}
@@ -153,9 +147,17 @@ export function SmartCollectionsPage({ collections, tab, onTab, counts, onOpen, 
         view={view}
         setView={setView}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4">
-        {!smart.length ? (
-          <div className="px-1 py-6 text-[12px] text-muted2">{query.trim() ? t("manager.noMatches", { query: query.trim() }) : t("sidebar.noSmart")}</div>
+      <main data-testid="gallery-scroll" className="min-h-0 flex-1 overflow-y-auto p-6 pb-24">
+        {!smartCount ? (
+          <ManagerEmptyState
+            testId="manager-empty"
+            icon={ListFilter}
+            title={t("manager.noSmart")}
+            hint={t("manager.noSmartHint")}
+            action={onNew ? { label: t("sidebar.newSmart"), onClick: onNew } : null}
+          />
+        ) : !smart.length ? (
+          <div className="px-1 py-6 text-[12px] text-muted2">{t("manager.noMatches", { query: query.trim() })}</div>
         ) : view === "grid" ? (
           <div className="grid gap-x-4 gap-y-5 [grid-template-columns:repeat(auto-fill,minmax(168px,1fr))]">
             {smart.map((c) => (
@@ -185,7 +187,7 @@ export function SmartCollectionsPage({ collections, tab, onTab, counts, onOpen, 
             </tbody>
           </table>
         )}
-      </div>
+      </main>
       {menu && <FaceMenu testId="manager-smart-menu" position={menu} items={menuItems(menu.item)} onClose={() => setMenu(null)} />}
     </div>
   );
@@ -204,13 +206,21 @@ export function DiskFoldersPage({ diskFolders, tab, onTab, counts, onOpen, onImp
   const { folders = [], watchedDirs = [] } = diskFolders || {};
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const list = folders.filter((f) => !needle || String(f.name).toLowerCase().includes(needle) || String(f.path).toLowerCase().includes(needle));
+    // The folders that hold photos themselves: a folder that only leads to
+    // others (a drive's Users, a project's apps) is the sidebar tree's to show.
+    const list = folders.filter((f) => (f.direct > 0 || !f.exists) && (!needle || String(f.name).toLowerCase().includes(needle) || String(f.path).toLowerCase().includes(needle)));
     if (sort === "count") return [...list].sort((a, b) => (b.total || 0) - (a.total || 0));
     if (sort === "path") return [...list].sort((a, b) => String(a.path).localeCompare(String(b.path), i18n.language, { numeric: true }));
     return [...list].sort(byName(i18n.language));
   }, [folders, query, sort, i18n.language]);
   const covers = useCovers(shown.map((f) => ({ key: `${f.path}:${f.total}`, base: folderBase(f.path, true) })));
   const coverOf = (f) => covers[`${f.path}:${f.total}`];
+  // Where a folder sits in the tree, as the collections page shows a
+  // collection's ("照片 / 2026"); the whole path is in its tooltip.
+  const locationOf = (f) => {
+    const names = ancestorsOf(folders, f.path).reverse().map((above) => folders.find((x) => x.path === above)?.name || "").filter(Boolean);
+    return (names.length > 2 ? ["…", ...names.slice(-2)] : names).join(" / ");
+  };
   const openMenu = (folder, event) => { event.preventDefault(); event.stopPropagation(); setMenu({ item: folder, x: event.clientX, y: event.clientY }); };
   const badges = (f) => (
     <>
@@ -220,7 +230,7 @@ export function DiskFoldersPage({ diskFolders, tab, onTab, counts, onOpen, onImp
   );
 
   return (
-    <div data-testid="manager-folders" className="library-view relative flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div data-testid="workspace-split" data-manager-page="folders" className="library-view relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <ManagerToolbar
         tabs={<ManagerTabs tab={tab} onTab={onTab} counts={counts} />}
         onNew={onImport}
@@ -239,9 +249,17 @@ export function DiskFoldersPage({ diskFolders, tab, onTab, counts, onOpen, onImp
           </IconButton>
         )}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4">
-        {!shown.length ? (
-          <div className="px-1 py-6 text-[12px] text-muted2">{query.trim() ? t("manager.noMatches", { query: query.trim() }) : t("diskFolders.empty")}</div>
+      <main data-testid="gallery-scroll" className="min-h-0 flex-1 overflow-y-auto p-6 pb-24">
+        {!folders.length ? (
+          <ManagerEmptyState
+            testId="manager-empty"
+            icon={Folder}
+            title={t("manager.noFolders")}
+            hint={t("manager.noFoldersHint")}
+            action={onImport ? { label: t("diskFolders.import"), onClick: onImport } : null}
+          />
+        ) : !shown.length ? (
+          <div className="px-1 py-6 text-[12px] text-muted2">{t("manager.noMatches", { query: query.trim() })}</div>
         ) : view === "grid" ? (
           <div className="grid gap-x-4 gap-y-5 [grid-template-columns:repeat(auto-fill,minmax(168px,1fr))]">
             {shown.map((f) => (
@@ -253,8 +271,8 @@ export function DiskFoldersPage({ diskFolders, tab, onTab, counts, onOpen, onImp
                   </button>
                 </div>
                 <div className="mt-2 min-w-0">
-                  <div className="flex items-center gap-1.5"><span className="min-w-0 truncate text-[13px] text-text" title={f.name}>{f.name}</span>{badges(f)}</div>
-                  <div className="truncate text-[10px] text-muted2" title={f.path}>{f.path}</div>
+                  <div className="flex items-center gap-1.5"><span className="min-w-0 truncate text-[13px] text-text" title={f.path}>{f.name}</span>{badges(f)}</div>
+                  {locationOf(f) && <div data-folder-location="true" className="truncate text-[10px] text-muted2" title={f.path}>{locationOf(f)}</div>}
                   <div className="mt-0.5 truncate text-[11px] text-muted2">{t("sidebar.folderMeta", { count: f.total || 0 })}</div>
                 </div>
               </div>
@@ -272,14 +290,14 @@ export function DiskFoldersPage({ diskFolders, tab, onTab, counts, onOpen, onImp
                       {badges(f)}
                     </span>
                   </td>
-                  <td className="max-w-0 py-2 pr-2 text-muted2"><span className="block truncate" title={f.path}>{f.path}</span></td>
+                  <td className="max-w-0 py-2 pr-2 text-muted2"><span className="block truncate" title={f.path}>{locationOf(f)}</span></td>
                   <td className="w-24 py-2 pr-2 text-right tabular-nums text-muted2">{f.total || 0}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-      </div>
+      </main>
       {menu && diskFolders && (
         <FaceMenu testId="manager-folder-menu" position={menu} items={diskFolderMenu(menu.item, { t, watchedDirs, actions: diskFolders })} onClose={() => setMenu(null)} />
       )}

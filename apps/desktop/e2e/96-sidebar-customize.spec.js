@@ -82,10 +82,13 @@ test.describe("customizing the sidebar", () => {
     await expect(w().getByTestId("manager-tab-folders")).toHaveAttribute("aria-selected", "true");
     const realImages = w().locator("[data-manager-folder]").filter({ hasText: "real-images" });
     await expect(realImages).toBeVisible({ timeout: 10_000 });
+    // Where it sits in the tree, not its whole path.
+    await expect(realImages.locator("[data-folder-location]")).toHaveText("fixtures");
 
     await w().getByTestId("manager-tab-smart").click();
-    await expect(w().getByTestId("manager-smart")).toBeVisible();
-    await expect(w().getByTestId("manager-smart")).toContainText("No smart collections yet");
+    await expect(w().locator("[data-manager-page='smart']")).toBeVisible();
+    await expect(w().getByTestId("manager-empty")).toContainText("No smart collections yet");
+    await expect(w().getByTestId("manager-empty").getByRole("button", { name: "New smart collection" })).toBeVisible();
 
     await w().getByTestId("manager-tab-collections").click();
     await expect(w().getByTestId("folders-new")).toBeVisible();

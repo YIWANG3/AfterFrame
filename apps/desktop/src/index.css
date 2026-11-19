@@ -514,6 +514,7 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 /* 图标钮 / 分组 → 胶囊 */
 .app-toolbar button.rounded-md { border-radius: 999px; }
 .app-toolbar > .toolbar-modes,
+.app-toolbar > .toolbar-group,
 .app-toolbar > .toolbar-thumbsize,
 .app-toolbar > label,
 .app-toolbar > .relative:not(.min-w-0) {
@@ -529,9 +530,11 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 .app-toolbar > .toolbar-modes button { padding-left: 10px; padding-right: 10px; }
 .app-toolbar > .toolbar-thumbsize { padding: 0 10px; }
 /* 分组胶囊(布局 / 地图):内部按钮 28 高、全圆角,高亮态与外壳同心 */
-.app-toolbar > .toolbar-modes { padding: 0 3px; gap: 2px; }
-.app-toolbar > .toolbar-modes button { height: 28px; min-width: 28px; border-radius: 999px; padding-left: 8px; padding-right: 8px; }
-.app-toolbar > .toolbar-modes button:hover, .app-toolbar button.rounded-md:hover { background: var(--fill-2); }
+.app-toolbar > .toolbar-modes, .app-toolbar > .toolbar-group { padding: 0 3px; gap: 2px; }
+.app-toolbar > .toolbar-modes button, .app-toolbar > .toolbar-group button { height: 28px; min-width: 28px; border-radius: 999px; padding-left: 8px; padding-right: 8px; }
+.app-toolbar > .toolbar-modes button:hover, .app-toolbar > .toolbar-group button:hover, .app-toolbar button.rounded-md:hover { background: var(--fill-2); }
+/* The manager's tabs read as the title: no pill, the skin's title type. */
+.app-toolbar [role="tablist"] button { height: auto; min-width: 0; border-radius: 0; background: transparent; }
 /* 单按钮的胶囊(排序 / 筛选 / 后台活动 / 加号):外壳不留内边距,按钮撑满,发丝边与填充重合 */
 .app-toolbar > .relative:not(.min-w-0) { padding: 0 3px; }
 .app-toolbar > .relative:not(.min-w-0) > button { height: 28px; min-width: 28px; border-radius: 999px; margin: 0; }

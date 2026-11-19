@@ -744,6 +744,10 @@
     }
   },
   "manager": {
+    "noSmart": "还没有智能合集",
+    "noSmartHint": "在筛选栏里设好条件，就能存成智能合集。",
+    "noFolders": "还没有文件夹",
+    "noFoldersHint": "导入文件夹后，照片所在的目录会出现在这里。",
     "tabs": "智能合集、合集和文件夹",
     "sort": "排序",
     "sorts": {

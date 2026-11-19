@@ -102,7 +102,8 @@ export default function App() {
   const managerCounts = {
     smart: (workspace.collections || []).filter((c) => c.kind === "smart").length,
     collections: (workspace.collections || []).filter((c) => c.kind === "manual").length,
-    folders: diskFolders.folders.length,
+    // The Folders tab lists the folders that hold photos themselves.
+    folders: diskFolders.folders.filter((folder) => folder.direct > 0 || !folder.exists).length,
   };
   // How the gallery shows photos is remembered (utils/prefs.js); what it
   // shows (the view, the filters) starts fresh.
