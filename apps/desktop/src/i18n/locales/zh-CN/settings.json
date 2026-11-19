@@ -23,7 +23,8 @@
     "themeLight": "浅色",
     "themeSystem": "跟随系统",
     "uiScale": "界面缩放",
-    "uiScaleHint": "整个界面一起缩放,立即生效。"
+    "uiScaleHint": "整个界面一起缩放,立即生效。",
+    "sidebar": "侧栏"
   },
   "annotation": {
     "loading": "正在加载设置…",

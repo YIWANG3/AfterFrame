@@ -92,6 +92,27 @@ export default function useDiskFolders({ workspaceRef, pushToast, refreshKey }) 
     }
   }
 
+  // Every folder at once: each top folder checked and imported again.
+  async function syncAll() {
+    const tops = folders.filter((folder) => folder.parent == null);
+    if (!tops.length) return;
+    try {
+      let missing = 0;
+      for (const folder of tops) missing += (await api.verifyAssets({ under: folder.path }))?.newly_missing || 0;
+      pushToast?.({
+        title: t("diskFolders.syncedAll", { count: tops.length }),
+        message: missing ? t("diskFolders.syncedMissing", { count: missing }) : undefined,
+        ttl: 4000,
+      });
+      const there = api.has("statDirs") ? (await api.statDirs(tops.map((folder) => folder.path))) || [] : tops.map((folder) => folder.path);
+      if (there.length) await workspaceRef.current.addImagesFromPaths(there, { auto: true });
+      else await workspaceRef.current.refreshAll({ preserveView: true });
+      await refresh();
+    } catch (error) {
+      fail(error);
+    }
+  }
+
   // Auto-sync is the folder being watched (electron/watcher.js).
   async function setAutoSync(folder, on) {
     try {
@@ -187,6 +208,7 @@ export default function useDiskFolders({ workspaceRef, pushToast, refreshKey }) 
     folderName,
     locate,
     sync,
+    syncAll,
     setAutoSync,
     saveAsCollection,
     reveal: (folder) => api.revealPath(folder.path),

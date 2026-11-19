@@ -179,6 +179,8 @@
     "people": "人物",
     "folders": "文件夹",
     "collections": "合集",
+    "hideEntry": "在侧栏隐藏「{{name}}」",
+    "customize": "自定义侧栏…",
     "newFolder": "新建合集",
     "noFolders": "暂无合集",
     "targetFolder": "按 {{keys}} 把选中的照片加入这里",
@@ -206,7 +208,14 @@
     "expand": "展开",
     "collapse": "折叠",
     "moveToRoot": "放到这里移到顶层",
-    "folderPath": "{{path}}"
+    "folderPath": "{{path}}",
+    "noSmart": "暂无智能合集",
+    "newSmart": "新建智能合集",
+    "newSmartHint": "在筛选栏里设好条件，再点「存为智能合集」。",
+    "more": "更多",
+    "sortBy": "排序方式",
+    "openInManager": "在管理页打开",
+    "hideSection": "在侧栏隐藏"
   },
   "people": {
     "title": "人物",
@@ -722,6 +731,30 @@
     "removeFromLibrary": "从图库移除",
     "removeToTrash_other": "把 {{count}} 个文件移到废纸篓",
     "removed_other": "已从图库移除 {{count}} 张照片",
-    "trashed_other": "已把 {{count}} 个文件移到废纸篓"
+    "trashed_other": "已把 {{count}} 个文件移到废纸篓",
+    "empty": "暂无文件夹",
+    "import": "导入文件夹…",
+    "search": "搜索文件夹",
+    "noMatches": "没有匹配“{{query}}”的文件夹",
+    "syncAll": "全部同步",
+    "syncedAll_other": "已同步 {{count}} 个文件夹",
+    "sort": {
+      "name": "名称",
+      "count": "照片最多"
+    }
+  },
+  "manager": {
+    "tabs": "智能合集、合集和文件夹",
+    "sort": "排序",
+    "sorts": {
+      "name": "名称",
+      "count": "照片最多",
+      "path": "路径"
+    },
+    "searchSmart": "搜索智能合集",
+    "searchFolders": "搜索文件夹",
+    "noMatches": "没有匹配“{{query}}”的项",
+    "more": "更多",
+    "notFound": "找不到"
   }
 }

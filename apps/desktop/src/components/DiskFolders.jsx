@@ -7,16 +7,26 @@
 // order come from components/diskFolderTree.js.
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Album, ChevronDown, ChevronRight, Folder, FolderSearch, FolderX, HardDrive, RefreshCw, Trash2, FolderSync, Eye } from "lucide-react";
+import { Album, ChevronDown, ChevronRight, EyeOff, Folder, FolderCog, FolderSearch, FolderX, HardDrive, Plus, RefreshCw, Search, Trash2, FolderSync, Eye, X } from "lucide-react";
 import FaceMenu from "./FaceMenu";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
-import { ancestorsOf, isSynced, visibleRows } from "./diskFolderTree";
+import { DISK_FOLDER_SORTS, ancestorsOf, isSynced, visibleRows } from "./diskFolderTree";
+import SectionMoreMenu from "./SectionMoreMenu";
+import { setSidebarHidden } from "./sidebarLayout";
+import { usePref } from "../hooks/usePref";
+import { oneOf } from "../utils/prefs";
 
-export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, actions, onDragOver, onDragLeave, onDrop, dropActive = false }) {
+// `onImport` picks a folder on disk to import; `onOpenManager` opens the
+// manager on its Folders tab.
+export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, actions, onImport, onOpenManager, onDragOver, onDragLeave, onDrop, dropActive = false, headingProps = {} }) {
   const { t } = useTranslation("nav");
   const [open, toggleOpen] = useSectionOpen("diskFolders");
   const [expanded, setExpanded] = useState(() => new Set());
   const [menu, setMenu] = useState(null);
+  const [sort, setSort] = usePref("sidebar.diskFolderSort", "name", oneOf(DISK_FOLDER_SORTS));
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState("");
+  const closeSearch = () => { setSearching(false); setQuery(""); };
 
   // The folder on screen stays visible: the folders above it open.
   useEffect(() => {
@@ -26,36 +36,19 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
     setExpanded((current) => (above.every((path) => current.has(path)) ? current : new Set([...current, ...above])));
   }, [activePath, folders]);
 
-  const rows = useMemo(() => visibleRows(folders, expanded), [folders, expanded]);
+  const rows = useMemo(() => visibleRows(folders, expanded, { sort, query }), [folders, expanded, sort, query]);
   const toggle = (path) => setExpanded((current) => {
     const next = new Set(current);
     if (next.has(path)) next.delete(path); else next.add(path);
     return next;
   });
 
-  const menuItems = (folder) => {
-    const synced = isSynced(folder.path, watchedDirs);
-    return [
-      !folder.exists && { key: "locate", icon: FolderSearch, label: t("diskFolders.locate"), onClick: () => actions.locate(folder) },
-      { key: "sync", icon: RefreshCw, label: t("diskFolders.sync"), onClick: () => actions.sync(folder) },
-      folder.exists && {
-        key: "auto-sync",
-        icon: FolderSync,
-        label: synced ? t("diskFolders.autoSyncOff") : t("diskFolders.autoSyncOn"),
-        onClick: () => actions.setAutoSync(folder, !synced),
-      },
-      { key: "save-collection", icon: Album, label: t("diskFolders.saveAsCollection"), onClick: () => actions.saveAsCollection(folder) },
-      folder.exists && { key: "reveal", icon: Eye, label: t("diskFolders.reveal"), onClick: () => actions.reveal(folder) },
-      { key: "remove", icon: Trash2, label: t("diskFolders.remove"), danger: true, onClick: () => actions.remove(folder) },
-    ].filter(Boolean);
-  };
-
-  if (!folders?.length) return null;
+  const menuItems = (folder) => diskFolderMenu(folder, { t, watchedDirs, actions });
 
   return (
     <div
       className={[
-        !open ? "shrink-0" : "flex max-h-[45%] min-h-0 shrink-0 flex-col",
+        !open ? "shrink-0" : "flex max-h-[45%] min-h-0 shrink flex-col",
         dropActive ? "relative after:pointer-events-none after:absolute after:inset-x-0 after:-top-1.5 after:bottom-0 after:z-10 after:rounded-md after:ring-1 after:ring-inset after:ring-accent/45" : "",
       ].join(" ")}
       data-disk-folders="true"
@@ -66,14 +59,74 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
       onDrop={onDrop}
     >
       <SectionHeading
+        {...headingProps}
         id="diskFolders"
         label={t("sidebar.folders")}
         open={open}
         onToggle={toggleOpen}
         holdsActive={!!activePath}
-      />
+      >
+        <button
+          type="button"
+          className={`rounded p-0.5 transition-colors hover:bg-hover hover:text-text ${searching ? "text-text" : "text-muted2"}`}
+          title={t("diskFolders.search")}
+          aria-label={t("diskFolders.search")}
+          aria-pressed={searching}
+          onClick={() => { if (searching) closeSearch(); else { if (!open) toggleOpen(); setSearching(true); } }}
+        >
+          <Search className="h-3.5 w-3.5" />
+        </button>
+        {onImport && (
+          <button
+            type="button"
+            className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+            title={t("diskFolders.import")}
+            aria-label={t("diskFolders.import")}
+            onClick={onImport}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <SectionMoreMenu
+          testId="sidebar-more-folders"
+          sort={{
+            value: sort,
+            options: DISK_FOLDER_SORTS.map((value) => ({ value, label: t(`diskFolders.sort.${value}`) })),
+            onChange: setSort,
+            testId: "disk-folder-sort-menu",
+          }}
+          items={[
+            { key: "sync-all", icon: RefreshCw, label: t("diskFolders.syncAll"), onClick: () => actions.syncAll() },
+            onOpenManager && { key: "manage", icon: FolderCog, label: t("sidebar.openInManager"), onClick: onOpenManager },
+            null,
+            { key: "hide", icon: EyeOff, label: t("sidebar.hideSection"), onClick: () => setSidebarHidden("diskFolders", true) },
+          ].filter((item) => item !== false && item !== undefined)}
+        />
+      </SectionHeading>
+      {open && searching && (
+        <div className="relative mx-2.5 mb-1.5 shrink-0">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted2" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Escape") closeSearch(); }}
+            placeholder={t("diskFolders.search")}
+            aria-label={t("diskFolders.search")}
+            data-testid="disk-folder-search"
+            className="h-7 w-full rounded-md bg-[var(--fill-2)] pl-6 pr-6 text-[12px] text-text outline-none placeholder:text-muted2/60"
+          />
+          {query && (
+            <button type="button" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted2 hover:text-text" aria-label={t("sidebar.clearFolderSearch")} onClick={() => setQuery("")}>
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
       {open && (
         <div className="min-h-0 overflow-y-auto overscroll-contain" data-disk-folders-list="true">
+          {!folders?.length && <div className="px-2.5 py-2 text-[11px] text-muted2">{t("diskFolders.empty")}</div>}
+          {query.trim() && !rows.length && <div className="px-2.5 py-2 text-[11px] text-muted2">{t("diskFolders.noMatches", { query: query.trim() })}</div>}
           {rows.map((row) => {
             if (row.kind === "volume") {
               return (
@@ -87,9 +140,8 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
             const active = activePath === folder.path;
             const synced = isSynced(folder.path, watchedDirs);
             const Icon = folder.exists ? Folder : FolderX;
-            // Closed, a folder counts everything under it; open, only its own
-            // (the collections' tree does the same).
-            const count = expandable && !isOpen ? folder.total : folder.direct;
+            // Always the photos in it and every folder under it, open or not.
+            const count = folder.total;
             return (
               <div
                 key={folder.path}
@@ -141,4 +193,24 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
       {menu && <FaceMenu testId="sidebar-disk-folder-menu" position={menu} items={menuItems(menu.folder)} onClose={() => setMenu(null)} />}
     </div>
   );
+}
+
+// A folder's menu, in the sidebar and on the manager's Folders tab: locate one
+// that moved, sync, auto-sync on or off, save as a collection, show in
+// Finder, take its photos out of the library.
+export function diskFolderMenu(folder, { t, watchedDirs, actions }) {
+  const synced = isSynced(folder.path, watchedDirs);
+  return [
+    !folder.exists && { key: "locate", icon: FolderSearch, label: t("diskFolders.locate"), onClick: () => actions.locate(folder) },
+    { key: "sync", icon: RefreshCw, label: t("diskFolders.sync"), onClick: () => actions.sync(folder) },
+    folder.exists && {
+      key: "auto-sync",
+      icon: FolderSync,
+      label: synced ? t("diskFolders.autoSyncOff") : t("diskFolders.autoSyncOn"),
+      onClick: () => actions.setAutoSync(folder, !synced),
+    },
+    { key: "save-collection", icon: Album, label: t("diskFolders.saveAsCollection"), onClick: () => actions.saveAsCollection(folder) },
+    folder.exists && { key: "reveal", icon: Eye, label: t("diskFolders.reveal"), onClick: () => actions.reveal(folder) },
+    { key: "remove", icon: Trash2, label: t("diskFolders.remove"), danger: true, onClick: () => actions.remove(folder) },
+  ].filter(Boolean);
 }

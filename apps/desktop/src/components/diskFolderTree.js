@@ -43,14 +43,27 @@ export function ancestorsOf(folders, path) {
   return out;
 }
 
-// The rows the sidebar shows: the tree depth-first in the sidecar's order,
-// a folder's children only while it is expanded. A volume heading starts
-// each volume's folders when there is more than one volume or the one there
-// is not the startup disk ({kind:"volume", volume}); else just folders
-// ({kind:"folder", folder, depth, expandable, expanded}).
-export function visibleRows(folders, expanded) {
-  const list = folders || [];
-  const open = expanded instanceof Set ? expanded : new Set(expanded || []);
+export const DISK_FOLDER_SORTS = ["name", "count"];
+
+// The rows the sidebar shows: the tree depth-first, a folder's children only
+// while it is expanded. A volume heading starts each volume's folders when
+// there is more than one volume or the one there is not the startup disk
+// ({kind:"volume", volume}); else just folders ({kind:"folder", folder,
+// depth, expandable, expanded}).
+//   sort   "name" (the sidecar's order) or "count" (most photos first, per level)
+//   query  only the folders whose name holds it, with the folders above them,
+//          opened so each match shows
+export function visibleRows(folders, expanded, { sort = "name", query = "" } = {}) {
+  let list = folders || [];
+  let open = expanded instanceof Set ? expanded : new Set(expanded || []);
+  const needle = String(query || "").trim().toLowerCase();
+  if (needle) {
+    const matches = list.filter((folder) => String(folder.name || "").toLowerCase().includes(needle));
+    const keep = new Set(matches.map((folder) => folder.path));
+    for (const match of matches) for (const above of ancestorsOf(list, match.path)) keep.add(above);
+    list = list.filter((folder) => keep.has(folder.path));
+    open = new Set([...open, ...[...keep].filter((path) => !matches.some((match) => match.path === path) || hasChildren(list, path))]);
+  }
   const volumes = [...new Set(list.map((folder) => folder.volume || ""))];
   const headed = volumes.length > 1 || (volumes.length === 1 && volumes[0] !== "");
   const children = new Map();
@@ -58,6 +71,9 @@ export function visibleRows(folders, expanded) {
     const key = folder.parent ?? null;
     if (!children.has(key)) children.set(key, []);
     children.get(key).push(folder);
+  }
+  if (sort === "count") {
+    for (const kids of children.values()) kids.sort((a, b) => (b.total || 0) - (a.total || 0));
   }
   const rows = [];
   let lastVolume = null;
@@ -67,7 +83,10 @@ export function visibleRows(folders, expanded) {
     rows.push({ kind: "folder", folder, depth, expandable: kids.length > 0, expanded: isOpen && kids.length > 0 });
     if (isOpen) for (const kid of kids) walk(kid, depth + 1);
   };
-  for (const top of children.get(null) || []) {
+  const tops = [...(children.get(null) || [])];
+  // Volumes stay together whatever the sort.
+  if (sort === "count") tops.sort((a, b) => String(a.volume || "").localeCompare(String(b.volume || "")) || (b.total || 0) - (a.total || 0));
+  for (const top of tops) {
     const volume = top.volume || "";
     if (headed && volume !== lastVolume) rows.push({ kind: "volume", volume });
     lastVolume = volume;

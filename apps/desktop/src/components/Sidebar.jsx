@@ -1,19 +1,19 @@
 import { useState, useRef, useEffect, Fragment } from "react";
-import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Copy, FolderPlus, FolderCog, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, ChevronDown, ChevronRight, X, Tags, BarChart3, Album } from "lucide-react";
+import { Images, Clock, Star, Copy, FolderPlus, FolderCog, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ChevronDown, ChevronRight, X, Tags, BarChart3, Album, EyeOff, Settings2, Plus } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
 import DiskFolders from "./DiskFolders";
+import SectionMoreMenu from "./SectionMoreMenu";
+import { openSidebarSettings, setSidebarHidden, useSidebarHidden } from "./sidebarLayout";
 import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { FOLDER_SORTS, canReorderFolders } from "./folderList";
 import { ancestorIds, canDropInto, parentIdOf, siblingIds, visibleTreeRows } from "./folderTree";
-import { Z } from "../ui";
 // The feature modules' library views (manifest `sidebarView`), listed below the browse rows.
 import { sidebarViews } from "../../features/index.js";
 
@@ -34,46 +34,6 @@ function writeExpanded(key, ids) {
   try { localStorage.setItem(key, JSON.stringify([...ids])); } catch { /* private mode */ }
 }
 
-function FolderSortMenu({ sort, onChange }) {
-  const { t } = useTranslation("nav");
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useDismiss(ref, () => setOpen(false), { enabled: open });
-  return (
-    <span ref={ref} className="relative flex">
-      <button
-        type="button"
-        className={`rounded p-0.5 transition-colors hover:bg-hover hover:text-text ${sort === "custom" ? "text-muted2" : "text-accent"}`}
-        title={t("sidebar.sortFolders")}
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <ArrowUpDown className="h-3.5 w-3.5" />
-      </button>
-      {open && (
-        <div data-testid="folder-sort-menu" className="absolute right-0 top-full mt-1.5 min-w-[140px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ zIndex: Z.dropdown }}>
-          {FOLDER_SORTS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={[
-                "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12px] normal-case tracking-normal transition-colors hover:bg-hover",
-                sort === value ? "text-text" : "text-muted",
-              ].join(" ")}
-              onClick={() => { onChange(value); setOpen(false); }}
-            >
-              <span className="flex h-3.5 w-3.5 items-center justify-center">
-                {sort === value && <Check className="h-3 w-3 text-accent" />}
-              </span>
-              {t(`sidebar.folderSort.${value}`)}
-            </button>
-          ))}
-        </div>
-      )}
-    </span>
-  );
-}
-
 const ICON_MAP = { Archive: Images, Clock, Star, Copy };
 
 
@@ -89,6 +49,8 @@ export default function Sidebar({
   onOpenSmartCollection,
   onEditSmartCollection,
   onSnapshotSmartCollection,
+  // A new smart collection: the filter bar, whose conditions it saves.
+  onNewSmartCollection,
   onSelectCollection,
   // (name, parentId): parentId makes the folder inside that folder.
   onCreateCollection,
@@ -127,6 +89,8 @@ export default function Sidebar({
   // (paths) → files and folders dragged from Finder onto the Folders section:
   // imported, appearing there as the folders they are.
   onImportToFolders,
+  // Picks a folder on disk and imports it (the Folders section's +).
+  onImportFolder,
 }) {
   const { t, i18n } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
@@ -217,6 +181,17 @@ export default function Sidebar({
   const [rootDrop, setRootDrop] = useState(false);
   // A Finder drag over the Folders section (disk folders): where it lands.
   const [diskDrop, setDiskDrop] = useState(false);
+  // Entries the user hid (sidebarLayout.js), and the right-click menu that
+  // hides one: { id, label, x, y }.
+  const hidden = useSidebarHidden();
+  const [entryMenu, setEntryMenu] = useState(null);
+  const hideMenu = (id, label) => ({
+    onContextMenu: (event) => {
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      setEntryMenu({ id, label, x: event.clientX, y: event.clientY });
+    },
+  });
   const hoverExpandRef = useRef(null);
   const folderScrollRef = useRef(null);
   const folderScrollSpeed = useRef(0);
@@ -377,15 +352,16 @@ export default function Sidebar({
         </div>
       </div>
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain">
+      <nav className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="shrink-0 space-y-1">
           {browse.map((item, idx) => {
             const Icon = ICON_MAP[item.icon];
-            const discoverButton = idx === 0 && onOpenDiscover ? (
+            const discoverButton = idx === 0 && onOpenDiscover && !hidden.has("discover") ? (
               <button
                 key="discover"
                 type="button"
                 onClick={() => onOpenDiscover()}
+                {...hideMenu("discover", t("sidebar.discover"))}
                 className={[
                   "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
                   discoverMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
@@ -397,12 +373,14 @@ export default function Sidebar({
                 </span>
               </button>
             ) : null;
+            if (item.key !== "all" && hidden.has(item.key)) return discoverButton ? <Fragment key={item.key}>{discoverButton}</Fragment> : null;
             const active = !activeCollectionId && !activeSmartCollectionId && !activeFolderPath && !similarTo && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && !tagsMode && !statsMode && item.key === status;
             return (
               <Fragment key={item.key}>
               <button
                 type="button"
                 onClick={() => setStatus(item.key)}
+                {...(item.key === "all" ? {} : hideMenu(item.key, t(`browse.${item.key}`, item.label)))}
                 className={[
                   "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
                   active
@@ -424,12 +402,13 @@ export default function Sidebar({
               locked with the platform hint where its feature is off. */}
           {sidebarViews.map(({ id, icon: ViewIcon, labelKey, cap, unavailable }) => {
             const available = api.can(cap);
-            if (!available && unavailable === "hidden") return null;
+            if ((!available && unavailable === "hidden") || hidden.has(id)) return null;
             const current = activeView === id;
             return (
               <button
                 key={id}
                 type="button"
+                {...hideMenu(id, t(labelKey))}
                 title={!available ? tc(LOCKED_HINT_KEY) : undefined}
                 onClick={available ? (e) => { e.currentTarget.blur(); onOpenView?.(id); } : undefined}
                 className={[
@@ -448,8 +427,9 @@ export default function Sidebar({
               </button>
             );
           })}
-          <button
+          {!hidden.has("people") && <button
             type="button"
+            {...hideMenu("people", t("sidebar.people"))}
             title={!api.can("people") ? tc(LOCKED_HINT_KEY) : undefined}
             onClick={api.can("people") ? (e) => { e.currentTarget.blur(); onOpenPeople?.(); } : undefined}
             className={[
@@ -465,11 +445,12 @@ export default function Sidebar({
               <UsersRound className={`h-4 w-4 stroke-[1.6] ${peopleMode ? "text-accent" : ""}`} />
               <span className="text-[13px]">{t("sidebar.people")}</span>
             </span>
-          </button>
-          {onOpenTags && (
+          </button>}
+          {onOpenTags && !hidden.has("tags") && (
             <button
               type="button"
               data-testid="sidebar-tags"
+              {...hideMenu("tags", t("sidebar.tags"))}
               onClick={(e) => { e.currentTarget.blur(); onOpenTags(); }}
               className={[
                 "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
@@ -482,10 +463,11 @@ export default function Sidebar({
               </span>
             </button>
           )}
-          {onOpenStats && (
+          {onOpenStats && !hidden.has("stats") && (
             <button
               type="button"
               data-testid="sidebar-stats"
+              {...hideMenu("stats", t("sidebar.stats"))}
               onClick={(e) => { e.currentTarget.blur(); onOpenStats(); }}
               className={[
                 "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
@@ -504,8 +486,10 @@ export default function Sidebar({
         {/* Three sections, top to bottom: smart collections (saved filters),
             collections (a tree the user arranges) and folders on disk. Each is
             as tall as its rows, up to a share of the sidebar, and scrolls
-            inside past that; the sidebar scrolls when together they don't fit. */}
-        <SmartCollections
+            inside past that; when together they don't fit, each gives way in
+            proportion and scrolls inside. The sidebar itself never scrolls. */}
+        {!hidden.has("smartCollections") && <SmartCollections
+          headingProps={hideMenu("smartCollections", t("sidebar.smartCollections"))}
           collections={collections}
           activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode || statsMode ? null : activeSmartCollectionId}
           view={folderView}
@@ -515,10 +499,14 @@ export default function Sidebar({
           onRename={onRenameCollection}
           onDelete={onDeleteCollection}
           onSnapshot={onSnapshotSmartCollection}
-        />
+          onNew={onNewSmartCollection}
+          onToggleView={toggleFolderView}
+          onOpenManager={onOpenFolders ? () => onOpenFolders("smart") : undefined}
+        />}
+        {!hidden.has("collections") && (
         <div
           className={[
-            foldersOpen ? "flex max-h-[45%] min-h-0 shrink-0 flex-col" : "shrink-0",
+            foldersOpen ? "flex max-h-[45%] min-h-0 shrink flex-col" : "shrink-0",
             // The highlight shows where a Finder drop lands: the whole section.
             // Drawn on top, so a selected row's fill doesn't cover its sides;
             // it reaches into the gap above as far as the heading's own gap
@@ -550,6 +538,7 @@ export default function Sidebar({
         >
           <SectionHeading
             id="folders"
+            {...hideMenu("collections", t("sidebar.collections"))}
             label={t("sidebar.collections")}
             open={foldersOpen}
             onToggle={toggleFolders}
@@ -586,19 +575,11 @@ export default function Sidebar({
               >
                 <Search className="h-3.5 w-3.5" />
               </button>
-              <FolderSortMenu sort={folderSort} onChange={changeFolderSort} />
-              <button
-                type="button"
-                className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
-                title={folderView === "covers" ? t("sidebar.viewList") : t("sidebar.viewCovers")}
-                onClick={toggleFolderView}
-              >
-                {folderView === "covers" ? <List className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
-              </button>
               <button
                 type="button"
                 className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
                 title={t("sidebar.newFolder")}
+                aria-label={t("sidebar.newFolder")}
                 onClick={() => {
                   // The field opens on top of the list: show it, and let no
                   // search hide the folder it makes.
@@ -609,21 +590,23 @@ export default function Sidebar({
                   if (folderScrollRef.current) folderScrollRef.current.scrollTop = 0;
                 }}
               >
-                <FolderPlus className="h-3.5 w-3.5" />
+                <Plus className="h-3.5 w-3.5" />
               </button>
-              {onOpenFolders && (
-                <button
-                  type="button"
-                  data-testid="sidebar-manage-folders"
-                  className={`rounded p-0.5 transition-colors hover:bg-hover hover:text-text ${foldersMode ? "bg-selected text-accent" : "text-muted2"}`}
-                  title={t("sidebar.manageFolders")}
-                  aria-label={t("sidebar.manageFolders")}
-                  aria-pressed={foldersMode}
-                  onClick={(e) => { e.currentTarget.blur(); onOpenFolders(); }}
-                >
-                  <FolderCog className="h-3.5 w-3.5" />
-                </button>
-              )}
+              <SectionMoreMenu
+                testId="sidebar-more-collections"
+                sort={{
+                  value: folderSort,
+                  options: FOLDER_SORTS.map((value) => ({ value, label: t(`sidebar.folderSort.${value}`) })),
+                  onChange: changeFolderSort,
+                  testId: "folder-sort-menu",
+                }}
+                items={[
+                  { key: "view", icon: folderView === "covers" ? List : ImageIcon, label: folderView === "covers" ? t("sidebar.viewList") : t("sidebar.viewCovers"), onClick: toggleFolderView },
+                  onOpenFolders && { key: "manage", testId: "sidebar-manage-folders", icon: FolderCog, label: t("sidebar.openInManager"), onClick: () => onOpenFolders("collections") },
+                  null,
+                  { key: "hide", icon: EyeOff, label: t("sidebar.hideSection"), onClick: () => setSidebarHidden("collections", true) },
+                ].filter((item) => item !== false && item !== undefined)}
+              />
           </SectionHeading>
 
           {foldersOpen && (<>
@@ -968,9 +951,13 @@ export default function Sidebar({
           </div>
           </>)}
         </div>
+        )}
 
-        {diskFolders && (
+        {diskFolders && !hidden.has("diskFolders") && (
           <DiskFolders
+            headingProps={hideMenu("diskFolders", t("sidebar.folders"))}
+            onImport={onImportFolder}
+            onOpenManager={onOpenFolders ? () => onOpenFolders("folders") : undefined}
             folders={diskFolders.folders}
             watchedDirs={diskFolders.watchedDirs}
             activePath={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode || statsMode ? null : activeFolderPath}
@@ -995,6 +982,17 @@ export default function Sidebar({
         )}
       </nav>
 
+      {entryMenu && (
+        <FaceMenu
+          testId="sidebar-entry-menu"
+          position={entryMenu}
+          onClose={() => setEntryMenu(null)}
+          items={[
+            { key: "hide", icon: EyeOff, label: t("sidebar.hideEntry", { name: entryMenu.label }), onClick: () => setSidebarHidden(entryMenu.id, true) },
+            { key: "customize", icon: Settings2, label: t("sidebar.customize"), onClick: openSidebarSettings },
+          ]}
+        />
+      )}
       {rowMenu && <FaceMenu testId="sidebar-folder-menu" position={rowMenu} items={folderMenuItems(rowMenu.col)} onClose={() => setRowMenu(null)} />}
 
       {api.capabilities.web && <div className="shrink-0 pt-2"><DesktopHint /></div>}

@@ -15,8 +15,9 @@ const names = () => cards().evaluateAll((els) => els.map((el) => el.querySelecto
 const sidebarRows = () => w().getByTestId("sidebar-folder-scroll").locator("[data-collection-id]");
 
 async function openFoldersPage() {
+  await w().getByTestId("sidebar-more-collections").click();
   await w().getByTestId("sidebar-manage-folders").click();
-  await expect(w().getByRole("heading", { name: "Collections", exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(w().getByTestId("manager-tab-collections")).toHaveAttribute("aria-selected", "true", { timeout: 10_000 });
 }
 
 test.beforeAll(async () => {
@@ -160,7 +161,7 @@ test("Escape clears the selection; Enter opens the folder in the gallery", async
 test("Discover's Albums row links to the page, and it survives a reload", async () => {
   await w().getByRole("navigation").first().getByRole("button", { name: "Discover" }).click();
   await w().getByRole("button", { name: "All collections ›" }).click();
-  await expect(w().getByRole("heading", { name: "Collections", exact: true })).toBeVisible();
+  await expect(w().getByTestId("manager-tab-collections")).toHaveAttribute("aria-selected", "true");
   await expect(cards()).toHaveCount(1);
   await w().reload();
   await expect(galleryCards(w()).first()).toBeVisible({ timeout: 15_000 });

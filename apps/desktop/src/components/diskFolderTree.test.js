@@ -46,6 +46,22 @@ describe("disk folders", () => {
     expect(open.find((row) => row.folder.name === "Kyoto").expandable).toBe(false);
   });
 
+  it("sorts each level by photo count when asked", () => {
+    const tree = [
+      { ...folder("/a", null), total: 3 },
+      { ...folder("/a/small", "/a"), total: 1 },
+      { ...folder("/a/big", "/a"), total: 2 },
+    ];
+    expect(visibleRows(tree, new Set(["/a"]), { sort: "count" }).map((row) => row.folder.name)).toEqual(["a", "big", "small"]);
+    expect(visibleRows(tree, new Set(["/a"])).map((row) => row.folder.name)).toEqual(["a", "small", "big"]);
+  });
+
+  it("a search shows the matching folders with the folders above them, opened", () => {
+    const rows = visibleRows(TREE, new Set(), { query: "day" });
+    expect(rows.map((row) => `${row.depth}:${row.folder.name}`)).toEqual(["0:2024", "1:Tokyo", "2:Day 2"]);
+    expect(visibleRows(TREE, new Set(), { query: "nowhere" })).toEqual([]);
+  });
+
   it("heads each volume's folders when there is another disk", () => {
     const rows = visibleRows([...TREE, folder("/Volumes/T7/Shoots", null, "T7")], new Set());
     expect(rows.map((row) => (row.kind === "volume" ? `[${row.volume || "local"}]` : row.folder.name))).toEqual(["[local]", "2024", "[T7]", "Shoots"]);

@@ -203,6 +203,8 @@ export default function FoldersView({
   // (App.jsx importIntoFolders). Absent where there is no file system.
   onImportInto,
   pushToast,
+  // The manager's tabs (ManagerTabs.jsx), shown where the title was.
+  tabs = null,
 }) {
   const { t, i18n } = useTranslation("nav");
   const locale = i18n.language || undefined;
@@ -423,11 +425,18 @@ export default function FoldersView({
         <IconButton title={t("folders.newFolder")} aria-label={t("folders.newFolder")} data-testid="folders-new" onClick={() => { setCreating({ parentId: null }); scrollRef.current?.scrollTo({ top: 0 }); }}>
           <Plus className="h-4 w-4 stroke-[1.8]" />
         </IconButton>
-        <div className="ml-2 mr-2 flex min-w-0 flex-1 items-center gap-2 text-muted2">
-          <FolderCog className="h-4 w-4 shrink-0" />
-          <h1 className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">{t("folders.title")}</h1>
-          <span data-testid="folders-count" className="shrink-0 text-[12px] text-muted3">· {manual.length}</span>
-        </div>
+        {tabs ? (
+          <div className="ml-1 mr-2 flex min-w-0 flex-1 items-center">
+            {tabs}
+            <span data-testid="folders-count" className="sr-only">· {manual.length}</span>
+          </div>
+        ) : (
+          <div className="ml-2 mr-2 flex min-w-0 flex-1 items-center gap-2 text-muted2">
+            <FolderCog className="h-4 w-4 shrink-0" />
+            <h1 className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">{t("folders.title")}</h1>
+            <span data-testid="folders-count" className="shrink-0 text-[12px] text-muted3">· {manual.length}</span>
+          </div>
+        )}
 
         <label className="relative block min-w-[96px] max-w-[176px] flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />

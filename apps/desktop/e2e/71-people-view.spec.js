@@ -21,7 +21,7 @@ test.describe("without a face model", () => {
   });
 
   test("People sidebar opens the local people wall", async () => {
-    const people = ctx.window.getByRole("button", { name: "People" });
+    const people = ctx.window.getByRole("navigation").first().getByRole("button", { name: "People", exact: true });
     await expect(people).toHaveCount(1);
     await people.click();
     await expect(ctx.window.getByRole("heading", { name: "People", exact: true })).toBeVisible();
@@ -46,7 +46,7 @@ test.describe("with the built-in face model", () => {
   });
 
   test("People is ready to scan with nothing to download", async () => {
-    await ctx.window.getByRole("button", { name: "People" }).click();
+    await ctx.window.getByRole("navigation").first().getByRole("button", { name: "People", exact: true }).click();
     await expect(ctx.window.getByText("No people yet")).toBeVisible();
     await expect(ctx.window.getByRole("button", { name: "Scan faces" }).first()).toBeEnabled();
   });

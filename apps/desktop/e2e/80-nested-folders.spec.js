@@ -200,8 +200,10 @@ test("the right-click submenu and the folder page reach nested folders", async (
   await kyoto.click();
   await expect(row("Kyoto").locator("span.tabular-nums")).toHaveText("2", { timeout: 10_000 });
 
+  await w().getByTestId("sidebar-more-collections").click();
+
   await w().getByTestId("sidebar-manage-folders").click();
-  await expect(w().getByRole("heading", { name: "Collections", exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(w().getByTestId("manager-tab-collections")).toHaveAttribute("aria-selected", "true", { timeout: 10_000 });
   const card = (name) => w().locator("[data-folder-id]").filter({ has: w().locator("[data-folder-name]", { hasText: new RegExp(`^${name}$`) }) });
   await expect(card("Kyoto").locator("[data-folder-location]")).toHaveText("Trips / Japan");
   await expect(card("Trips").locator("[data-folder-location]")).toHaveCount(0);
@@ -290,6 +292,7 @@ test("deleting a folder takes the folders under it; the photos stay", async () =
 
   // The folder page's confirm says so too when the selection holds a parent.
   await newSubfolder("Trips", "Japan");
+  await w().getByTestId("sidebar-more-collections").click();
   await w().getByTestId("sidebar-manage-folders").click();
   const card = (name) => w().locator("[data-folder-id]").filter({ has: w().locator("[data-folder-name]", { hasText: new RegExp(`^${name}$`) }) });
   await card("Trips").click();

@@ -20,7 +20,10 @@ test("folders scroll independently inside the rounded sidebar", async () => {
     await expect(sidebar).toHaveCSS("clip-path", "inset(0px round 18px)");
     const nav = page.getByRole("button", { name: /^All Assets/ }).first();
     for (const mode of ["list", "covers"]) {
-      if (mode === "covers") await page.getByRole("button", { name: "Show covers", exact: true }).click();
+      if (mode === "covers") {
+        await page.getByTestId("sidebar-more-collections").click();
+        await page.locator("[data-section-more-menu] [data-menu-item='view']").click();
+      }
       await list.evaluate((el) => { el.scrollTop = 0; });
       const listBox = await list.boundingBox();
       const navBefore = await nav.boundingBox();

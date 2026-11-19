@@ -23,7 +23,8 @@
     "themeLight": "Light",
     "themeSystem": "Follow system",
     "uiScale": "Interface scale",
-    "uiScaleHint": "Scales the whole interface. Takes effect immediately."
+    "uiScaleHint": "Scales the whole interface. Takes effect immediately.",
+    "sidebar": "Sidebar"
   },
   "annotation": {
     "loading": "Loading settings…",

@@ -195,6 +195,8 @@
     "people": "People",
     "folders": "Folders",
     "collections": "Collections",
+    "hideEntry": "Hide “{{name}}” in Sidebar",
+    "customize": "Customize Sidebar…",
     "newFolder": "New collection",
     "noFolders": "No collections yet",
     "targetFolder": "{{keys}} adds the selected photos here",
@@ -223,7 +225,14 @@
     "expand": "Expand",
     "collapse": "Collapse",
     "moveToRoot": "Drop here to move to the top level",
-    "folderPath": "{{path}}"
+    "folderPath": "{{path}}",
+    "noSmart": "No smart collections yet",
+    "newSmart": "New smart collection",
+    "newSmartHint": "Set the conditions in the filter bar, then choose Save as smart collection.",
+    "more": "More",
+    "sortBy": "Sort by",
+    "openInManager": "Open in Manager",
+    "hideSection": "Hide in Sidebar"
   },
   "people": {
     "title": "People",
@@ -770,6 +779,31 @@
     "removed_one": "{{count}} photo removed from the library",
     "removed_other": "{{count}} photos removed from the library",
     "trashed_one": "{{count}} file moved to the Trash",
-    "trashed_other": "{{count}} files moved to the Trash"
+    "trashed_other": "{{count}} files moved to the Trash",
+    "empty": "No folders yet",
+    "import": "Import Folder…",
+    "search": "Search folders",
+    "noMatches": "No folders match “{{query}}”",
+    "syncAll": "Sync All",
+    "syncedAll_one": "Synced {{count}} folder",
+    "syncedAll_other": "Synced {{count}} folders",
+    "sort": {
+      "name": "Name",
+      "count": "Most photos"
+    }
+  },
+  "manager": {
+    "tabs": "Smart collections, collections and folders",
+    "sort": "Sort",
+    "sorts": {
+      "name": "Name",
+      "count": "Most photos",
+      "path": "Path"
+    },
+    "searchSmart": "Search smart collections",
+    "searchFolders": "Search folders",
+    "noMatches": "Nothing matches “{{query}}”",
+    "more": "More",
+    "notFound": "Not found"
   }
 }

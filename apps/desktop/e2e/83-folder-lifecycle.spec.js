@@ -225,6 +225,7 @@ test("…or nowhere: the folder alone goes, and an empty one goes without a ques
 
 test("the Folders page takes a folder from Finder too: on the page it is a top-level folder", async () => {
   test.setTimeout(120_000);
+  await w().getByTestId("sidebar-more-collections").click();
   await w().getByTestId("sidebar-manage-folders").click();
   const page = w().getByTestId("gallery-scroll");
   await expect(w().getByTestId("folders-count")).toHaveText("· 0");
@@ -241,6 +242,7 @@ test("the Folders page takes a folder from Finder too: on the page it is a top-l
 
 test("…and on a folder's card it lands inside that folder, and loose files go into it", async () => {
   test.setTimeout(120_000);
+  await w().getByTestId("sidebar-more-collections").click();
   await w().getByTestId("sidebar-manage-folders").click();
   const page = w().getByTestId("gallery-scroll");
   const wedding = page.locator("[data-folder-id]").filter({ has: w().locator("[data-folder-name]", { hasText: /^Wedding$/ }) });

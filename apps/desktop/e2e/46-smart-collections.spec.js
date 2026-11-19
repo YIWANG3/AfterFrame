@@ -37,7 +37,9 @@ test.afterAll(async () => {
 test("nothing to save until there is a condition", async () => {
   await window.getByRole("button", { name: "Filters" }).click();
   await expect(window.getByRole("button", { name: "Save as smart collection" })).toHaveCount(0);
-  await expect(window.locator("[data-smart-collections]")).toHaveCount(0);
+  // The section is there from the start, empty, with its + for a new one.
+  await expect(window.locator("[data-smart-collections]")).toContainText("No smart collections yet");
+  await expect(window.locator("[data-smart-collection]")).toHaveCount(0);
 });
 
 test("Clear and the smart collection actions stay put while the facets scroll", async () => {
@@ -245,7 +247,8 @@ test("narrowing rewrites the open collection to what is showing, on top of its o
 });
 
 test("the sidebar's covers switch gives smart collections a cover too", async () => {
-  await window.getByTitle("Show covers").click();
+  await window.getByTestId("sidebar-more-collections").click();
+  await window.locator("[data-section-more-menu] [data-menu-item='view']").click();
   const row = smartRow("Five stars");
   const cover = row.locator("[data-smart-cover]");
   await expect(cover).toBeVisible();
@@ -260,7 +263,8 @@ test("the sidebar's covers switch gives smart collections a cover too", async ()
   if ((await browseCount({ date_within_days: 30 })) === 0) {
     await expect(smartRow("This month").locator("[data-smart-cover]")).toHaveCount(0);
   }
-  await window.getByTitle("Show as list").click();
+  await window.getByTestId("sidebar-more-collections").click();
+  await window.locator("[data-section-more-menu] [data-menu-item='view']").click();
   await expect(cover).toHaveCount(0);
 });
 

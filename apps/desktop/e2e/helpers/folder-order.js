@@ -24,7 +24,8 @@ async function exerciseFolderOrder(page, { reload = false } = {}) {
     await page.reload();
     await expect.poll(order).toEqual(expected);
   }
-  await page.getByTitle('Show covers', { exact: true }).click();
+  await page.getByTestId('sidebar-more-collections').click();
+  await page.locator("[data-section-more-menu] [data-menu-item='view']").click();
   const box = await row('Order Alpha').boundingBox();
   await row('Order Middle').dragTo(row('Order Alpha'), { targetPosition: { x: 20, y: box.height - 2 } });
   const final = expected.filter((id) => id !== sourceId);
@@ -82,7 +83,7 @@ async function exerciseFolderSearchAndSort(page) {
   await expect.poll(names).toEqual(['Sort alpha 2', 'Sort Bravo', 'Sort alpha 10']);
 
   const sortBy = async (label) => {
-    await page.getByTitle('Sort collections', { exact: true }).click();
+    await page.getByTestId('sidebar-more-collections').click();
     await page.getByTestId('folder-sort-menu').getByRole('button', { name: label, exact: true }).click();
   };
   await sortBy('Name');
