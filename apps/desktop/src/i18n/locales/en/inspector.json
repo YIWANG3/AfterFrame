@@ -21,6 +21,7 @@
     "people": "People"
   },
   "rows": {
+    "folder": "Folder",
     "rawFile": "RAW file",
     "rating": "Rating",
     "dimensions": "Dimensions",

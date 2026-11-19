@@ -18,7 +18,8 @@ export const browseScopeKey = ({ status, collectionId, includeDescendants, searc
 //
 // Two layers (docs/next-features-plan.md §D, sidecar db/browse.py):
 //   WHERE the user is    status | collectionId | base (a smart collection's
-//                        rules) — picks the base set.
+//                        rules, or a folder on disk's: folderBase) — picks
+//                        the base set.
 //   the refinement       query + filters — what the filter bar and the search
 //                        box hold. It only ever narrows INSIDE the base set,
 //                        and changing location clears it.
@@ -32,7 +33,16 @@ export const browseScopeKey = ({ status, collectionId, includeDescendants, searc
 // the nested part of its rules, which the bar cannot show.
 export const DEFAULT_SCOPE = Object.freeze({
   status: "all", collectionId: null, includeDescendants: true, smartCollectionId: null, base: null, editingRules: false, similarTo: null,
+  folderPath: null,
   query: "", filters: {}, sort: "imported-desc",
+});
+
+// A folder on disk as a place (docs/collections-and-folders-design.md §5):
+// its photos, as the base set every browse, count and facet already takes
+// (`in_folder`, db/facets.py). `folderPath` in the scope names it (sidebar
+// highlight, title); this is what is asked.
+export const folderBase = (path, includeDescendants = true) => ({
+  status: "all", search: "", filters: { in_folder: path, in_folder_descendants: includeDescendants !== false },
 });
 
 export const scopeKeyOf = (scope) => browseScopeKey({
@@ -108,6 +118,9 @@ const savableFilters = (filters) => {
 // null when there is nothing to save (no refinement, or the plain library).
 export function rulesFromScope(scope, { hasSubfolders = false } = {}) {
   if (!scope) return null;
+  // A folder on disk is not a condition a smart collection keeps (§6 of
+  // docs/collections-and-folders-design.md): nothing to save from inside one.
+  if (scope.folderPath) return null;
   const search = (scope.query || "").trim();
   const filters = savableFilters(scope.filters);
   const refined = !!search || activeFilterCount(filters) > 0;

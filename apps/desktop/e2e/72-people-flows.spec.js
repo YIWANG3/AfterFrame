@@ -23,7 +23,7 @@ test.afterAll(async () => {
 });
 
 async function openPeoplePage() {
-  await ctx.window.getByRole("navigation").getByRole("button", { name: "People" }).click();
+  await ctx.window.getByRole("navigation").getByRole("button", { name: "People", exact: true }).click();
   await expect(ctx.window.getByRole("heading", { name: "People", exact: true })).toBeVisible();
 }
 

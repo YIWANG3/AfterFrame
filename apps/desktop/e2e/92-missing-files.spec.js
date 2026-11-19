@@ -145,7 +145,7 @@ test.describe("the Missing Originals view", () => {
     await expect(bar()).toContainText("Relink 2 from Folder…");
     await bar().getByRole("button", { name: "Remove 2 from Library…" }).click();
     await expect(w().getByText("Remove these 2 missing photos from the library?")).toBeVisible();
-    await expect(w().getByText("Their ratings, tags and folder places go with them. Nothing on disk changes.")).toBeVisible();
+    await expect(w().getByText("Their ratings, tags and collection places go with them. Nothing on disk changes.")).toBeVisible();
     await w().getByRole("button", { name: "Cancel" }).click();
     await expectShowing(["c", "d", "f"]);
 

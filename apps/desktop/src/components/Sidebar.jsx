@@ -6,6 +6,7 @@ import { Images, Clock, Star, Copy, FolderPlus, FolderCog, Trash2, Pencil, Spark
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
+import DiskFolders from "./DiskFolders";
 import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
@@ -118,6 +119,14 @@ export default function Sidebar({
   foldersMode = false,
   tagsMode = false,
   statsMode = false,
+  // Folders on disk (hooks/useDiskFolders.js): the tree, the auto-synced
+  // folders, the folder on screen, opening one and its menu's actions.
+  diskFolders = null,
+  activeFolderPath = null,
+  onOpenDiskFolder,
+  // (paths) → files and folders dragged from Finder onto the Folders section:
+  // imported, appearing there as the folders they are.
+  onImportToFolders,
 }) {
   const { t, i18n } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
@@ -206,6 +215,8 @@ export default function Sidebar({
   const [folderInsertion, setFolderInsertion] = useState(null);
   // A folder dragged over the top-level drop zone.
   const [rootDrop, setRootDrop] = useState(false);
+  // A Finder drag over the Folders section (disk folders): where it lands.
+  const [diskDrop, setDiskDrop] = useState(false);
   const hoverExpandRef = useRef(null);
   const folderScrollRef = useRef(null);
   const folderScrollSpeed = useRef(0);
@@ -386,7 +397,7 @@ export default function Sidebar({
                 </span>
               </button>
             ) : null;
-            const active = !activeCollectionId && !activeSmartCollectionId && !similarTo && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && !tagsMode && !statsMode && item.key === status;
+            const active = !activeCollectionId && !activeSmartCollectionId && !activeFolderPath && !similarTo && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && !tagsMode && !statsMode && item.key === status;
             return (
               <Fragment key={item.key}>
               <button
@@ -962,6 +973,30 @@ export default function Sidebar({
           onDelete={onDeleteCollection}
           onSnapshot={onSnapshotSmartCollection}
         />
+        {diskFolders && (
+          <DiskFolders
+            folders={diskFolders.folders}
+            watchedDirs={diskFolders.watchedDirs}
+            activePath={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode || statsMode ? null : activeFolderPath}
+            onOpen={(path) => onOpenDiskFolder?.(path)}
+            actions={diskFolders}
+            dropActive={diskDrop}
+            onDragOver={onImportToFolders ? (event) => {
+              if (draggingFolderId || !filesDragged(event)) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+              setDiskDrop(true);
+            } : undefined}
+            onDragLeave={onImportToFolders ? (event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDiskDrop(false); } : undefined}
+            onDrop={onImportToFolders ? (event) => {
+              if (draggingFolderId || !filesDragged(event)) return;
+              event.preventDefault();
+              setDiskDrop(false);
+              const paths = droppedPaths(event);
+              if (paths.length) void onImportToFolders(paths);
+            } : undefined}
+          />
+        )}
       </nav>
 
       {rowMenu && <FaceMenu testId="sidebar-folder-menu" position={rowMenu} items={folderMenuItems(rowMenu.col)} onClose={() => setRowMenu(null)} />}

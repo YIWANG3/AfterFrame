@@ -12,17 +12,17 @@ module.exports = (ctx) => {
     {
       name: "manage_collections",
       description:
-        "Collections management. Two kinds: a folder holds photos you add to it; a SMART collection is a saved " +
+        "Collections management. Two kinds: a manual collection holds photos you add to it; a SMART collection is a saved " +
         "filter that fills itself and stays current (e.g. 5-star photos from the last 30 days). " +
-        "Folders nest: a folder can sit inside another folder, any depth (parent_collection_id; smart collections stay top-level). " +
+        "Manual collections nest: one can sit inside another, any depth (parent_collection_id; smart collections stay top-level). " +
         "Actions: 'list' all collections (each with parent_collection_id, path like 'Trips / Japan / Kyoto', depth, item_count = photos " +
-        "added to it directly and subtree_count = photos in it or any folder under it, once each; smart ones include their rules and a live item_count; " +
-        "folders also carry last_added_at, captured_from / captured_to — the capture-time span of their photos — and cover_preview_paths, " +
-        "the previews of the newest four photos); 'create' (name; parent_id to make it inside a folder; " +
-        "pass rules to make it smart); 'move' (collection_id, parent_id or none for the top level) to put a folder inside another; " +
+        "added to it directly and subtree_count = photos in it or any collection under it, once each; smart ones include their rules and a live item_count; " +
+        "manual ones also carry last_added_at, captured_from / captured_to — the capture-time span of their photos — and cover_preview_paths, " +
+        "the previews of the newest four photos); 'create' (name; parent_id to make it inside a manual collection; " +
+        "pass rules to make it smart); 'move' (collection_id, parent_id or none for the top level) to put a manual collection inside another; " +
         "'update_rules' (collection_id, rules) to change a smart collection's " +
-        "conditions; 'rename' (collection_id, name); 'delete' (collection_id; a folder's subfolders go with it, the photos stay); 'add_items' / 'remove_items' " +
-        "(collection_id, asset_ids; folders only); 'browse' (collection_id, limit/offset, include_descendants) to list the assets of either kind.",
+        "conditions; 'rename' (collection_id, name); 'delete' (collection_id; the collections inside it go with it, the photos stay); 'add_items' / 'remove_items' " +
+        "(collection_id, asset_ids; manual collections only); 'browse' (collection_id, limit/offset, include_descendants) to list the assets of either kind.",
       inputSchema: {
         type: "object",
         properties: {
@@ -32,13 +32,13 @@ module.exports = (ctx) => {
             description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
               "search_assets (camera, lens, tag, tag_group, extension, country and city take one value or a list meaning any of them; tag_match: 'all' requires every tag, 'by_group' makes same-group tags alternatives): query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
               "date_from, date_to, date_within_days, rating_min, rating_max (0 = unrated), flag (pick | reject | none), orientation, tag, tag_match, tag_group, asset_type, extension, people, person_id, annotated, has_raw (true | false), location_source, country, city, color, color_tolerance, caption_contains, ocr_contains, path_contains, name_contains (text in the file name; a list means any), " +
-              "collection_id ('only photos in that folder'; add include_descendants: true for the folders under it too); " +
-              "exclude (a list of those condition names to turn into their opposite: exclude ['collection_id'] = not in that folder); " +
+              "collection_id ('only photos in that collection'; add include_descendants: true for the collections under it too); " +
+              "exclude (a list of those condition names to turn into their opposite: exclude ['collection_id'] = not in that collection); " +
               "any_of (a list of groups of the same conditions, at least one of which must hold: OR).",
           },
           collection_id: { type: "string" },
-          parent_id: { type: "string", description: "For create: the folder to make it in. For move: the folder to move it into; omit or null for the top level" },
-          include_descendants: { type: "boolean", description: "For browse (folders): the folders under it too, each photo once" },
+          parent_id: { type: "string", description: "For create: the manual collection to make it in. For move: the one to move it into; omit or null for the top level" },
+          include_descendants: { type: "boolean", description: "For browse (manual collections): the collections under it too, each photo once" },
           name: { type: "string", description: "For create/rename" },
           sort_order: { type: "number", description: "For rename: optional new position in the sidebar" },
           asset_ids: { type: "array", items: { type: "string" }, description: "For add_items/remove_items" },
@@ -59,7 +59,7 @@ module.exports = (ctx) => {
         }
         if (action === "create") {
           if (!args.name) throw new Error("name is required for create.");
-          if (args.rules && parentId) throw new Error("A smart collection cannot sit inside a folder.");
+          if (args.rules && parentId) throw new Error("A smart collection cannot sit inside another collection.");
           const created = args.rules
             ? await commands.createCollection(String(args.name), "smart", smartRulesFrom(args.rules))
             : await commands.createCollection(String(args.name), "manual", null, parentId);
@@ -170,17 +170,20 @@ module.exports = (ctx) => {
         "'relink' (asset_id, new_path) — point a missing asset at its moved file; " +
         "'relink_from_folder' (dir, asset_ids optional) — look for missing originals by file name under a folder, recursively, and relink those whose content matches (none forced; without asset_ids: every missing asset); " +
         "'scan_new_media' (dirs) — one-shot import sweep of folders; " +
-        "'list_watched_dirs' / 'add_watched_dir' / 'remove_watched_dir' (dir) — folders the app auto-imports from.",
+        "'list_folders' — the folders on disk the library's photos are in, as a tree of flat rows {path, name, parent, volume, direct, total, exists} (read-only; exists false = moved or deleted); " +
+        "'locate_folder' (old_dir, dir) — a folder that moved on disk: relink every photo under old_dir to the same place under dir, each checked by its content; " +
+        "'list_watched_dirs' / 'add_watched_dir' / 'remove_watched_dir' (dir) — the folders the app keeps in sync (auto-sync: new files imported, moved ones keep their records).",
       inputSchema: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["verify_assets", "refresh_from_disk", "relink", "relink_from_folder", "scan_new_media", "list_watched_dirs", "add_watched_dir", "remove_watched_dir"] },
+          action: { type: "string", enum: ["verify_assets", "refresh_from_disk", "relink", "relink_from_folder", "scan_new_media", "list_folders", "locate_folder", "list_watched_dirs", "add_watched_dir", "remove_watched_dir"] },
           scope: { type: "string", enum: ["all", "missing"], description: "For verify_assets, default all" },
           asset_ids: { type: "array", items: { type: "string" }, description: "For refresh_from_disk; optional for relink_from_folder" },
           asset_id: { type: "string", description: "For relink" },
           new_path: { type: "string", description: "For relink" },
           dirs: { type: "array", items: { type: "string" }, description: "For scan_new_media" },
-          dir: { type: "string", description: "For add_watched_dir/remove_watched_dir/relink_from_folder" },
+          dir: { type: "string", description: "For add_watched_dir/remove_watched_dir/relink_from_folder/locate_folder (where it is now)" },
+          old_dir: { type: "string", description: "For locate_folder: the folder as the library knows it (a list_folders path)" },
         },
         required: ["action"],
       },
@@ -217,6 +220,17 @@ module.exports = (ctx) => {
           if (!fs.existsSync(String(args.dir))) throw new Error(`Path does not exist: ${args.dir}`);
           const assetIds = (args.asset_ids || []).map(String).filter(Boolean);
           const result = await commands.relinkFromFolder({ folder: String(args.dir), assetIds });
+          const ids = (result?.items || []).filter((item) => item.status === "relinked").map((item) => item.asset_id);
+          deps.broadcastCatalogChanged?.("assets", { ids });
+          return result;
+        }
+        if (action === "list_folders") {
+          return commands.listFolders();
+        }
+        if (action === "locate_folder") {
+          if (!args.old_dir || !args.dir) throw new Error("old_dir and dir are required for locate_folder.");
+          if (!fs.existsSync(String(args.dir))) throw new Error(`Path does not exist: ${args.dir}`);
+          const result = await commands.locateFolder({ old: String(args.old_dir), folder: String(args.dir) });
           const ids = (result?.items || []).filter((item) => item.status === "relinked").map((item) => item.asset_id);
           deps.broadcastCatalogChanged?.("assets", { ids });
           return result;

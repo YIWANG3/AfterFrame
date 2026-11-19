@@ -88,7 +88,7 @@ test.describe("moved originals", () => {
 
     // The photo, the JPG and its RAW: three files found, nothing new.
     await expect(w().getByText("Found 3 moved files")).toBeVisible({ timeout: 60_000 });
-    await expect(w().getByText("Their records came along: ratings, tags and folders are kept.")).toBeVisible();
+    await expect(w().getByText("Their records came along: ratings, tags and collections are kept.")).toBeVisible();
     await importDone();
     await expect(w().getByText(/already in catalog/)).toHaveCount(0);
 

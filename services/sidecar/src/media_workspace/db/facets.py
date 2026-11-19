@@ -373,6 +373,19 @@ def _in_collection(filters: dict) -> list[Clause]:
     return [(f"assets.asset_id IN (SELECT asset_id FROM collection_items WHERE {cond})", params)]
 
 
+def _in_folder(filters: dict) -> list[Clause]:
+    # A folder on disk as a place (db/folders.py): the photos under that
+    # directory, or only right in it. Not savable into a smart collection
+    # (smart_rules), which never follows the disk.
+    path = str(filters.get("in_folder") or "").strip()
+    if not path:
+        return []
+    from .folders import folder_clause
+
+    descendants = filters.get("in_folder_descendants") not in (False, 0, "0", "false")
+    return [folder_clause(path, descendants)]
+
+
 # The asset whose location row counts for a photo: the paired RAW's when it has
 # one, else the photo's own (the same RAW-first rule as _geo_filter_clause, the
 # map and the Inspector).
@@ -519,6 +532,7 @@ FACETS: tuple[Facet, ...] = (
     Facet("name_contains", ("name_contains",), _name_contains),
     Facet("geo", ("geo",), _geo),
     Facet("in_collection", ("in_collection", "in_collection_descendants"), _in_collection, modifiers=("in_collection_descendants",)),
+    Facet("in_folder", ("in_folder", "in_folder_descendants"), _in_folder, modifiers=("in_folder_descendants",)),
 )
 
 FACET_NAMES = frozenset(facet.name for facet in FACETS)

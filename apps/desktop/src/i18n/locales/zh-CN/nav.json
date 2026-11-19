@@ -700,5 +700,30 @@
     "added_other": "已把 {{count}} 张照片加入「{{name}}」",
     "failed": "加入合集失败",
     "filter": "筛选"
+  },
+  "diskFolders": {
+    "thisMac": "本机",
+    "missing": "磁盘上的这个位置已经找不到了。右键可以定位。",
+    "autoSynced": "自动同步中",
+    "locate": "定位…",
+    "sync": "同步",
+    "autoSyncOn": "自动同步",
+    "autoSyncOff": "停止自动同步",
+    "saveAsCollection": "存为合集…",
+    "reveal": "在访达中显示",
+    "remove": "从图库移除…",
+    "failed": "操作没有完成",
+    "synced": "已同步“{{name}}”",
+    "syncedMissing_other": "有 {{count}} 张照片已经不在那里了。",
+    "autoSyncOnToast": "“{{name}}”会自动同步",
+    "saveTitle": "把“{{name}}”存为合集",
+    "saved": "已存为合集“{{name}}”",
+    "removeTitle": "从图库移除“{{name}}”？",
+    "removeMsg_other": "它和里面的文件夹共有 {{count}} 张照片。",
+    "removeDetail": "它们的评分、标签和所在合集会一起去掉。",
+    "removeFromLibrary": "从图库移除",
+    "removeToTrash_other": "把 {{count}} 个文件移到废纸篓",
+    "removed_other": "已从图库移除 {{count}} 张照片",
+    "trashed_other": "已把 {{count}} 个文件移到废纸篓"
   }
 }

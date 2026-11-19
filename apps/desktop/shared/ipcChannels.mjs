@@ -67,6 +67,9 @@ export const CORE_IPC_METHODS = [
   ["setRawPairsMode", "workspace:set-raw-pairs-mode", 1],
   ["noticeRawPairs", "workspace:notice-raw-pairs", 0],
   ["relinkFromFolder", "workspace:relink-from-folder", 1],
+  // Folders on disk, a read-only mirror (docs/collections-and-folders-design.md §5).
+  ["listFolders", "workspace:list-folders", 0],
+  ["locateFolder", "workspace:locate-folder", 1],
   ["setLocale", "app:set-locale", 1],
   // Interface scale: the window's page zoom (electron/uiScale.js).
   ["getUiScale", "app:get-ui-scale", 0],

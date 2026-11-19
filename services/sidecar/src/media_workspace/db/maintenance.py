@@ -18,6 +18,8 @@ def verify_assets(
     connection: sqlite3.Connection,
     *,
     scope: str = "all",
+    under: str | None = None,
+    paths: list[str] | None = None,
     commit: bool = True,
 ) -> dict[str, int]:
     """Stat every asset's original file and reconcile assets.exists_on_disk.
@@ -26,16 +28,30 @@ def verify_assets(
     menu action. Browsing reconciles the visible page lazily; this catches the
     rest. Stat is cheap (microseconds/file), so we run it synchronously.
 
-    scope: 'all' | 'image' | 'raw'.
+    scope: 'all' | 'image' | 'raw'. `under`: only the files in that folder on
+    disk and below (a folder's Sync, db/folders.py). `paths`: only the assets
+    whose original is one of these (a synced folder's watcher saw them go).
     Returns {checked, present, missing, newly_missing, recovered}.
     """
-    where = ""
+    conditions: list[str] = []
     params: list[object] = []
     if scope in ("image", "raw"):
-        where = "WHERE asset_type = ?"
-        params = [scope]
+        conditions.append("asset_type = ?")
+        params.append(scope)
     elif scope != "all":
         raise ValueError(f"unsupported scope: {scope}")
+    if under:
+        from .folders import folder_clause
+
+        clause, clause_params = folder_clause(under)
+        conditions.append(clause.replace("assets.", ""))
+        params.extend(clause_params)
+    if paths is not None:
+        if not paths:
+            return {"checked": 0, "present": 0, "missing": 0, "newly_missing": 0, "recovered": 0}
+        conditions.append(f"canonical_path IN ({','.join('?' * len(paths))})")
+        params.extend(paths)
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
     rows = connection.execute(
         f"SELECT asset_id, canonical_path, exists_on_disk FROM assets {where}",
