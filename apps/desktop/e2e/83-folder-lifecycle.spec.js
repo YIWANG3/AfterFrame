@@ -33,9 +33,14 @@ const folders = async () => {
   return Object.fromEntries(collections.filter((c) => c.kind === "manual").map((c) => [c.name, c]));
 };
 const libraryCount = () => w().evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 1000 }).then((rows) => rows.length));
+// null while the folder isn't there yet: right after a drop the import is still
+// making it, and a throw here would end expect.poll at once (it retries only
+// failed matches, not a throwing callback). Seen on the Intel build under
+// Rosetta, where the import is slower.
 const namesIn = (folderName) => w().evaluate(async (name) => {
   const bridge = window.mediaWorkspace;
   const folder = (await bridge.listCollections()).find((c) => c.name === name);
+  if (!folder) return null;
   const rows = await bridge.browseCollection(folder.collection_id, { limit: 200 });
   return rows.map((r) => r.image_path.split(/[\\/]/).pop()).sort();
 }, folderName);
