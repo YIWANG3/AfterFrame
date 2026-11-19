@@ -160,6 +160,23 @@ class ClaimMovedTest(unittest.TestCase):
         self.assertEqual(result["claimed_moved"], 1)
         self.assertEqual(self.id_at(arrived), second_id)
 
+    def test_with_many_copies_of_the_same_bytes_nothing_is_claimed(self) -> None:
+        from media_workspace.db import maintenance
+
+        folder = self.root / "copies"
+        folder.mkdir()
+        for index in range(maintenance.CLAIM_MAX_COPIES + 1):
+            (folder / f"copy_{index:03d}.jpg").write_bytes(JPG.read_bytes())
+        self.imported(folder)
+        (folder / "copy_000.jpg").unlink()
+        arrived = self.place(JPG, "copy_000.jpg", self.root / "elsewhere")
+
+        result = self.imported(arrived.parent)
+
+        # One of them is gone, but past the limit no record is looked at.
+        self.assertEqual(result["claimed_moved"], 0)
+        self.assertEqual(result["newly_added"], 1)
+
     def test_a_moved_pair_comes_back_as_the_same_pair(self) -> None:
         self.place(DNG, "DSC_0001.dng")
         jpg = self.place(JPG, "DSC_0001.JPG")

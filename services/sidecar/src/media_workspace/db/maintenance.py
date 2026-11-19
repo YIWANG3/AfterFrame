@@ -179,6 +179,10 @@ def relink_asset(
         "forced": actual_fp != expected_fp,
     }
 
+# More records than this with the same content: an import claims none of them.
+CLAIM_MAX_COPIES = 50
+
+
 def claim_moved_original(
     connection: sqlite3.Connection,
     asset_type: str,
@@ -198,10 +202,16 @@ def claim_moved_original(
     new_str = str(path)
     if connection.execute("SELECT 1 FROM asset_files WHERE path = ?", (new_str,)).fetchone():
         return None
+    # Many records of the same bytes (a folder of identical placeholders, a
+    # library of copies) say nothing about which one moved, and checking each
+    # on disk for every file of an import is quadratic: past this many, none
+    # is claimed.
     rows = connection.execute(
-        "SELECT asset_id, canonical_path FROM assets WHERE fingerprint = ? AND asset_type = ? AND canonical_path != ?",
-        (fingerprint, asset_type, new_str),
+        "SELECT asset_id, canonical_path FROM assets WHERE fingerprint = ? AND asset_type = ? AND canonical_path != ? LIMIT ?",
+        (fingerprint, asset_type, new_str, CLAIM_MAX_COPIES + 1),
     ).fetchall()
+    if len(rows) > CLAIM_MAX_COPIES:
+        return None
     gone = [row for row in rows if not os.path.exists(str(row["canonical_path"]))]
     if len(gone) > 1:
         name = os.path.basename(new_str).lower()
