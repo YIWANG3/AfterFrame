@@ -121,7 +121,7 @@ class FoldersTest(unittest.TestCase):
         self.jpeg("Shoot/c.jpg", 3)
         resolve_image_batch(self.connection, [self.photos])
         ids = {
-            str(row["image_path"]).split("/Photos/")[1]: row["asset_id"]
+            Path(row["image_path"]).relative_to(self.photos).as_posix(): row["asset_id"]
             for row in list_image_assets(self.connection, "all")
         }
         old = self.photos / "Shoot"
@@ -159,10 +159,8 @@ class FoldersTest(unittest.TestCase):
 
         self.assertEqual(result["relinked"], 1)
         self.assertEqual(len(result["items"]), 2)
-        self.assertEqual(
-            self.connection.execute("SELECT COUNT(*) FROM assets WHERE canonical_path LIKE ?", (str(new) + "/%",)).fetchone()[0],
-            2,
-        )
+        paths = [Path(row[0]) for row in self.connection.execute("SELECT canonical_path FROM assets")]
+        self.assertEqual(sum(1 for path in paths if path.parent == new), 2)
 
     # ── Sync's verify ──
     def test_verify_under_a_folder_checks_only_that_folder(self) -> None:

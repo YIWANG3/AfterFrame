@@ -217,17 +217,21 @@ test("a photo deleted from a synced folder is checked, and the window told", asy
 
 test("a folder moved into a synced folder is imported whole; an empty new one isn't", async (t) => {
   const { api, root, watched, sent } = setup(t);
-  const shoot = path.join(root, "Shoot");
-  fs.mkdirSync(path.join(shoot, "Day 2"), { recursive: true });
-  fs.writeFileSync(path.join(shoot, "Day 2", "a.jpg"), "jpeg");
+  const outside = path.join(root, "Shoot");
+  fs.mkdirSync(path.join(outside, "Day 2"), { recursive: true });
+  fs.writeFileSync(path.join(outside, "Day 2", "a.jpg"), "jpeg");
   api.start();
   await sleep(300);
   fs.mkdirSync(path.join(watched, "untitled folder"));
-  fs.renameSync(shoot, path.join(watched, "Shoot"));
+  fs.renameSync(outside, path.join(watched, "Shoot"));
   await waitFor(() => sent.length > 0);
   await sleep(400);
   const targets = sent.flat().map((p) => fs.realpathSync(p));
-  assert.ok(targets.includes(fs.realpathSync(path.join(watched, "Shoot"))), JSON.stringify(targets));
+  // FSEvents (macOS) reports the folder alone, so it goes in whole; Linux's
+  // recursive watch reports the files inside it as well. Either way the
+  // photo comes in.
+  const shoot = fs.realpathSync(path.join(watched, "Shoot"));
+  assert.ok(targets.some((p) => p === shoot || p.startsWith(shoot + path.sep)), JSON.stringify(targets));
   assert.ok(!targets.some((p) => p.endsWith("untitled folder")), JSON.stringify(targets));
 });
 
