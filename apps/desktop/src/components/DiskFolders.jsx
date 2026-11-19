@@ -7,7 +7,7 @@
 // order come from components/diskFolderTree.js.
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Album, ChevronRight, Folder, FolderSearch, FolderX, HardDrive, RefreshCw, Trash2, FolderSync, Eye } from "lucide-react";
+import { Album, ChevronDown, ChevronRight, Folder, FolderSearch, FolderX, HardDrive, RefreshCw, Trash2, FolderSync, Eye } from "lucide-react";
 import FaceMenu from "./FaceMenu";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
 import { ancestorsOf, isSynced, visibleRows } from "./diskFolderTree";
@@ -55,7 +55,7 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
   return (
     <div
       className={[
-        !open ? "mt-3 shrink-0" : "mt-3 flex min-h-[96px] max-h-[45%] shrink flex-col",
+        !open ? "shrink-0" : "flex max-h-[45%] min-h-0 shrink-0 flex-col",
         dropActive ? "relative after:pointer-events-none after:absolute after:inset-x-0 after:-top-1.5 after:bottom-0 after:z-10 after:rounded-md after:ring-1 after:ring-inset after:ring-accent/45" : "",
       ].join(" ")}
       data-disk-folders="true"
@@ -77,7 +77,7 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
           {rows.map((row) => {
             if (row.kind === "volume") {
               return (
-                <div key={`volume:${row.volume}`} className="flex items-center gap-1.5 px-2.5 pb-0.5 pt-1.5 text-[10px] text-muted2" data-disk-volume={row.volume || "local"}>
+                <div key={`volume:${row.volume}`} className="flex items-center gap-1.5 pb-0.5 pl-[10px] pr-2.5 pt-1.5 text-[10px] text-muted2" data-disk-volume={row.volume || "local"}>
                   <HardDrive className="h-3 w-3 shrink-0" />
                   <span className="truncate">{row.volume || t("diskFolders.thisMac")}</span>
                 </div>
@@ -87,6 +87,9 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
             const active = activePath === folder.path;
             const synced = isSynced(folder.path, watchedDirs);
             const Icon = folder.exists ? Folder : FolderX;
+            // Closed, a folder counts everything under it; open, only its own
+            // (the collections' tree does the same).
+            const count = expandable && !isOpen ? folder.total : folder.direct;
             return (
               <div
                 key={folder.path}
@@ -103,12 +106,20 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
                 }}
                 onContextMenu={(event) => { event.preventDefault(); setMenu({ folder, x: event.clientX, y: event.clientY }); }}
                 className={[
-                  "flex w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] py-1.5 pr-2.5 text-left transition-colors",
+                  "flex w-full cursor-pointer items-center justify-between rounded-md py-1.5 pr-2.5 text-left transition-colors",
                   active ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
                 ].join(" ")}
-                style={{ paddingLeft: `${4 + depth * 14}px` }}
+                // Laid out like a collection row: the icon first, at the same
+                // place for every top folder; the chevron after the count.
+                style={{ paddingLeft: `calc(10px + ${depth} * 14px)` }}
               >
-                <span className="flex min-w-0 items-center gap-1">
+                <span className="flex min-w-0 items-center gap-2.5 overflow-hidden">
+                  <Icon className={`h-4 w-4 shrink-0 stroke-[1.6] ${active ? "text-accent" : ""} ${folder.exists ? "" : "text-muted2"}`} />
+                  <span className={`min-w-0 truncate text-[13px] ${folder.exists ? "" : "text-muted2"}`}>{folder.name}</span>
+                  {synced && <RefreshCw data-auto-synced="true" aria-label={t("diskFolders.autoSynced")} className="h-3 w-3 shrink-0 text-muted2" />}
+                </span>
+                <span className="flex shrink-0 items-center gap-1">
+                  <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{count}</span>
                   {expandable ? (
                     <button
                       type="button"
@@ -116,16 +127,12 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
                       aria-expanded={isOpen}
                       aria-label={isOpen ? t("sidebar.collapse") : t("sidebar.expand")}
                       onClick={(event) => { event.stopPropagation(); toggle(folder.path); }}
-                      className="rounded p-0.5 text-muted2 hover:text-text"
+                      className="-mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted2 hover:bg-hover hover:text-text"
                     >
-                      <ChevronRight className={`h-3 w-3 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                      {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                     </button>
-                  ) : <span className="w-4 shrink-0" />}
-                  <Icon className={`h-4 w-4 shrink-0 stroke-[1.6] ${active ? "text-accent" : ""} ${folder.exists ? "" : "text-muted2"}`} />
-                  <span className={`ml-1.5 min-w-0 truncate text-[13px] ${folder.exists ? "" : "text-muted2"}`}>{folder.name}</span>
-                  {synced && <RefreshCw data-auto-synced="true" aria-label={t("diskFolders.autoSynced")} className="ml-1 h-3 w-3 shrink-0 text-muted2" />}
+                  ) : null}
                 </span>
-                <span className={`shrink-0 text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{folder.total}</span>
               </div>
             );
           })}

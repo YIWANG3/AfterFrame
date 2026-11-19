@@ -1,6 +1,6 @@
 // Collections and folders (docs/collections-and-folders-design.md). The
-// sidebar has one Collections heading (Manual and Smart groups) and a Folders
-// section below: the folders on disk the library's photos are in, a read-only
+// sidebar has three sections, Smart Collections, Collections and Folders: the
+// last is the folders on disk the library's photos are in, a read-only
 // mirror. A folder opens as a place, with or without the folders under it;
 // the Inspector's Folder row goes to a photo's folder. A folder moved in
 // Finder shows as not found until it is located. Save as Collection is a
@@ -64,10 +64,14 @@ test.describe("folders on disk", () => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
   });
 
-  test("the sidebar has Collections (Manual, Smart) and the folders on disk, folded down to the photos", async () => {
-    await expect(w().locator("[data-sidebar-collections-heading]")).toHaveText("Collections");
-    await expect(w().locator("[data-sidebar-section-toggle='folders']")).toContainText("Manual");
+  test("the sidebar has Collections and the folders on disk below them, folded down to the photos", async () => {
+    await expect(w().locator("[data-sidebar-section-toggle='folders']")).toContainText("Collections");
     await expect(w().locator("[data-sidebar-section-toggle='diskFolders']")).toContainText("Folders");
+    // Top to bottom, each section as tall as its rows: the folders come
+    // right after the collections, not at the foot of the sidebar.
+    const collectionsBox = await w().locator("[data-sidebar-folders]").boundingBox();
+    const foldersBox = await w().locator("[data-disk-folders]").boundingBox();
+    expect(foldersBox.y - (collectionsBox.y + collectionsBox.height)).toBeLessThanOrEqual(24);
     // Photos holds nothing itself and one folder: the tree starts at 2026.
     await expect(folderRow(year)).toBeVisible({ timeout: 15_000 });
     await expect(folderRow(path.join(root, "Photos"))).toHaveCount(0);

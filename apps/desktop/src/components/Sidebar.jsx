@@ -377,7 +377,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-4">
+      <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain">
         <div className="shrink-0 space-y-1">
           {browse.map((item, idx) => {
             const Icon = ICON_MAP[item.icon];
@@ -501,17 +501,24 @@ export default function Sidebar({
         </div>
 
 
-        {/* Collections: the manual ones (a tree the user arranges) and the
-            smart ones (saved filters), two groups under one heading. Folders
-            on disk are a section of their own below. */}
-        <div className="shrink-0 px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2" data-sidebar-collections-heading="true">
-          {t("sidebar.collections")}
-        </div>
-        {/* Open, the manual collections keep at least a few rows however short
-            the window: the smart ones below give way first (they may shrink). */}
+        {/* Three sections, top to bottom: smart collections (saved filters),
+            collections (a tree the user arranges) and folders on disk. Each is
+            as tall as its rows, up to a share of the sidebar, and scrolls
+            inside past that; the sidebar scrolls when together they don't fit. */}
+        <SmartCollections
+          collections={collections}
+          activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode || statsMode ? null : activeSmartCollectionId}
+          view={folderView}
+          grow={!foldersOpen}
+          onOpen={onOpenSmartCollection}
+          onEditRules={onEditSmartCollection}
+          onRename={onRenameCollection}
+          onDelete={onDeleteCollection}
+          onSnapshot={onSnapshotSmartCollection}
+        />
         <div
           className={[
-            foldersOpen ? "flex min-h-[180px] flex-1 flex-col" : "shrink-0",
+            foldersOpen ? "flex max-h-[45%] min-h-0 shrink-0 flex-col" : "shrink-0",
             // The highlight shows where a Finder drop lands: the whole section.
             // Drawn on top, so a selected row's fill doesn't cover its sides;
             // it reaches into the gap above as far as the heading's own gap
@@ -543,8 +550,7 @@ export default function Sidebar({
         >
           <SectionHeading
             id="folders"
-            variant="group"
-            label={t("sidebar.manualCollections")}
+            label={t("sidebar.collections")}
             open={foldersOpen}
             onToggle={toggleFolders}
             holdsActive={manualCollections.some((c) => c.collection_id === activeCollectionId)}
@@ -661,7 +667,7 @@ export default function Sidebar({
                 setFolderInsertion(null);
               }
             }}
-            className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pb-2"
+            className="min-h-0 shrink space-y-0.5 overflow-y-auto overscroll-contain pb-2"
           >
             {creatingFolder && (
               <div className="px-2.5 py-0.5">
@@ -962,17 +968,7 @@ export default function Sidebar({
           </div>
           </>)}
         </div>
-        <SmartCollections
-          collections={collections}
-          activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode || statsMode ? null : activeSmartCollectionId}
-          view={folderView}
-          grow={!foldersOpen}
-          onOpen={onOpenSmartCollection}
-          onEditRules={onEditSmartCollection}
-          onRename={onRenameCollection}
-          onDelete={onDeleteCollection}
-          onSnapshot={onSnapshotSmartCollection}
-        />
+
         {diskFolders && (
           <DiskFolders
             folders={diskFolders.folders}

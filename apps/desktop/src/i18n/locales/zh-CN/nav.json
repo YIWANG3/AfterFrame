@@ -179,8 +179,6 @@
     "people": "人物",
     "folders": "文件夹",
     "collections": "合集",
-    "manualCollections": "手动",
-    "smartGroup": "智能",
     "newFolder": "新建合集",
     "noFolders": "暂无合集",
     "targetFolder": "按 {{keys}} 把选中的照片加入这里",

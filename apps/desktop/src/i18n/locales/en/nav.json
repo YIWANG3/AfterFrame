@@ -195,8 +195,6 @@
     "people": "People",
     "folders": "Folders",
     "collections": "Collections",
-    "manualCollections": "Manual",
-    "smartGroup": "Smart",
     "newFolder": "New collection",
     "noFolders": "No collections yet",
     "targetFolder": "{{keys}} adds the selected photos here",

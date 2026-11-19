@@ -10,9 +10,9 @@ import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
 
-// The Smart group under the sidebar's Collections heading, below the manual
-// ones. `view` is the sidebar's list / covers switch, shared with them.
-// `grow`: the manual group above is folded, so this one may run past its cap,
+// The sidebar's first section, above the collections and the folders.
+// `view` is the sidebar's list / covers switch, shared with the collections.
+// `grow`: the collections below are folded, so this one may run past its cap,
 // as tall as its rows.
 export default function SmartCollections({ collections, activeId, view = "list", grow = false, onOpen, onEditRules, onRename, onDelete, onSnapshot }) {
   const { t } = useTranslation("nav");
@@ -59,18 +59,16 @@ export default function SmartCollections({ collections, activeId, view = "list",
   if (!smart.length) return null;
 
   return (
-    // Open, the group takes at most two fifths of the sidebar and scrolls
-    // inside that, so the manual group above always keeps its room; in a
-    // short window it shrinks further, down to its heading and a couple of rows.
+    // Open, the section is as tall as its rows up to two fifths of the
+    // sidebar, and scrolls inside past that.
     <div
-      className={!open ? "mt-1.5 shrink-0" : grow ? "mt-1.5 flex min-h-0 shrink flex-col" : "mt-1.5 flex min-h-[96px] max-h-[40%] shrink flex-col"}
+      className={!open ? "shrink-0" : grow ? "flex min-h-0 shrink-0 flex-col" : "flex max-h-[40%] min-h-0 shrink-0 flex-col"}
       data-smart-collections="true"
       data-open={open ? "true" : "false"}
     >
       <SectionHeading
         id="smart"
-        variant="group"
-        label={t("sidebar.smartGroup")}
+        label={t("sidebar.smartCollections")}
         open={open}
         onToggle={toggleOpen}
         holdsActive={smart.some((c) => c.collection_id === activeId)}
