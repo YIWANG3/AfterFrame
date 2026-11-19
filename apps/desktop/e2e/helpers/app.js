@@ -58,7 +58,9 @@ async function importThroughToolbar(app, window, paths, { hold = false } = {}) {
   const folders = paths.every((p) => fs.statSync(p).isDirectory());
   const entry = !splitsImport(process.platform) ? "Import" : folders ? "Import Folder…" : "Import Files…";
   await window.locator(".app-toolbar button").first().click();
-  await window.getByRole("button", { name: entry, exact: true }).click();
+  // The toolbar's own menu: the sidebar's Folders section has an
+  // "Import Folder…" button of its own.
+  await window.locator(".app-toolbar").first().getByRole("button", { name: entry, exact: true }).click();
   if (!hold) return null;
   for (const deadline = Date.now() + 10_000; !(await app.evaluate(() => Boolean(globalThis.__answerImportPicker)));) {
     if (Date.now() > deadline) throw new Error("the import picker never opened");
