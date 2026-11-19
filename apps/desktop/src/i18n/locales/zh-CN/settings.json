@@ -23,7 +23,8 @@
     "themeLight": "浅色",
     "themeSystem": "跟随系统",
     "uiScale": "界面缩放",
-    "uiScaleHint": "整个界面一起缩放,立即生效。"
+    "uiScaleHint": "整个界面一起缩放,立即生效。",
+    "sidebar": "侧栏"
   },
   "annotation": {
     "loading": "正在加载设置…",
@@ -101,8 +102,8 @@
     "switchCatalogHint": "打开已有的 .afcatalog,或新建一个。当前视图会重新加载。",
     "openCatalog": "打开…",
     "newCatalog": "新建…",
-    "watchedTitle": "监控目录",
-    "watchedSubtitle": "仅属于当前 Catalog。落入这些文件夹的新文件会被自动导入；切换 Catalog 后，监听也会随之切换。",
+    "watchedTitle": "自动同步的文件夹",
+    "watchedSubtitle": "仅属于当前 Catalog。放进这些文件夹的新文件会自动导入，在里面挪动的文件沿用原来的记录；切换 Catalog 后，这份列表也随之切换。",
     "noWatched": "当前 Catalog 尚无监控目录。",
     "addFolder": "添加文件夹…",
     "remove": "移除",
@@ -389,7 +390,7 @@
         "deleteRejected": "删除排除的照片…"
       },
       "folder": {
-        "addToTarget": "加入目标文件夹"
+        "addToTarget": "加入目标合集"
       },
       "select": {
         "all": "全选",

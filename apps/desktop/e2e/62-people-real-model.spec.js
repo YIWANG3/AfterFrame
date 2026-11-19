@@ -28,7 +28,7 @@ test.describe("people recognition with the bundled face model", () => {
   const cards = () => galleryCards(ctx.window);
   const nameOf = (file) => path.basename(file);
   const openPeople = async () => {
-    await ctx.window.getByRole("navigation").getByRole("button", { name: "People" }).click();
+    await ctx.window.getByRole("navigation").getByRole("button", { name: "People", exact: true }).click();
     await expect(ctx.window.getByRole("heading", { name: "People", exact: true })).toBeVisible();
   };
   const photosOf = (groupId) => ctx.window.evaluate(

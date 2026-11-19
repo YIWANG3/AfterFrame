@@ -58,11 +58,15 @@ const QUIET_MS = 3000;
 const MAX_FILES_PER_IMPORT = 500;
 
 const keepAll = async (paths) => ({ changed: paths });
+const checkNone = async () => null;
 
 let watchers = [];
 let getWindow = () => null;
-let catalog = { path: () => null, read: () => ({}), update: async () => {}, changed: keepAll };
+let catalog = { path: () => null, read: () => ({}), update: async () => {}, changed: keepAll, verify: checkNone };
 const pending = new Set();
+// Paths fs.watch reported that are not media files: a folder that arrived (a
+// shoot moved in, a folder renamed) or one that went (moved out, deleted).
+const pendingDirs = new Set();
 let flushTimer = null;
 let generation = 0;
 let quietMs = QUIET_MS;
@@ -93,6 +97,21 @@ function send(channel, payload, catalogPath) {
   }
 }
 
+// Does a folder hold a photo or video anywhere inside? A new empty folder
+// (Finder's "untitled folder") is nothing to import. Gives up looking after
+// `budget` entries and says yes: the import itself finds out.
+function holdsMedia(dir, budget = { left: 5000 }) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return false; }
+  for (const entry of entries) {
+    if (--budget.left <= 0) return true;
+    if (entry.name.startsWith(".")) continue;
+    if (entry.isFile() && MEDIA_RE.test(entry.name)) return true;
+    if (entry.isDirectory() && holdsMedia(path.join(dir, entry.name), budget)) return true;
+  }
+  return false;
+}
+
 function isFile(p) {
   try { return fs.statSync(p).isFile(); } catch { return false; }
 }
@@ -117,19 +136,51 @@ async function checkFiles(files) {
   return { changed, present };
 }
 
+// What left a synced folder: the photos whose files went (`files`) or that
+// were in a folder that went (`dirs`) are checked, so they show as missing.
+// A file moved within the folder arrives too; its import relinks the record
+// (db.maintenance.claim_moved_original), whatever order the two come in.
+async function verifyGone(files, dirs) {
+  let missing = 0;
+  try {
+    if (files.length) missing += (await catalog.verify({ paths: files }))?.newly_missing || 0;
+    for (const dir of dirs) missing += (await catalog.verify({ under: dir }))?.newly_missing || 0;
+  } catch (err) {
+    console.warn("[watcher] can't check what went:", err?.message || err);
+  }
+  return missing;
+}
+
 async function flush(eventGeneration, catalogPath) {
   flushTimer = null;
   if (eventGeneration !== generation || !sameCatalog(catalog.path(), catalogPath)) {
     pending.clear();
+    pendingDirs.clear();
     return;
   }
-  // fs.watch reports a deletion like a creation ('rename'): keep what exists.
-  const files = [...pending].filter(isFile);
+  // fs.watch reports a deletion like a creation ('rename'): what exists came
+  // or changed, what doesn't went.
+  const reported = [...pending];
+  const reportedDirs = [...pendingDirs];
   pending.clear();
-  if (!files.length) return;
-  const { changed, present } = await checkFiles(files);
+  pendingDirs.clear();
+  const files = reported.filter(isFile);
+  const gone = reported.filter((file) => !fs.existsSync(file));
+  // A folder reported along with a file inside it was only written to (its
+  // own change follows the file's); one that arrived is reported alone.
+  const arrivedDirs = reportedDirs.filter((dir) => isDir(dir) && !reported.some((file) => isInside(file, dir)) && holdsMedia(dir));
+  const goneDirs = reportedDirs.filter((dir) => !fs.existsSync(dir));
+  if (gone.length || goneDirs.length) {
+    const missing = await verifyGone(gone, goneDirs);
+    if (eventGeneration !== generation) return;
+    if (missing) send("workspace:catalog-changed", { scope: "assets", reason: "watcher" }, catalogPath);
+  }
+  if (!files.length && !arrivedDirs.length) return;
+  const { changed, present } = files.length ? await checkFiles(files) : { changed: [], present: [] };
   if (eventGeneration !== generation) return;
-  if (changed.length) send("workspace:watched-import", importTargets(changed), catalogPath);
+  // A folder that arrived goes to the import whole: the import skips what it holds already.
+  const targets = [...importTargets(changed), ...arrivedDirs];
+  if (targets.length) send("workspace:watched-import", importTargets(targets), catalogPath);
   if (present.length) send("workspace:watched-present", present, catalogPath);
 }
 
@@ -139,15 +190,23 @@ function onChange(root, relative, eventGeneration, catalogPath) {
   if (!relative) return;
   const name = String(relative);
   const sidecar = SIDECAR_RE.test(name);
-  if (!sidecar && !MEDIA_RE.test(name)) return;
   // Hidden files and folders: temp files, .Trashes, .Spotlight-V100, editors' scratch.
   if (name.split(/[\\/]/).some((part) => part.startsWith("."))) return;
   const filePath = path.join(root, name);
   // A catalog kept inside a watched folder writes its own previews there.
   if (catalogPath && isInside(filePath, catalogPath)) return;
-  const files = sidecar ? photosOfSidecar(filePath) : [filePath];
-  if (!files.length) return;
-  for (const file of files) pending.add(file);
+  if (!sidecar && !MEDIA_RE.test(name)) {
+    // No extension: a folder that came or went (a file of another type that
+    // exists is left alone). FSEvents also reports the watched folder itself
+    // by its own name, which is no folder inside it.
+    if (path.extname(name) || isFile(filePath)) return;
+    if (name === path.basename(root) && !fs.existsSync(filePath)) return;
+    pendingDirs.add(filePath);
+  } else {
+    const files = sidecar ? photosOfSidecar(filePath) : [filePath];
+    if (!files.length) return;
+    for (const file of files) pending.add(file);
+  }
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(() => flush(eventGeneration, catalogPath), quietMs);
 }
@@ -177,6 +236,7 @@ function close() {
 function rebuild() {
   generation += 1;
   pending.clear();
+  pendingDirs.clear();
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = null;
   close();
@@ -200,10 +260,12 @@ function register({
   ipcMain, getMainWindow, catalog: { path: getCatalogPath }, readCatalogSettings, updateCatalogSettings,
   // The sidecar's changed-media filter; a test without a sidecar keeps every path.
   commands = null, changedMedia = commands ? (paths) => commands.changedMedia(paths) : keepAll,
+  // Marks what left a synced folder missing (verify-assets for those paths).
+  verifyMedia = commands ? (options) => commands.verifyAssets(options) : checkNone,
   quietPeriodMs = QUIET_MS,
 }) {
   getWindow = getMainWindow;
-  catalog = { path: getCatalogPath, read: readCatalogSettings, update: updateCatalogSettings, changed: changedMedia };
+  catalog = { path: getCatalogPath, read: readCatalogSettings, update: updateCatalogSettings, changed: changedMedia, verify: verifyMedia };
   quietMs = quietPeriodMs;
 
   // Named (not inline in the handlers) so the MCP maintain_library tool can

@@ -78,6 +78,31 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, media: { ad
     return outcome;
   }));
 
+  // Folders on disk (docs/collections-and-folders-design.md §5): the tree,
+  // and a moved one located. Locate asks where it went unless `folder` says.
+  ipcMain.handle("workspace:list-folders", withCatalog(getCatalogState, { folders: [] }, () => commands.listFolders()));
+  ipcMain.handle("workspace:locate-folder", withCatalog(getCatalogState, null, async (_event, options) => {
+    const opts = options || {};
+    if (!opts.old) return null;
+    let folder = opts.folder;
+    if (!folder) {
+      const translate = tr();
+      const result = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow(), {
+        title: translate("dialog.locateFolderTitle"),
+        properties: ["openDirectory"],
+        // The main process's t() has no interpolation.
+        message: translate("dialog.locateFolderMessage").replace("{{name}}", path.basename(String(opts.old))),
+      });
+      if (result.canceled || !result.filePaths?.length) return { status: "cancelled" };
+      folder = result.filePaths[0];
+    }
+    const outcome = await commands.locateFolder({ old: opts.old, folder });
+    for (const dir of new Set((outcome?.items || []).filter((item) => item.new_path).map((item) => path.dirname(item.new_path)))) {
+      addAllowedMediaDir(dir);
+    }
+    return outcome;
+  }));
+
   // The picture the editor edits a RAW from (../rawEditSource.js): its HD
   // preview when that is the RAW's full size, else a full-size render.
   // `neutral`: always the full render, never the camera's embedded JPEG — the

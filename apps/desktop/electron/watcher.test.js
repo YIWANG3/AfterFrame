@@ -10,7 +10,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const fdDir = process.platform === "darwin" ? "/dev/fd" : process.platform === "linux" ? "/proc/self/fd" : null;
 const openFds = () => fs.readdirSync(fdDir).length;
 
-function setup(t, { changedMedia } = {}) {
+function setup(t, { changedMedia, verifyMedia } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-watch-"));
   const watched = path.join(root, "Trips");
   const catalogPath = path.join(watched, "My.afcatalog");
@@ -18,7 +18,8 @@ function setup(t, { changedMedia } = {}) {
   fs.mkdirSync(path.join(catalogPath, "previews"), { recursive: true });
   const sent = [];
   const present = [];
-  const channels = { "workspace:watched-import": sent, "workspace:watched-present": present };
+  const changed = [];
+  const channels = { "workspace:watched-import": sent, "workspace:watched-present": present, "workspace:catalog-changed": changed };
   const handlers = {};
   const api = register({
     ipcMain: { handle: (name, fn) => { handlers[name] = fn; } },
@@ -27,13 +28,14 @@ function setup(t, { changedMedia } = {}) {
     readCatalogSettings: () => ({ integrations: { watchedDirs: [watched] } }),
     updateCatalogSettings: async () => {},
     changedMedia,
+    verifyMedia,
     quietPeriodMs: 200,
   });
   t.after(() => {
     api.stop();
     fs.rmSync(root, { recursive: true, force: true });
   });
-  return { api, root, watched, catalogPath, sent, present };
+  return { api, root, watched, catalogPath, sent, present, changed };
 }
 
 test("watching a folder holds a handle per folder, not per file (#130)", { skip: !fdDir }, async (t) => {
@@ -187,4 +189,62 @@ test("a dropped folder has subfolders when it holds a folder that isn't hidden",
   assert.equal(hasSubfolder(nested), true);
   assert.equal(hasSubfolder(path.join(flat, "a.jpg")), false);
   assert.equal(hasSubfolder(path.join(root, "missing")), false);
+});
+
+// What left a synced folder is checked (docs/collections-and-folders-design.md
+// §5.6): the verify the watcher asks for, by paths or under a folder.
+function verifyRecorder(calls, newlyMissing = 1) {
+  return async (options) => {
+    calls.push(options);
+    return { newly_missing: newlyMissing };
+  };
+}
+
+test("a photo deleted from a synced folder is checked, and the window told", async (t) => {
+  const calls = [];
+  const { api, watched, changed, sent } = setup(t, { verifyMedia: verifyRecorder(calls) });
+  const photo = path.join(watched, "day 1", "gone.jpg");
+  fs.writeFileSync(photo, "jpeg");
+  await sleep(1000); // so FSEvents doesn't report the write once watching starts
+  api.start();
+  await sleep(300);
+  fs.rmSync(photo);
+  await waitFor(() => changed.length > 0);
+  assert.deepEqual(calls.map((call) => (call.paths || []).map((p) => fs.realpathSync(path.dirname(p)) + path.sep + path.basename(p))), [[fs.realpathSync(path.join(watched, "day 1")) + path.sep + "gone.jpg"]]);
+  assert.deepEqual(changed, [{ scope: "assets", reason: "watcher" }]);
+  assert.deepEqual(sent, []);
+});
+
+test("a folder moved into a synced folder is imported whole; an empty new one isn't", async (t) => {
+  const { api, root, watched, sent } = setup(t);
+  const outside = path.join(root, "Shoot");
+  fs.mkdirSync(path.join(outside, "Day 2"), { recursive: true });
+  fs.writeFileSync(path.join(outside, "Day 2", "a.jpg"), "jpeg");
+  api.start();
+  await sleep(300);
+  fs.mkdirSync(path.join(watched, "untitled folder"));
+  fs.renameSync(outside, path.join(watched, "Shoot"));
+  await waitFor(() => sent.length > 0);
+  await sleep(400);
+  const targets = sent.flat().map((p) => fs.realpathSync(p));
+  // FSEvents (macOS) reports the folder alone, so it goes in whole; Linux's
+  // recursive watch reports the files inside it as well. Either way the
+  // photo comes in.
+  const shoot = fs.realpathSync(path.join(watched, "Shoot"));
+  assert.ok(targets.some((p) => p === shoot || p.startsWith(shoot + path.sep)), JSON.stringify(targets));
+  assert.ok(!targets.some((p) => p.endsWith("untitled folder")), JSON.stringify(targets));
+});
+
+test("a folder moved out of a synced folder has its photos checked", async (t) => {
+  const calls = [];
+  const { api, root, watched, changed } = setup(t, { verifyMedia: verifyRecorder(calls) });
+  const shoot = path.join(watched, "Shoot");
+  fs.mkdirSync(shoot);
+  fs.writeFileSync(path.join(shoot, "a.jpg"), "jpeg");
+  api.start();
+  await sleep(300);
+  fs.renameSync(shoot, path.join(root, "Elsewhere"));
+  await waitFor(() => changed.length > 0);
+  const under = calls.filter((call) => call.under).map((call) => path.basename(call.under));
+  assert.deepEqual(under, ["Shoot"]);
 });

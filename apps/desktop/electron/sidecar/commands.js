@@ -199,8 +199,13 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     },
 
     // ── Missing-original handling ────────────────────────────────────────
-    verifyAssets({ scope = "all" } = {}) {
-      return callJson(["verify-assets", "--scope", String(scope)]);
+    // `under`: only the files in that folder on disk and below (a folder's
+    // Sync). `paths`: only the assets whose original is one of these files.
+    verifyAssets({ scope = "all", under = null, paths = null } = {}) {
+      const argv = ["verify-assets", "--scope", String(scope)];
+      if (under) argv.push("--under", String(under));
+      for (const file of paths || []) argv.push("--path", String(file));
+      return callJson(argv);
     },
 
     // ── Same-shot RAW+JPG pairs ──────────────────────────────────────────
@@ -235,6 +240,16 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       const argv = ["relink-from-folder", "--folder", String(folder)];
       for (const id of assetIds) argv.push("--asset-id", String(id));
       return callJson(argv);
+    },
+
+    // The folders on disk the library's photos are in, as flat rows of a tree.
+    listFolders() {
+      return callJson(["list-folders"]);
+    },
+
+    // A folder moved on disk: its photos, relinked to the same places under `folder`.
+    locateFolder({ old, folder } = {}) {
+      return callJson(["locate-folder", "--old", String(old), "--new", String(folder)]);
     },
 
     // The view the counts are taken inside (folder or status, search text, the

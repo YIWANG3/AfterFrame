@@ -42,7 +42,7 @@ test("Discover groups the catalog by capture month and pins Rated; sparse sectio
   for (const month of ["February 2018", "May 2025", "October 2025"]) {
     await expect(ctx.window.getByRole("button", { name: new RegExp(`^${month}`) })).toBeVisible();
   }
-  await expect(ctx.window.getByRole("button", { name: /^October 2025/ })).toContainText("1 items");
+  await expect(ctx.window.getByRole("button", { name: /^October 2025/ })).toContainText("1 item");
   await expect(ctx.window.getByRole("button", { name: "Rated", exact: true })).toBeVisible();
   await expect(ctx.window.getByRole("button", { name: "Has Paired RAW", exact: true })).toHaveCount(0);
 });

@@ -317,6 +317,16 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
         ttl: 6000,
       });
     }
+    // Moved originals the import met: their old records were relinked to
+    // where they are now (db.maintenance.claim_moved_original), not doubled.
+    const claimed = resolve?.result?.claimed_moved || 0;
+    if (claimed > 0) {
+      pushToast?.({
+        title: t("importClaimed", { count: claimed }),
+        message: t("importClaimedMsg"),
+        ttl: 6000,
+      });
+    }
     // Files the import walked past because the catalog doesn't take their
     // type (a .docx in the folder, a .psb): said once, with what they were,
     // and a way to the list of what does import. Sidecars (.xmp, .thm) are

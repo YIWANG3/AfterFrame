@@ -252,7 +252,7 @@ test("a description is written by hand; the AI's shows until one is, and comes b
 
 test("B adds the selection to the folder last made, and the folder keeps the key after a restart", async () => {
   // A folder made in the sidebar becomes the target: its row shows the key.
-  await ctx.window.getByTitle("New folder").click();
+  await ctx.window.getByTitle("New collection").click();
   const field = ctx.window.getByTestId("sidebar-folder-scroll").locator("input");
   await field.fill("Keepers");
   await field.press("Enter");
@@ -281,7 +281,7 @@ test("B adds the selection to the folder last made, and the folder keeps the key
 
   // The menu's folder list leads with it, key and all.
   await card(c).click({ button: "right" });
-  await ctx.window.getByText("Add to Folder", { exact: true }).hover();
+  await ctx.window.getByText("Add to Collection", { exact: true }).hover();
   const menuTarget = ctx.window.locator("[data-target-folder='true']:not([data-collection-id])");
   await expect(menuTarget).toContainText("Keepers");
   await expect(menuTarget).toContainText("B");

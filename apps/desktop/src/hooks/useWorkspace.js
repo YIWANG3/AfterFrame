@@ -10,7 +10,7 @@ import useImportPipeline from "./useImportPipeline";
 import { usePref } from "./usePref";
 import { adoptLegacyPref, bool, intIn, oneOf, readPref, writePref } from "../utils/prefs";
 import { isEmptyValue,
-  DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
+  DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, folderBase, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, rejectedFilters, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
@@ -728,12 +728,21 @@ export default function useWorkspace({ pushToast, onShowMissing } = {}) {
     goTo({ collectionId });
   }
 
+  // A folder on disk: its photos, with or without the folders under it as
+  // the subfolder switch was last left (the same choice a collection's is).
+  function openFolder(folderPath) {
+    if (!folderPath) return;
+    const includeDescendants = readIncludeDescendants();
+    goTo({ folderPath, includeDescendants, base: folderBase(folderPath, includeDescendants) });
+  }
+
   // The toolbar's switch inside a folder: with or without the folders under
   // it. The place stays the same, so the refinement stays too.
   function setIncludeDescendants(next) {
     const value = next !== false;
     writePref(SUBFOLDERS_PREF, value);
     if (scopeRef.current.collectionId) updateScope({ includeDescendants: value });
+    else if (scopeRef.current.folderPath) updateScope({ includeDescendants: value, base: folderBase(scopeRef.current.folderPath, value) });
   }
 
   // A smart collection's rules become the base set; the filter bar starts
@@ -765,7 +774,7 @@ export default function useWorkspace({ pushToast, onShowMissing } = {}) {
   // All Assets opened empty, and coming back any other way showed the
   // folder's photos under the All Assets title.
   function clearCollection() {
-    if (scopeRef.current.collectionId) goTo({});
+    if (scopeRef.current.collectionId || scopeRef.current.folderPath) goTo({});
   }
 
   // Opening a person is a new browse destination, not an intersection with a
@@ -962,6 +971,8 @@ export default function useWorkspace({ pushToast, onShowMissing } = {}) {
     filters: scope.filters,
     setFilters: applyFilters,
     activeCollectionId: scope.collectionId,
+    activeFolderPath: scope.folderPath || null,
+    openFolder,
     includeDescendants: scope.includeDescendants !== false,
     setIncludeDescendants,
     facetScope: facetScopeOf(scope),

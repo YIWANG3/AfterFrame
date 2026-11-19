@@ -12,6 +12,7 @@ import FaceMenu from "./FaceMenu";
 import NamePersonPopover from "./NamePersonPopover";
 import PersonPickerPopover from "./PersonPickerPopover";
 import { DetailRow, Section } from "./inspector/InspectorPrimitives";
+import { folderName } from "./diskFolderTree";
 
 function StarRating({ value = 0, onChange }) {
   const [hover, setHover] = useState(0);
@@ -164,7 +165,11 @@ function SimilarStrip({ assetId, onSelect }) {
 // (palette, faces) are left out, as are the strips that lead to another photo
 // and the blocks about the file's place in the catalog; what was shot, and
 // when, comes before what was written about it.
-export default function Inspector({ variant = "panel", detail, onRatingChange, onFlagChange, onDescriptionChange, onAnnotated, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
+
+// The directory a file is in, either separator.
+const parentDir = (path) => String(path || "").replace(/[\\/][^\\/]*$/, "");
+
+export default function Inspector({ variant = "panel", detail, onOpenFolder, onRatingChange, onFlagChange, onDescriptionChange, onAnnotated, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
   const { t } = useTranslation("inspector");
   const [relinking, setRelinking] = useState(false);
   const [hoveredFaceId, setHoveredFaceId] = useState(null);
@@ -375,6 +380,19 @@ export default function Inspector({ variant = "panel", detail, onRatingChange, o
 
   const sourceSection = api.can("fileSystem") ? (
     <Section title={t("sections.source")}>
+      {onOpenFolder && detail.image_path ? (
+        <DetailRow label={t("rows.folder")}>
+          <button
+            type="button"
+            className="max-w-full cursor-pointer truncate text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+            onClick={() => onOpenFolder(parentDir(detail.image_path))}
+            title={parentDir(detail.image_path)}
+            data-testid="inspector-folder"
+          >
+            {folderName(parentDir(detail.image_path))}
+          </button>
+        </DetailRow>
+      ) : null}
       <DetailRow label={t("rows.asset")}>
         {missing ? (
           <span className="flex min-w-0 items-center justify-end gap-1.5">

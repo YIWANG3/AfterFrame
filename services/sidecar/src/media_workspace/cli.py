@@ -68,6 +68,7 @@ from .db import (
     upsert_catalog_root,
     verify_assets,
 )
+from .db.folders import list_folders, locate_folder
 from .job_runner import (
     run_ai_repaint_job,
     run_annotation_job,
@@ -458,6 +459,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify_assets_p = subparsers.add_parser("verify-assets", parents=[common])
     verify_assets_p.add_argument("--scope", choices=["all", "image", "raw"], default="all")
+    verify_assets_p.add_argument("--under", default=None, help="Only the files in this folder on disk and below")
+    verify_assets_p.add_argument("--path", action="append", default=None, help="Only the assets whose original is this file")
+
+    subparsers.add_parser("list-folders", parents=[common])
+    locate_folder_p = subparsers.add_parser("locate-folder", parents=[common])
+    locate_folder_p.add_argument("--old", required=True, help="The folder as the catalog knows it")
+    locate_folder_p.add_argument("--new", type=Path, required=True, help="Where it is now")
 
     relink_asset_p = subparsers.add_parser("relink-asset", parents=[common])
     relink_asset_p.add_argument("--asset-id", required=True)
@@ -1954,8 +1962,18 @@ def _cmd_export_assets(args, connection, catalog, parser):
 
 
 def _cmd_verify_assets(args, connection, catalog, parser):
-    payload = verify_assets(connection, scope=args.scope)
+    payload = verify_assets(connection, scope=args.scope, under=args.under, paths=args.path)
     print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_list_folders(args, connection, catalog, parser):
+    print(json.dumps(list_folders(connection), indent=2))
+    return 0
+
+
+def _cmd_locate_folder(args, connection, catalog, parser):
+    print(json.dumps(locate_folder(connection, args.old, args.new), indent=2))
     return 0
 
 
@@ -2252,6 +2270,8 @@ COMMAND_HANDLERS = {
     "verify-assets": _cmd_verify_assets,
     "relink-asset": _cmd_relink_asset,
     "relink-from-folder": _cmd_relink_from_folder,
+    "list-folders": _cmd_list_folders,
+    "locate-folder": _cmd_locate_folder,
     "delete-image-assets": _cmd_delete_image_assets,
     "raw-pairs-status": _cmd_raw_pairs_status,
     "set-raw-pairs-mode": _cmd_set_raw_pairs_mode,

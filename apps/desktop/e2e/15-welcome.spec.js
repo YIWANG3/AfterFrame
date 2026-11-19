@@ -115,6 +115,10 @@ test.describe("First run (no catalog)", () => {
     // Recreate the old shipping layout, including all 14 web-demo thumbnails.
     fs.cpSync(path.join(__dirname, "..", "sample-photos", "previews"), path.join(photosDir, "previews"), { recursive: true });
     await window.evaluate((dir) => window.mediaWorkspace.startImport({ mode: "processed_only", imageDirs: [dir] }), photosDir);
+    // The status can still be the previous import's "succeeded" for a moment
+    // after this one is started: wait for its photos, not for a status.
+    await expect.poll(async () => (await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 }))).length, { timeout: 30_000 })
+      .toBe(28);
     await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getImportStatus()), { timeout: 30_000 })
       .toMatchObject({ status: "succeeded" });
     const before = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 }));

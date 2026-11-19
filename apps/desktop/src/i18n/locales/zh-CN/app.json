@@ -7,7 +7,7 @@
   "showInAllAssets": {
     "failed": "无法在全部素材中定位这张照片"
   },
-  "folderOrderFailed": "无法保存文件夹顺序",
+  "folderOrderFailed": "无法保存合集顺序",
   "ratingFailed": "评分保存失败",
   "drop": {
     "title": "拖放以导入",
@@ -91,18 +91,20 @@
   "importAllExisting": "{{already}} 个已在库中",
   "importMixedMsg_other": "{{count}} 个所选文件已导入过,已跳过。",
   "importAllExistingMsg": "所有所选文件都已导入过，没有新增。",
+  "importClaimed_other": "接回了 {{count}} 个挪过位置的文件",
+  "importClaimedMsg": "沿用了它们原来的记录，评分、标签和所在合集都还在。",
   "importSkippedUnsupported_one": "已跳过 1 个不支持的文件",
   "importSkippedUnsupported_other": "已跳过 {{count}} 个不支持的文件",
   "importSkippedUnsupportedMsg": "不是图库能导入的照片、RAW 或视频格式：{{kinds}}。",
   "importSkippedNoExtension": "无扩展名",
   "importSupportedFormats": "支持的格式",
   "openWithFailed": "无法在编辑器中打开",
-  "watchPromptTitle": "监控这个文件夹?",
-  "watchPromptMsg": "自动导入「{{dir}}」中新增的文件。",
-  "watchPromptMsgN": "自动导入这 {{count}} 个文件夹中新增的文件。",
-  "watchAdd": "加入监控",
-  "watchedCatchUpTitle_one": "监控文件夹有 1 个新文件",
-  "watchedCatchUpTitle_other": "监控文件夹有 {{count}} 个新文件",
+  "watchPromptTitle": "保持这个文件夹同步？",
+  "watchPromptMsg": "「{{dir}}」里新增和挪动的文件会自动跟上。",
+  "watchPromptMsgN": "这 {{count}} 个文件夹里新增和挪动的文件会自动跟上。",
+  "watchAdd": "保持同步",
+  "watchedCatchUpTitle_one": "自动同步的文件夹有 1 个新文件",
+  "watchedCatchUpTitle_other": "自动同步的文件夹有 {{count}} 个新文件",
   "watchedCatchUpMsg": "正在导入",
   "webUnsupportedFiles": "已跳过 {{count}} 个文件，视频和 RAW 请使用桌面版",
   "smartCollection": {
@@ -116,8 +118,8 @@
   "targetFolder": {
     "added_one": "已把 {{count}} 张照片加入「{{name}}」",
     "added_other": "已把 {{count}} 张照片加入「{{name}}」",
-    "none": "还没有目标文件夹",
-    "noneHint": "新建一个文件夹，或先用右键菜单加入一次，之后按 {{key}} 就会加到那里。",
+    "none": "还没有目标合集",
+    "noneHint": "新建一个合集，或先用右键菜单加入一次，之后按 {{key}} 就会加到那里。",
     "failed": "加入「{{name}}」失败"
   },
   "smartCollectionRulesLost": "筛选条件没有存进去。请完全退出并重新打开 AfterFrame,再保存一次。",
@@ -149,7 +151,7 @@
   },
   "compareNeedsTwo": "选中两张照片才能对比",
   "descriptionFailed": "描述保存失败",
-  "folderMoveFailed": "无法移动文件夹",
+  "folderMoveFailed": "无法移动合集",
   "rawPairs": {
     "merged_other": "{{count}} 组同名 RAW+JPG 已合并为一张",
     "separate": "改为分开",

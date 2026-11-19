@@ -84,8 +84,10 @@ module.exports = (ctx) => {
           person_id: { type: "string", description: "Only photos of this person (a people group id from list_people)" },
           annotated: { type: "string", enum: ["with", "without"], description: "Whether AI annotation exists" },
           has_raw: { type: "boolean", description: "true: only photos with their RAW file paired (bound on import or confirmed by hand); false: only photos without one" },
-          collection_id: { type: "string", description: "Only photos in this folder (a manual collection from manage_collections)" },
-          include_descendants: { type: "boolean", description: "With collection_id: photos in the folders under it count too (folders nest), each once. Default false." },
+          collection_id: { type: "string", description: "Only photos in this collection (a manual collection from manage_collections)" },
+          include_descendants: { type: "boolean", description: "With collection_id: photos in the collections under it count too (collections nest), each once. Default false." },
+          folder: { type: "string", description: "Only photos in this folder on disk (an absolute path, as maintain_library list_folders lists them) and the folders under it" },
+          folder_descendants: { type: "boolean", description: "With folder: false for the photos right in it only. Default true." },
           exclude: EXCLUDE_ARG,
           any_of: ANY_OF_ARG,
           geo: {
@@ -103,6 +105,12 @@ module.exports = (ctx) => {
       async handler(args) {
         requireCatalog();
         const filters = facetFiltersFrom(args);
+        // A folder on disk is a place to search in, not a condition a smart
+        // collection keeps, so it is search_assets' alone (db/folders.py).
+        if (args.folder) {
+          filters.in_folder = String(args.folder);
+          filters.in_folder_descendants = args.folder_descendants !== false;
+        }
         if (args.geo && typeof args.geo === "object") {
           const geo = args.geo.near
             ? nearToBounds(args.geo.near)
@@ -234,7 +242,7 @@ module.exports = (ctx) => {
         properties: {
           query: { type: "string", description: "Free-text scope, same as search_assets query" },
           collection_id: { type: "string" },
-          include_descendants: { type: "boolean", description: "With collection_id: the folders under it too" },
+          include_descendants: { type: "boolean", description: "With collection_id: the collections under it too" },
           min_precision: { type: "string", enum: ["exact", "locality", "admin1", "country"], description: "Default locality" },
           limit: { type: "number", description: "Default 5000" },
         },
