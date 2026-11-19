@@ -398,9 +398,10 @@ test("with many smart collections their section keeps to its share and the colle
   // A short window (the CI runner's screen): the smart collections keep to
   // their share and scroll inside it; the sidebar scrolls to the rest.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 560));
+  // (The CI runner's screen may already be this short: the sidebar's height
+  // then doesn't change, and the share is measured against what it is.)
   const shortNav = window.locator("aside nav");
-  await expect.poll(async () => (await shortNav.boundingBox()).height).toBeLessThan(nav.height);
-  expect((await section.boundingBox()).height).toBeLessThanOrEqual((await shortNav.boundingBox()).height * 0.4 + 1);
+  await expect.poll(async () => (await section.boundingBox()).height <= (await shortNav.boundingBox()).height * 0.4 + 1).toBe(true);
   expect(await list.evaluate((el) => el.clientHeight > 0 && el.scrollHeight > el.clientHeight)).toBe(true);
   await snapshot.scrollIntoViewIfNeeded();
   await expect(snapshot).toBeInViewport();
