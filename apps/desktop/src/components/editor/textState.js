@@ -235,7 +235,7 @@ export const TEXT_STYLE_KEYS = [
   "strokeGradFrom", "strokeGradFromOpacity", "strokeGradTo", "strokeGradToOpacity", "strokeGradAngle",
   "bgMode", "bgColor", "bgOpacity",
   "bgGradFrom", "bgGradFromOpacity", "bgGradTo", "bgGradToOpacity", "bgGradAngle",
-  "bgPadTop", "bgPadRight", "bgPadBottom", "bgPadLeft",
+  "bgPadTop", "bgPadRight", "bgPadBottom", "bgPadLeft", "bgRadius",
   "shadow", "shadowX", "shadowY", "shadowBlur", "shadowColor", "shadowOpacity",
   "glow", "glowColor", "glowBlur", "glowOpacity", "glowIntensity",
 ];

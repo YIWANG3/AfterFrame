@@ -10,6 +10,7 @@
 // (frameUserTemplates.outputGeometry).
 
 import { LOGO_SCALE, logoHeightFactor } from "./render/frameLogos";
+import { parseCssColor } from "./render/canvasHelpers";
 
 const INSET = 0.075; // of the short edge: the built-in bars' 0.05 × 1.5
 const IN_BAND = 0.4 * LOGO_SCALE; // of the band's height, on the marks' scale
@@ -187,4 +188,31 @@ export function backgroundLightness(bg) {
     return stops.reduce((sum, color) => sum + lightness(color), 0) / stops.length;
   }
   return lightness(bg?.color || "#ffffff");
+}
+
+// Light and dark ends far enough apart to read (lightness 0..1).
+const READS = 0.4;
+
+/** A frame text colour that reads on a background `light` (0 black, 1
+ *  white), or null when `color` already does. A grey line (a lens, the
+ *  settings under the model) stays the quieter of the two. */
+export function readableTextColor(color, light) {
+  const L = backgroundLightness({ color: parseCssColor(color).hex });
+  if (Math.abs(L - light) >= READS) return null;
+  const secondary = L > 0.3 && L < 0.75;
+  if (light < 0.55) return secondary ? "#b8b8b8" : "#f4f4f4";
+  return secondary ? "#6e6e6e" : "#1a1a1a";
+}
+
+// The plain tints a camera logo is drawn in (null: the template's dark ink).
+// Others (a gold mark, a brand's own red) are left as they are.
+const MONO_LOGO = new Map([[null, 0.08], ["#141414", 0.08], ["#1a1a1a", 0.1], ["#f4f4f4", 0.96], ["#ffffff", 1]]);
+
+/** The tint a plain camera logo needs on a background `light`, or null when
+ *  its tint (`color`, a logoRef's) already reads or is not a plain one. */
+export function readableLogoColor(color, light) {
+  const key = color ? String(color).toLowerCase() : null;
+  if (!MONO_LOGO.has(key)) return null;
+  if (Math.abs(MONO_LOGO.get(key) - light) >= READS) return null;
+  return light < 0.55 ? "#ffffff" : "#141414";
 }

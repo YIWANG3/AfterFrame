@@ -22,6 +22,8 @@ import {
   bgToCss,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
+import { bgUsesPhoto, photoPalette, photoStyleCss } from "./editor/render/frameBackdrop";
+import FrameBackgroundCanvas from "./editor/components/FrameBackgroundCanvas";
 import { createOverlayLayer } from "./editor/textState";
 import { isFrameLayer } from "./editor/layerStack";
 import { bakeCrop } from "./editor/render/bakeCrop";
@@ -70,7 +72,8 @@ import {
   getNormalizedCrop,
   getOutputView,
   clampImagePlacement,
-  hasPad,
+  canvasActive,
+  effectiveCanvasPad,
   layersToDisplay,
   layersFromDisplay,
   bakeLayersIntoCrop,
@@ -88,6 +91,11 @@ function padEquals(a, b) {
   const pa = { top: 0, right: 0, bottom: 0, left: 0, ...(a || {}) };
   const pb = { top: 0, right: 0, bottom: 0, left: 0, ...(b || {}) };
   return pa.top === pb.top && pa.right === pb.right && pa.bottom === pb.bottom && pa.left === pb.left;
+}
+
+// Margins and ratio: what changes the framed canvas's shape (and so the fit).
+function canvasShapeEquals(a, b) {
+  return padEquals(a?.pad, b?.pad) && (a?.aspect ?? null) === (b?.aspect ?? null);
 }
 
 const SPLIT_DIR_PREF = "split.outputDir";
@@ -329,7 +337,7 @@ export default function EditorOverlay({
     // pad=0: the output IS the photo and the crop-space placement already centers
     // it, so the screen view transform is neutral. (Anchoring to imageRect here
     // would fold imageZoom into the fit and shrink the photo — see review F6.)
-    if (!hasPad(state.canvas?.pad)) return IDENTITY_VIEW_TRANSFORM;
+    if (!canvasActive(state.canvas)) return IDENTITY_VIEW_TRANSFORM;
     const nextImageRect = getImageRect(state, transformedPreview, placement);
     const nextCrop = getNormalizedCrop(state, nextImageRect);
     const nextOutputView = getOutputView(state, transformedPreview, nextCrop, nextImageRect);
@@ -352,20 +360,53 @@ export default function EditorOverlay({
     else applyState(nextState);
   }
 
+  // A canvas setting that isn't a margin (ratio, background, the photo's
+  // corners and shadow) as one history step; a new shape refits the view.
+  function recordCanvas(patch) {
+    const s = editorStateRef.current;
+    const nextState = { ...s, canvas: { ...s.canvas, ...patch } };
+    if (!canvasShapeEquals(s.canvas, nextState.canvas)) resetViewToFit(nextState);
+    recordState(nextState);
+  }
+
+  // A canvas change that can leave the frame's text or logo unreadable (the
+  // background): what would not read is recoloured in the same history step.
+  async function recordCanvasReadable(patch) {
+    const s = editorStateRef.current;
+    const adapted = await adaptFrameColors(currentLayerHead(), { ...s.canvas, ...patch });
+    if (!adapted) {
+      recordCanvas(patch);
+      return;
+    }
+    const now = editorStateRef.current;
+    const nextState = { ...now, canvas: { ...now.canvas, ...patch } };
+    if (!canvasShapeEquals(now.canvas, nextState.canvas)) resetViewToFit(nextState);
+    applyState(nextState);
+    applyLayers(adapted);
+    commitCurrent();
+  }
+
+  // The photo's corners / shadow while a slider drags (no history), then
+  // committed as one step by onCanvasPhotoCommit.
+  function applyCanvasPhoto(photo) {
+    const s = editorStateRef.current;
+    applyState({ ...s, canvas: { ...s.canvas, photo } });
+  }
+
   function handleUndo() {
     flushWheelCommit?.(); // land a pending wheel edit as its own step first (F8)
-    const oldPad = editorStateRef.current.canvas?.pad || BASE_STATE.canvas.pad;
+    const oldCanvas = editorStateRef.current.canvas || BASE_STATE.canvas;
     rawHandleUndo();
     // viewTransform isn't in the transform history; refit when the undo crossed a
     // border change so the framed view stays centered (review F5).
-    if (!padEquals(oldPad, editorStateRef.current.canvas?.pad || BASE_STATE.canvas.pad)) resetViewToFit();
+    if (!canvasShapeEquals(oldCanvas, editorStateRef.current.canvas || BASE_STATE.canvas)) resetViewToFit();
   }
 
   function handleRedo() {
     flushWheelCommit?.(); // F8
-    const oldPad = editorStateRef.current.canvas?.pad || BASE_STATE.canvas.pad;
+    const oldCanvas = editorStateRef.current.canvas || BASE_STATE.canvas;
     rawHandleRedo();
-    if (!padEquals(oldPad, editorStateRef.current.canvas?.pad || BASE_STATE.canvas.pad)) resetViewToFit();
+    if (!canvasShapeEquals(oldCanvas, editorStateRef.current.canvas || BASE_STATE.canvas)) resetViewToFit();
   }
 
   // How much of the framed output must remain inside the stage when panning the
@@ -559,15 +600,20 @@ export default function EditorOverlay({
     }
   }, [placement, transformedPreview, viewportSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The margins as laid out: the user's, widened to the canvas ratio.
+  const layoutPad = useMemo(
+    () => effectiveCanvasPad(editorState.canvas, transformedPreview, normalizedCrop),
+    [editorState.canvas, transformedPreview, normalizedCrop],
+  );
   // Layers are STORED in full-photo coords; the panels edit in the current
   // display basis. Derive display layers on render, and fold edits back to
   // storage in the change callbacks — a pure, drift-free boundary that replaces
   // the old imperative basis remapping.
   const displayLayers = useMemo(
-    () => layersToDisplay(layers, transformedPreview, normalizedCrop, editorState.canvas?.pad),
-    [layers, transformedPreview, normalizedCrop, editorState.canvas],
+    () => layersToDisplay(layers, transformedPreview, normalizedCrop, layoutPad),
+    [layers, transformedPreview, normalizedCrop, layoutPad],
   );
-  const toStorage = (dl) => layersFromDisplay(dl, transformedPreview, normalizedCrop, editorState.canvas?.pad);
+  const toStorage = (dl) => layersFromDisplay(dl, transformedPreview, normalizedCrop, layoutPad);
   const applyLayersDisplay = (dl) => applyLayers(toStorage(dl));
   const commitLayersDisplay = (dl) => commitLayers(toStorage(dl));
   const commitLayersCoalescedDisplay = (dl, sig) => commitLayersCoalesced(toStorage(dl), sig);
@@ -616,7 +662,7 @@ export default function EditorOverlay({
   // content + margins) via a clipping window; every other view is the plain
   // crop-space photo. The canvas element remounts when the mode flips, so the
   // draw effect keys on it too.
-  const padActive = hasPad(editorState.canvas?.pad);
+  const padActive = canvasActive(editorState.canvas);
   const screenOutputView = layerTool ? transformOutputView(outputView, viewTransform) : outputView;
   const screenOutputRect = screenOutputView?.rect ?? null;
   const screenImageRect = tool === "split"
@@ -637,6 +683,14 @@ export default function EditorOverlay({
     discreteRotationDeg, flipX, flipY, sourcePath,
     apply: applyState, record: recordState, pushToast,
   });
+
+  // The crop in the preview's pixels: what photo-made backgrounds sample.
+  const previewContentRect = useMemo(() => {
+    if (!transformedPreview) return null;
+    const W = transformedPreview.width, H = transformedPreview.height;
+    const c = normalizedCrop || { x: 0, y: 0, width: 1, height: 1 };
+    return { x: c.x * W, y: c.y * H, width: Math.max(1, c.width * W), height: Math.max(1, c.height * H) };
+  }, [transformedPreview, normalizedCrop]);
 
   // The feature modules' tool hooks by rail key, for the table-driven overlay
   // (each hook is called above by name — rules of hooks).
@@ -713,6 +767,8 @@ export default function EditorOverlay({
     canvasPad: editorState.canvas?.pad,
     canvasBg: editorState.canvas?.bg,
     canvasScrim: editorState.canvas?.scrim,
+    canvasAspect: editorState.canvas?.aspect ?? null,
+    canvasPhoto: editorState.canvas?.photo ?? null,
     layers,
     depthFieldCanvas: depthFieldCanvasRef.current,
     depthFeather,
@@ -780,9 +836,12 @@ export default function EditorOverlay({
   function setCanvasPreset(res) {
     const s = editorStateRef.current;
     const nextPad = res ? res.pad : { top: 0, right: 0, bottom: 0, left: 0 };
+    // A template that says nothing about the ratio or the photo's corners and
+    // shadow (every built-in one) leaves the user's; clearing resets them.
+    const kept = (key) => (res[key] !== undefined ? res[key] : s.canvas?.[key] ?? null);
     const nextState = res
-      ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: null } }
-      : { ...s, canvas: { ...s.canvas, pad: nextPad, bg: null, scrim: null } };
+      ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: null, aspect: kept("aspect"), photo: kept("photo") } }
+      : { ...s, canvas: { ...s.canvas, pad: nextPad, bg: null, scrim: null, aspect: null, photo: null } };
     // Layers are full-photo coords, basis-independent — the user's own layers
     // stay put; the preset's generated layers already arrive in full-photo coords.
     // Re-applying a preset REPLACES the previous preset's layers (don't stack).
@@ -805,7 +864,16 @@ export default function EditorOverlay({
 
   async function applyFramePreset(tpl) {
     const res = await frameToolRef.current?.generatePresetLayers?.(tpl);
-    if (res) setCanvasPreset(res);
+    if (!res) return;
+    // The template's colours, where they would not read on its background
+    // (a saved template's dark text on a dark blurred photo), as one step
+    // with the template.
+    const s = editorStateRef.current;
+    const kept = (key) => (res[key] !== undefined ? res[key] : s.canvas?.[key] ?? null);
+    const adapted = await adaptFrameColors(res.layers, {
+      pad: res.pad, bg: res.bg, aspect: kept("aspect"), photo: kept("photo"),
+    });
+    setCanvasPreset(adapted ? { ...res, layers: adapted } : res);
   }
 
   function clearFramePreset() {
@@ -813,7 +881,7 @@ export default function EditorOverlay({
   }
 
   const {
-    placePersonalLogo, placeCameraLogo, chooseCameraLogo, addFrameText, saveFrameTemplate,
+    placePersonalLogo, placeCameraLogo, chooseCameraLogo, addFrameText, saveFrameTemplate, adaptFrameColors,
     logoDropActive, handleLogoDrop, handleLogoDragOver, handleLogoDragLeave,
   } = useFramePlacement({
     transformedPreview, normalizedCrop, editorStateRef, layersRef, stickerImageCache, frameToolRef,
@@ -1016,19 +1084,33 @@ export default function EditorOverlay({
                 {/* Composed border view (text tool): bg-filled output canvas +
                     a clipping window showing the CROPPED photo inset by the
                     margins — mirrors exactly what saveImage renders. */}
-                <div
-                  className="absolute"
-                  style={{
-                    left: `${composedView.rect.x}px`, top: `${composedView.rect.y}px`,
-                    width: `${composedView.rect.width}px`, height: `${composedView.rect.height}px`,
-                    background: bgToCss(editorState.canvas?.bg),
-                  }}
-                />
+                {bgUsesPhoto(editorState.canvas?.bg) ? (
+                  <FrameBackgroundCanvas
+                    rect={composedView.rect}
+                    contentRect={composedView.contentRect}
+                    bg={editorState.canvas?.bg}
+                    photoStyle={editorState.canvas?.photo}
+                    userPad={editorState.canvas?.pad}
+                    source={transformedPreview}
+                    srcRect={previewContentRect}
+                  />
+                ) : (
+                  <div
+                    className="absolute"
+                    style={{
+                      left: `${composedView.rect.x}px`, top: `${composedView.rect.y}px`,
+                      width: `${composedView.rect.width}px`, height: `${composedView.rect.height}px`,
+                      background: bgToCss(editorState.canvas?.bg),
+                    }}
+                  />
+                )}
                 <div
                   className="absolute overflow-hidden"
+                  data-frame-photo="true"
                   style={{
                     left: `${composedView.contentRect.x}px`, top: `${composedView.contentRect.y}px`,
                     width: `${composedView.contentRect.width}px`, height: `${composedView.contentRect.height}px`,
+                    ...photoStyleCss(editorState.canvas?.photo, Math.min(composedView.contentRect.width, composedView.contentRect.height)),
                   }}
                 >
                   <div
@@ -1244,16 +1326,35 @@ export default function EditorOverlay({
                 onChooseCameraLogo={(logo, scope) => chooseCameraLogo(logo, scope)}
                 canvasPad={editorState.canvas?.pad}
                 canvasBg={editorState.canvas?.bg}
+                canvasAspect={editorState.canvas?.aspect ?? null}
+                canvasPhoto={editorState.canvas?.photo ?? null}
+                bgPalette={transformedPreview ? photoPalette(transformedPreview, previewContentRect) : null}
                 onCanvasPad={(patch) => {
                   // Live (no history) while dragging the slider — keeps it smooth.
                   const s = editorStateRef.current;
                   applyCanvasPad({ ...s.canvas.pad, ...patch });
                 }}
                 onCanvasPadCommit={() => recordState(editorStateRef.current)}
-                onCanvasBg={(nextBg) => {
+                onCanvasBg={(nextBg, { live = false } = {}) => {
                   const s = editorStateRef.current;
-                  recordState({ ...s, canvas: { ...s.canvas, bg: nextBg } });
+                  // A slider mid-drag: show it, record on release.
+                  if (live) {
+                    applyState({ ...s, canvas: { ...s.canvas, bg: nextBg } });
+                    return;
+                  }
+                  const patch = { bg: nextBg };
+                  // A background made from the photo needs room to show: with
+                  // no margin yet, give it one, and the photo soft corners and
+                  // a shadow so it sits on it.
+                  if (bgUsesPhoto(nextBg) && !bgUsesPhoto(s.canvas?.bg)) {
+                    if (!canvasActive(s.canvas)) patch.pad = { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 };
+                    if (!s.canvas?.photo) patch.photo = { radius: 15, shadow: 45 };
+                  }
+                  recordCanvasReadable(patch);
                 }}
+                onCanvasAspect={(aspect) => recordCanvas({ aspect })}
+                onCanvasPhoto={applyCanvasPhoto}
+                onCanvasPhotoCommit={() => recordState(editorStateRef.current)}
               />
             ) : tool === "split" ? (
               <SplitPanel

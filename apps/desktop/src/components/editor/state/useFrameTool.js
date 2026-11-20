@@ -10,7 +10,7 @@ import { FRAME_TEMPLATES, FRAME_FONTS } from "../frameTemplates";
 import { brandIdForExif, builtInBrandMarks, builtInModelMarks, cameraNamesFor, mineFor, modelKeyFor, normalizeMake } from "../render/frameLogos";
 import { labelledExif, loadLogoRegistry, prepareLogoNeed, setBrandLogo, subscribeBrandLogos } from "../render/brandLogos";
 import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
-import { layersFromDisplay } from "../imageMath";
+import { effectiveCanvasPad, layersFromDisplay, resolveCanvasPad } from "../imageMath";
 import { drawScrim } from "../render/canvasHelpers";
 import { createDefaultLayer, createOverlayLayer, createStickerLayer, measureTextWidthDOM } from "../textState";
 import {
@@ -473,8 +473,13 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     const personal = await personalLogosOf(tpl);
     const pad = { top: 0, right: 0, bottom: 0, left: 0, ...(tpl.canvas?.pad || {}) };
     const bg = tpl.canvas?.bg || { color: "#ffffff" };
+    // A template saved before ratios and photo corners existed has neither
+    // key: undefined leaves the editor's own settings alone.
+    const aspect = tpl.canvas && "aspect" in tpl.canvas ? tpl.canvas.aspect ?? null : undefined;
+    const photo = tpl.canvas && "photo" in tpl.canvas ? tpl.canvas.photo ?? null : undefined;
+    const layoutPad = resolveCanvasPad({ pad, aspect }, base.width, base.height);
     const stickerImages = new Map();
-    const geom = outputGeometry({ fullW: base.width, fullH: base.height, pad });
+    const geom = outputGeometry({ fullW: base.width, fullH: base.height, pad: layoutPad });
     const layers = layersFromTemplate(tpl, {
       geom, exif: labelledExif(exif, lg), profile: currentProfile, measure: measureTextWidthDOM,
       logoFor: (ref) => {
@@ -491,17 +496,19 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       }
       return { ...createDefaultLayer({}), ...l, fromPreset: true };
     });
-    return { pad, bg, scrim: null, stickerImages, layers };
+    return { pad, layoutPad, bg, aspect, photo, scrim: null, stickerImages, layers };
   }
 
-  // Generated layers → STORED layers, plus the canvas treatment.
-  function placeLayers({ pad, bg, scrim, stickerImages, layers }) {
+  // Generated layers → STORED layers, plus the canvas treatment. `layoutPad`
+  // is the margin the layers were laid out in when a ratio widened it.
+  function placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, stickerImages, layers }) {
+    const lp = layoutPad || pad;
     // Layers are STORED in full-photo coords. The elements above were computed on
     // the cropped base:
     //  • pad=0 → they're in CONTENT (crop) fractions; map content → full photo.
     //  • pad>0 → they're in composed-output fractions; layersFromDisplay converts
     //    those → full photo (and is an identity no-op for pad=0).
-    const padZero = !(pad.top || pad.right || pad.bottom || pad.left);
+    const padZero = !(lp.top || lp.right || lp.bottom || lp.left);
     const c = normalizedCrop;
     if (padZero && c && (c.x || c.y || c.width !== 1 || c.height !== 1)) {
       for (const l of layers) {
@@ -519,8 +526,8 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       }
     }
     return {
-      pad, bg, scrim, stickerImages,
-      layers: layersFromDisplay(layers, transformedPreview, normalizedCrop, pad),
+      pad, bg, aspect, photo, scrim, stickerImages,
+      layers: layersFromDisplay(layers, transformedPreview, normalizedCrop, lp),
     };
   }
 
@@ -533,15 +540,17 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   }
   // The editor's current look as a new template. `layers` are the STORED
   // layers; pad/bg the canvas. Returns how many layers could not be kept.
-  async function saveTemplate(name, { layers, pad, bg }) {
+  async function saveTemplate(name, { layers, pad, bg, aspect = null, photo = null }) {
     if (!transformedPreview) return null;
+    // Layers are pinned to the edges of the canvas as laid out (a ratio
+    // widens the margins); the template keeps the user's margins and ratio.
     const geom = outputGeometry({
       fullW: transformedPreview.width || transformedPreview.naturalWidth,
       fullH: transformedPreview.height || transformedPreview.naturalHeight,
-      crop: normalizedCrop, pad,
+      crop: normalizedCrop, pad: effectiveCanvasPad({ pad, aspect }, transformedPreview, normalizedCrop),
     });
     const id = `${USER_TEMPLATE_PREFIX}${crypto.randomUUID()}`;
-    const { template, skipped } = templateFromLayers({ id, name, layers, geom, pad, bg, measure: measureTextWidthDOM });
+    const { template, skipped } = templateFromLayers({ id, name, layers, geom, pad, bg, aspect, photo, measure: measureTextWidthDOM });
     await persistTemplates([template, ...userTemplates]);
     return { template, skipped };
   }
