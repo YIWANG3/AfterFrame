@@ -75,6 +75,7 @@ function buildEditorTestApi(h) {
           // Text styling the panel/gesture specs assert on.
           text: l.text, fontFamily: l.fontFamily, fontSize: l.fontSize, italic: l.italic, fillColor: l.fillColor, rotation: l.rotation,
           strokeEnabled: !!l.strokeEnabled, strokeWidth: l.strokeWidth, shadow: !!l.shadow, shadowX: l.shadowX, bgMode: l.bgMode,
+          bgRadius: l.bgRadius, fromPreset: !!l.fromPreset,
           // Data URLs are megabytes — expose only the kind, not the payload.
           stickerPathKind: typeof l.stickerPath === "string"
             ? (l.stickerPath.startsWith("data:") ? "data" : "path")
@@ -96,6 +97,9 @@ function buildEditorTestApi(h) {
         historyIndex: h.historyIndexRef.current,
         historyLength: h.historyRef.current.length,
         canvasPad: s.canvas?.pad,
+        canvasBg: s.canvas?.bg || null,
+        canvasAspect: s.canvas?.aspect ?? null,
+        canvasPhoto: s.canvas?.photo ?? null,
         imageRect: h.imageRect,
         outputRect: h.screenOutputRect,
         outputContentRect: h.screenOutputView?.contentRect || null,

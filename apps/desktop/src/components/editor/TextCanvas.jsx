@@ -1,9 +1,54 @@
-import { useRef, useCallback, useState, memo, useEffect, useMemo } from "react";
+import { useRef, useCallback, useState, memo, useEffect, useMemo, useLayoutEffect } from "react";
 import { getBgPadding, measureTextWidthDOM, getDisplayText } from "./textState";
 import { stickerSrc } from "../../utils/format";
 import SelectionHandles from "./components/SelectionHandles";
 import { snapAngle, resizeRatio, snapAxis } from "./selectionMath";
 import { buildDepthAlphaMask, hexToRgba, scrimCoverageRect, scrimToCss } from "./render/canvasHelpers";
+import { textBgRadius } from "./render/frameBackdrop";
+
+// A text layer's background box (solid or gradient), sized by the inset
+// around the text. It measures itself for the corner radius (a share of its
+// short side), as the export rounds it.
+function TextBgBox({ layer, inset }) {
+  const ref = useRef(null);
+  const [size, setSize] = useState(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const measure = () => setSize((cur) => {
+      const w = el.offsetWidth, h = el.offsetHeight;
+      return cur && cur.w === w && cur.h === h ? cur : { w, h };
+    });
+    measure();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const radius = size ? textBgRadius(layer, size.w, size.h) : 0;
+  const bgOp = (layer.bgOpacity ?? 100) / 100;
+  const paint = layer.bgMode === "gradient"
+    ? {
+        backgroundImage: `linear-gradient(${layer.bgGradAngle ?? 90}deg, ${hexToRgba(layer.bgGradFrom ?? layer.bgColor ?? "#000", ((layer.bgGradFromOpacity ?? 100) / 100) * bgOp)}, ${hexToRgba(layer.bgGradTo ?? "#fff", ((layer.bgGradToOpacity ?? 100) / 100) * bgOp)})`,
+      }
+    : { backgroundColor: hexToRgba(layer.bgColor, bgOp) };
+  return (
+    <div
+      ref={ref}
+      data-text-bg={layer.bgMode}
+      style={{
+        position: "absolute",
+        inset: `${-inset.t}px ${-inset.r}px ${-inset.b}px ${-inset.l}px`,
+        ...paint,
+        borderRadius: radius ? `${radius}px` : 0,
+        pointerEvents: "none",
+        zIndex: 0,
+      }}
+    />
+  );
+}
 
 // Half-width / half-height of a layer as fractions of the image rect — for
 // element-to-element alignment snapping. Text is measured via the DOM (see
@@ -557,30 +602,13 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
       {/* Background */}
       {(layer.bgMode === "solid" || layer.bgMode === "gradient") && (() => {
         const pad = getBgPadding(layer);
-        const t = (fontSize * pad.top) / 100;
-        const r = (fontSize * pad.right) / 100;
-        const b = (fontSize * pad.bottom) / 100;
-        const l = (fontSize * pad.left) / 100;
-        const bgOp = (layer.bgOpacity ?? 100) / 100;
-        const bgStyle = layer.bgMode === "gradient"
-          ? {
-              backgroundImage: `linear-gradient(${layer.bgGradAngle ?? 90}deg, ${hexToRgba(layer.bgGradFrom ?? layer.bgColor ?? "#000", ((layer.bgGradFromOpacity ?? 100) / 100) * bgOp)}, ${hexToRgba(layer.bgGradTo ?? "#fff", ((layer.bgGradToOpacity ?? 100) / 100) * bgOp)})`,
-            }
-          : {
-              backgroundColor: hexToRgba(layer.bgColor, bgOp),
-            };
-        return (
-          <div
-            style={{
-              position: "absolute",
-              inset: `${-t}px ${-r}px ${-b}px ${-l}px`,
-              ...bgStyle,
-              borderRadius: 0,
-              pointerEvents: "none",
-              zIndex: 0,
-            }}
-          />
-        );
+        const inset = {
+          t: (fontSize * pad.top) / 100,
+          r: (fontSize * pad.right) / 100,
+          b: (fontSize * pad.bottom) / 100,
+          l: (fontSize * pad.left) / 100,
+        };
+        return <TextBgBox layer={layer} inset={inset} />;
       })()}
 
       {isEditing ? (

@@ -18,7 +18,10 @@ export const BASE_STATE = {
   // All zero / null by default → output === photo, i.e. today's behavior
   // exactly. Consumed by the unified canvas/layer model
   // (docs/unified-canvas-plan.md).
-  canvas: { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null },
+  // `aspect` ("9:16"…, null = the photo's shape) widens the margins until the
+  // output has that ratio; `photo` rounds the photo's corners and gives it a
+  // drop shadow ({ radius, shadow }, 0..100 each; null = neither).
+  canvas: { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null, aspect: null, photo: null },
   // Seamless split (docs/split-carousel-plan.md): panel aspect preset, panel
   // count (null = automatic from the photo's shape) and the covered region as
   // FRACTIONS of the transformed photo, so it survives viewport resizes.
@@ -66,7 +69,13 @@ function gradientEquals(a, b) {
 
 function bgEquals(a, b) {
   if (!a || !b) return (a ?? null) === (b ?? null);
-  return a.mode === b.mode && a.color === b.color && gradientEquals(a.gradient ?? null, b.gradient ?? null);
+  return a.mode === b.mode && a.color === b.color && a.blur === b.blur && a.angle === b.angle &&
+    gradientEquals(a.gradient ?? null, b.gradient ?? null);
+}
+
+function photoStyleEquals(a, b) {
+  if (!a || !b) return (a ?? null) === (b ?? null);
+  return a.radius === b.radius && a.shadow === b.shadow;
 }
 
 // canvas.scrim is a LEGACY slot: since overlay layers landed, frame presets
@@ -84,11 +93,12 @@ function scrimEquals(a, b) {
 function canvasEquals(a, b) {
   if (!a || !b) return a === b;
   return bgEquals(a.bg ?? null, b.bg ?? null) && padEquals(a.pad, b.pad) &&
-    scrimEquals(a.scrim ?? null, b.scrim ?? null);
+    scrimEquals(a.scrim ?? null, b.scrim ?? null) && (a.aspect ?? null) === (b.aspect ?? null) &&
+    photoStyleEquals(a.photo ?? null, b.photo ?? null);
 }
 
 function cloneCanvas(canvas) {
-  if (!canvas) return { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null };
+  if (!canvas) return { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null, aspect: null, photo: null };
   const cloneGradient = (g) => (g ? { ...g, ...(g.stops ? { stops: g.stops.map((s) => ({ ...s })) } : {}) } : g);
   const bg = canvas.bg
     ? { ...canvas.bg, ...(canvas.bg.gradient ? { gradient: cloneGradient(canvas.bg.gradient) } : {}) }
@@ -96,7 +106,10 @@ function cloneCanvas(canvas) {
   const scrim = canvas.scrim
     ? { ...canvas.scrim, ...(canvas.scrim.gradient ? { gradient: cloneGradient(canvas.scrim.gradient) } : {}) }
     : null;
-  return { pad: { ...canvas.pad }, bg, scrim };
+  return {
+    pad: { ...canvas.pad }, bg, scrim, aspect: canvas.aspect ?? null,
+    photo: canvas.photo ? { ...canvas.photo } : null,
+  };
 }
 
 function cloneSplit(split) {

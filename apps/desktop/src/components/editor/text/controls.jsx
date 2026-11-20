@@ -66,6 +66,7 @@ export function SegGroup({ options, className }) {
           key={o.key}
           type="button"
           title={o.title}
+          aria-pressed={!!o.active}
           className={[
             "flex h-full min-w-[30px] flex-1 items-center justify-center px-2 text-[11px] font-semibold transition-colors",
             i > 0 ? "border-l border-border/60" : "",
