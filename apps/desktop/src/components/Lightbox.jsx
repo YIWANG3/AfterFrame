@@ -17,7 +17,7 @@ const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
 const WHEEL_ZOOM_SENSITIVITY = 0.014;
 const DETAIL_SETTLE_DELAY_MS = 180;
-const CONTROLS_HIDE_DELAY_MS = 350;
+const CONTROLS_HIDE_DELAY_MS = 500;
 
 function OverlayButton({ children, className = "", ...props }) {
   return (

@@ -794,6 +794,7 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden] {
   --lightbox-controls-opacity: 0;
   --lightbox-controls-visibility: hidden;
+  --lightbox-controls-fade-duration: 300ms;
 }
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-floating][data-lightbox-controls-hidden] > [data-lightbox-control],
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden] > [data-lightbox-control] * { pointer-events: none; }
@@ -802,11 +803,11 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-floating]::after {
   opacity: var(--lightbox-controls-opacity, 1);
   visibility: var(--lightbox-controls-visibility, visible);
-  transition: opacity var(--lightbox-controls-fade-duration, 180ms) ease,
-    visibility var(--lightbox-controls-fade-duration, 180ms) ease;
+  transition: opacity var(--lightbox-controls-fade-duration, 160ms) ease-out,
+    visibility var(--lightbox-controls-fade-duration, 160ms) ease-out;
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-layer="lightbox"] { --lightbox-controls-fade-duration: 0ms; }
+  .fixed.inset-0[data-layer="lightbox"][data-lightbox-floating] { --lightbox-controls-fade-duration: 0ms; }
 }
 .fixed.inset-0[data-layer="lightbox"]::before, .fixed.inset-0[data-layer="lightbox"]::after {
   /* 铺满整宽:详情栏四周有 8px 缝,放大的照片会从缝里露出来,压色要连这道缝一起盖住 */
