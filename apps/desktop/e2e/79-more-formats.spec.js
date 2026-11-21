@@ -13,6 +13,7 @@ const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, callTool: mcpTool, galleryCards } = require("./helpers/app");
+const { revealLightboxControl } = require("./helpers/lightbox");
 
 const FIXTURES = path.resolve(__dirname, "fixtures");
 const HEIC = path.join(FIXTURES, "heic", "iphone-style.heic");
@@ -114,6 +115,8 @@ test("a photo without a preview is a placeholder in the filmstrip, not a broken 
   await ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${assetId}"]`).dblclick();
   await expect(ctx.window.locator("[data-lightbox-viewport='true']")).toBeVisible({ timeout: 8_000 });
   const thumb = ctx.window.locator('button[title="truncated.tif"]');
+  const filmstrip = ctx.window.locator('[data-lightbox-control="bottom"]').filter({ has: thumb });
+  await revealLightboxControl(ctx.window, filmstrip);
   await expect(thumb).toBeVisible();
   await expect(thumb.locator("[data-filmstrip-placeholder]")).toBeVisible();
   await expect(thumb.locator("img")).toHaveCount(0);
