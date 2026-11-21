@@ -13,6 +13,7 @@ const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, collectCoverage, mcpCall, galleryCards } = require("./helpers/app");
+const { revealLightboxControl } = require("./helpers/lightbox");
 const { devPython } = require("../electron/sidecar/transport");
 
 test.describe.configure({ mode: "serial" });
@@ -132,7 +133,9 @@ test("⌘P is proof in the lightbox; P there flags the photo", async () => {
 
   await ctx.window.keyboard.press("p");
   await expect.poll(() => flagOf(id)).toBe(1);
-  await expect(ctx.window.locator("[data-lightbox-flag='pick']")).toBeVisible();
+  const pickFlag = ctx.window.locator("[data-lightbox-flag='pick']");
+  await revealLightboxControl(ctx.window, pickFlag);
+  await expect(pickFlag).toBeVisible();
   await expect(lightbox).toHaveAttribute("data-lightbox-proof", "false");
 
   await ctx.window.keyboard.press("ControlOrMeta+p");
