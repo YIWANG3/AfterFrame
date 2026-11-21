@@ -150,6 +150,7 @@ test("pinned, the bars stay out and the photo is fitted between them; the pin is
   const fullStage = await box(viewport());
   await clickLightboxControl(w(), pin());
   await expect(pin()).toHaveAttribute("aria-pressed", "true");
+  await expect(pin()).not.toBeFocused();
   await expect(lightbox(w())).not.toHaveAttribute("data-lightbox-floating");
   const stage = await box(viewport());
   expect(stage.top).toBeGreaterThan(fullStage.top + 40);

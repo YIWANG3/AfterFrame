@@ -786,6 +786,7 @@ export default function Lightbox({
               className="theme-dark !h-9 !w-9 aria-pressed:bg-hover aria-pressed:text-text"
               onClick={(event) => {
                 event.stopPropagation();
+                if (event.detail > 0) event.currentTarget.blur();
                 if (controlsPinned) setControlsRevealed(true);
                 setControlsPinned(!controlsPinned);
               }}
