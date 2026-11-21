@@ -3,10 +3,10 @@
 // Unpinned, which is how it starts, the photo has the whole lightbox and the
 // bars (the header, the zoom row with the filmstrip, the arrows) stay out of
 // sight until the pointer comes near one of them; back on the photo they go
-// again, and the arrow keys page either way. The details float over the photo
-// rather than moving it. Pinned, the bars stay out and the photo is fitted
-// between them, as before the pin. The choice is remembered across a reopen
-// and a restart.
+// again, and hidden bars drop focus and stay out of the Tab order. The arrow
+// keys page either way. The details float over the photo. Pinned, the bars
+// stay out and the photo is fitted between them. The choice is remembered
+// across a reopen and a restart.
 
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, collectCoverage, galleryCards } = require("./helpers/app");
@@ -19,7 +19,7 @@ const photo = () => viewport().locator("[data-lightbox-layer='preview']");
 const header = () => w().locator("[data-layer='lightbox'] > div[data-lightbox-control='true']");
 const zoomRow = () => w().locator("[data-layer='lightbox'] > div[data-lightbox-control='bottom']").first();
 const headerTitle = () => w().locator("[data-layer='lightbox'] .text-\\[15px\\]").first();
-const pin = () => w().getByRole("button", { name: "Pin preview controls" });
+const pin = () => w().getByRole("button", { name: "Pin preview controls", includeHidden: true });
 const pane = () => w().getByTestId("lightbox-info");
 const box = async (locator) => {
   const b = await locator.boundingBox();
@@ -87,7 +87,7 @@ test("the pointer at a bar or an arrow brings the bars out; back on the photo th
   await toCenter();
   await hidden();
 
-  await revealLightboxControl(w(), w().getByRole("button", { name: "Next item" }));
+  await revealLightboxControl(w(), w().getByRole("button", { name: "Next item", includeHidden: true }));
   await toCenter();
   await hidden();
 });
@@ -122,6 +122,28 @@ test("unpinned, the details float over the photo and leave it where it was", asy
   expect(ground.blur).toContain("blur");
   await w().keyboard.press("i");
   await expect(pane()).toHaveCount(0);
+});
+
+test("a clicked control loses focus when the bars hide and Tab skips them", async () => {
+  const reset = w().getByTitle("Reset to fit");
+  await clickLightboxControl(w(), reset);
+  await expect(reset).toBeFocused();
+
+  await toCenter();
+  await expect(reset).not.toBeFocused();
+  await expect(zoomRow()).toHaveCSS("opacity", "0");
+
+  const first = (await headerTitle().textContent()).trim();
+  await w().keyboard.press("ArrowRight");
+  await expect(headerTitle()).not.toHaveText(first);
+  await expect(header()).toHaveCSS("opacity", "0");
+  await w().keyboard.press("ArrowLeft");
+  await expect(headerTitle()).toHaveText(first);
+
+  await w().keyboard.press("Tab");
+  await expect(lightbox(w()).locator("[data-lightbox-control]:focus-within")).toHaveCount(0);
+  await expect(header()).toHaveCSS("opacity", "0");
+  await expect(zoomRow()).toHaveCSS("opacity", "0");
 });
 
 test("pinned, the bars stay out and the photo is fitted between them; the pin is remembered", async () => {

@@ -791,15 +791,19 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 .fixed.inset-0[data-layer="lightbox"] > [data-lightbox-viewport] { z-index: 1; }
 .fixed.inset-0[data-layer="lightbox"]:not([data-lightbox-floating]) > [data-lightbox-viewport] { margin: 84px var(--lightbox-info, 0px) 140px 0; overflow: visible; }
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-floating] > div[data-lightbox-control] { pointer-events: auto; }
-/* Keep the controls in the tab order so keyboard focus can reveal them. */
-.fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden]:not(:has(> [data-lightbox-control]:focus-visible, > [data-lightbox-control] :focus-visible)) { --lightbox-controls-opacity: 0; }
-.fixed.inset-0[data-layer="lightbox"][data-lightbox-floating][data-lightbox-controls-hidden]:not(:has(> [data-lightbox-control]:focus-visible, > [data-lightbox-control] :focus-visible)) > [data-lightbox-control],
-.fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden]:not(:has(> [data-lightbox-control]:focus-visible, > [data-lightbox-control] :focus-visible)) > [data-lightbox-control] * { pointer-events: none; }
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden] {
+  --lightbox-controls-opacity: 0;
+  --lightbox-controls-visibility: hidden;
+}
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-floating][data-lightbox-controls-hidden] > [data-lightbox-control],
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden] > [data-lightbox-control] * { pointer-events: none; }
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-floating] > [data-lightbox-control],
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-floating]::before,
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-floating]::after {
   opacity: var(--lightbox-controls-opacity, 1);
-  transition: opacity var(--lightbox-controls-fade-duration, 180ms) ease;
+  visibility: var(--lightbox-controls-visibility, visible);
+  transition: opacity var(--lightbox-controls-fade-duration, 180ms) ease,
+    visibility var(--lightbox-controls-fade-duration, 180ms) ease;
 }
 @media (prefers-reduced-motion: reduce) {
   [data-layer="lightbox"] { --lightbox-controls-fade-duration: 0ms; }
