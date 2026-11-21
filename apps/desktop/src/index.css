@@ -781,15 +781,15 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 .fixed.inset-0[data-layer="overlay"] [data-testid="batch-page-card"] > .ring-1:not([class*="ring-[rgb"]) { --tw-ring-color: transparent; box-shadow: var(--shadow-menu); }
 
 /* ───────── 12a · 灯箱上下栏玻璃化:头部与底部(缩放行 + 胶片条)不再是两条实黑,改成压在照片之上的 Clear 玻璃。
-   固定时照片区保留在两栏之间做适配,取消固定时使用整个窗口内容区。
+   固定时照片区保留在两栏之间做适配,右侧详情栏打开时照片区和控件都给它留出宽度。
    玻璃面板画在灯箱根节点的 ::before / ::after 上,向窗口外多伸 40px,避免 backdrop-filter 在窗口边缘采样出浅线 ───────── */
 .fixed.inset-0[data-layer="lightbox"] { position: fixed; }
-/* --lightbox-info 是详情栏为控件留出的宽度。固定时照片区也留出这部分宽度。 */
+/* --lightbox-info 是照片区和控件为详情栏留出的宽度。 */
 .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { position: absolute; top: 0; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
 .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-center.justify-center.gap-3 { position: absolute; bottom: 76px; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
 .fixed.inset-0[data-layer="lightbox"] > .h-16 { position: absolute; bottom: 0; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
-.fixed.inset-0[data-layer="lightbox"] > [data-lightbox-viewport] { z-index: 1; }
-.fixed.inset-0[data-layer="lightbox"]:not([data-lightbox-floating]) > [data-lightbox-viewport] { margin: 84px var(--lightbox-info, 0px) 140px 0; overflow: visible; }
+.fixed.inset-0[data-layer="lightbox"] > [data-lightbox-viewport] { z-index: 1; margin-right: var(--lightbox-info, 0px); }
+.fixed.inset-0[data-layer="lightbox"]:not([data-lightbox-floating]) > [data-lightbox-viewport] { margin-block: 84px 140px; overflow: visible; }
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-floating] > div[data-lightbox-control] { pointer-events: auto; }
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden] {
   --lightbox-controls-opacity: 0;
@@ -828,9 +828,7 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
   background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,.45) 55%, rgba(0,0,0,0));
   -webkit-mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); }
 .fixed.inset-0[data-layer="lightbox"].bg-white::before, .fixed.inset-0[data-layer="lightbox"].bg-white::after { display: none; }
-/* 灯箱详情栏:取消固定时它浮在照片上,--pane(3.5% 白)几乎透明,字压在亮天空上读不清,
-   头部玻璃又只画到详情栏左缘,照片上会露出一道竖向分界。给它自己的深色模糊底;
-   固定时压在黑底上,看起来和网格的检查器一样。 */
+/* 灯箱详情栏使用独立的深色模糊底。 */
 .lightbox-info-pane { background: rgba(14, 14, 16, 0.82); backdrop-filter: blur(28px) saturate(1.2); -webkit-backdrop-filter: blur(28px) saturate(1.2); }
 
 /* ───────── 12 · 灯箱控件:Clear(媒体之上) ───────── */

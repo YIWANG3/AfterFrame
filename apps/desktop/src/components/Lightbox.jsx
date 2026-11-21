@@ -135,8 +135,7 @@ export default function Lightbox({
   onIndexChange,
   // The photo's details, docked on the right: the pane (a node the caller
   // builds), whether it is out, and the toggle. Without a pane there is no
-  // button. The pane reserves space beside a pinned preview and floats
-  // above the photo when the controls are unpinned.
+  // button. The pane reserves space beside the preview.
   info = null,
   infoOpen = false,
   onToggleInfo,
@@ -406,7 +405,7 @@ export default function Lightbox({
 
   useLayoutEffect(() => {
     updateFitForLayout();
-  }, [controlsPinned]);
+  }, [controlsPinned, showInfo]);
 
   function zoomFromCenter(nextScale, previewDuringMotion = false) {
     const viewport = viewportRef.current;

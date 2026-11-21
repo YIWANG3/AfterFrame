@@ -4,9 +4,9 @@
 // bars (the header, the zoom row with the filmstrip, the arrows) stay out of
 // sight until the pointer comes near one of them; back on the photo they go
 // again, and hidden bars drop focus and stay out of the Tab order. The arrow
-// keys page either way. The details float over the photo. Pinned, the bars
-// stay out and the photo is fitted between them. The choice is remembered
-// across a reopen and a restart.
+// keys page either way. Pinned, the bars stay out and the photo is fitted
+// between them. The photo makes room for the details in both modes. The pin
+// is remembered across a reopen and a restart.
 
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, collectCoverage, galleryCards } = require("./helpers/app");
@@ -101,19 +101,23 @@ test("the arrow keys page while the bars are hidden", async () => {
   await expect(headerTitle()).toHaveText(first);
 });
 
-test("unpinned, the details float over the photo and leave it where it was", async () => {
+test("unpinned, opening the details refits the photo beside them", async () => {
   // The paging above leaves a photo that may not be loaded and fitted yet (an
   // unloaded one has no size, so it "fits" trivially); read it once it is.
   await expect.poll(() => photo().evaluate((image) => image.complete && image.naturalWidth > 0 && !!image.style.width)).toBe(true);
   await fitsStage();
-  const stage = await box(viewport());
-  const transform = await photo().evaluate((image) => image.style.transform);
+  const fullStage = await box(viewport());
   await w().keyboard.press("i");
   await expect(pane()).toBeVisible();
-  expect((await box(viewport())).width).toBe(stage.width);
-  expect(await photo().evaluate((image) => image.style.transform)).toBe(transform);
-  // Over the photo, the pane has a dark, blurred ground of its own, so its text
-  // reads on a bright sky too.
+  await hidden();
+  const stage = await box(viewport());
+  expect(stage.right).toBeCloseTo((await box(pane())).left, 0);
+  expect(stage.width).toBeLessThan(fullStage.width);
+  expect(stage.height).toBe(fullStage.height);
+  await fitsStage();
+  const fitted = await box(photo());
+  expect(fitted.left + fitted.width / 2).toBeCloseTo(stage.left + stage.width / 2, 0);
+
   const ground = await pane().evaluate((el) => {
     const style = getComputedStyle(el);
     return { alpha: Number(style.backgroundColor.match(/[\d.]+(?=\))/)?.[0] ?? 1), blur: style.backdropFilter };
@@ -122,6 +126,9 @@ test("unpinned, the details float over the photo and leave it where it was", asy
   expect(ground.blur).toContain("blur");
   await w().keyboard.press("i");
   await expect(pane()).toHaveCount(0);
+  expect(await box(viewport())).toEqual(fullStage);
+  const restored = await box(photo());
+  expect(restored.left + restored.width / 2).toBeCloseTo(fullStage.left + fullStage.width / 2, 0);
 });
 
 test("a clicked control loses focus when the bars hide and Tab skips them", async () => {
