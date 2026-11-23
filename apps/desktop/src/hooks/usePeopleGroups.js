@@ -6,7 +6,7 @@ import api from "../api";
 // PeopleInspector. Corrections patch the list in place — resorting only
 // happens on load(), so naming a person never makes their tile jump away
 // under the cursor.
-export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
+export default function usePeopleGroups({ pushToast, enabled, catalogKey, settingsOpen = false }) {
   const { t } = useTranslation("nav");
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -157,9 +157,11 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     }
   }, []);
 
+  // Settings may have chosen a model or turned pets on: look again each time
+  // it closes, or the wall keeps showing the state from before.
   useEffect(() => {
-    if (enabled) void refreshModelState();
-  }, [enabled, refreshModelState]);
+    if (enabled && !settingsOpen) void refreshModelState();
+  }, [enabled, settingsOpen, refreshModelState]);
 
   // Single scan entry: re-checks the live model state (a model may have been
   // chosen in Settings since we last looked). The scan buttons are disabled

@@ -221,6 +221,7 @@ export default function App() {
     pushToast,
     enabled: viewMode === "people" || viewMode === "discover",
     catalogKey: workspace.info?.catalogPath || null,
+    settingsOpen,
   });
 
   // Warm the Discover page in the background: its data depends only on the

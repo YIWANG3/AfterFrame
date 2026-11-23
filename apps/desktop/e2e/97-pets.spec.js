@@ -1,8 +1,9 @@
 // Cats and dogs beside people (docs/pet-recognition-design.md): one wall
 // renamed People & Pets, pet tiles with a paw and an All / People / Pets
 // switch, a named pet opening its photos, corrections that never mix species,
-// the Pets filter, the Inspector listing a photo's pet, the one-time prompt
-// for a library analyzed before pets, and the Recognize pets setting.
+// the Pets filter, the Inspector listing a photo's pet, the Recognize pets
+// setting (off by default, with the built-in model ready), and the one-time
+// prompt for a library analyzed before pets once pets are on.
 //
 // Groups come from the pet model in real use (sidecar tests cover the
 // grouping); here they are written into the catalog once the app has
@@ -140,7 +141,32 @@ test("the Inspector lists a photo's pet with its species", async () => {
   await expect(row.getByTestId("inspector-pet-species")).toHaveText("Cat");
 });
 
-test("a library analyzed before pets is offered the pets once", async () => {
+test("while pets are off, the wall doesn't offer to analyze them", async () => {
+  await openWall();
+  await expect(tiles()).toHaveCount(3);
+  await expect(ctx.window.getByTestId("pets-prompt")).toHaveCount(0);
+});
+
+test("Recognize pets is off by default with the built-in pet model ready, and stays on once turned on", async () => {
+  const openTab = async () => {
+    await ctx.window.keyboard.press("ControlOrMeta+,");
+    await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People & Pets" }).click();
+  };
+  const toggle = () => ctx.window.getByText("Recognize pets", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class,'justify-between')][1]").getByRole("switch");
+  await openTab();
+  await expect(ctx.window.getByText("Pet model", { exact: true })).toBeVisible();
+  await expect(ctx.window.getByText("DINOv2 Small · Core ML")).toBeVisible();
+  await expect(toggle()).toHaveAttribute("aria-checked", "false");
+  await toggle().click();
+  await expect(toggle()).toHaveAttribute("aria-checked", "true");
+  await ctx.window.keyboard.press("Escape");
+  await openTab();
+  await expect(toggle()).toHaveAttribute("aria-checked", "true");
+  await ctx.window.keyboard.press("Escape");
+});
+
+test("with pets on, a library analyzed before pets is offered the pets once", async () => {
   await openWall();
   const prompt = ctx.window.getByTestId("pets-prompt");
   await expect(prompt).toBeVisible();
@@ -152,23 +178,4 @@ test("a library analyzed before pets is offered the pets once", async () => {
   await openWall();
   await expect(tiles()).toHaveCount(3);
   await expect(ctx.window.getByTestId("pets-prompt")).toHaveCount(0);
-});
-
-test("Recognize pets is on with the built-in pet model, and stays off once turned off", async () => {
-  const openTab = async () => {
-    await ctx.window.keyboard.press("ControlOrMeta+,");
-    await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People & Pets" }).click();
-  };
-  const toggle = () => ctx.window.getByText("Recognize pets", { exact: true })
-    .locator("xpath=ancestor::div[contains(@class,'justify-between')][1]").getByRole("switch");
-  await openTab();
-  await expect(ctx.window.getByText("Pet model", { exact: true })).toBeVisible();
-  await expect(ctx.window.getByText("DINOv2 Small · Core ML")).toBeVisible();
-  await expect(toggle()).toHaveAttribute("aria-checked", "true");
-  await toggle().click();
-  await expect(toggle()).toHaveAttribute("aria-checked", "false");
-  await ctx.window.keyboard.press("Escape");
-  await openTab();
-  await expect(toggle()).toHaveAttribute("aria-checked", "false");
-  await ctx.window.keyboard.press("Escape");
 });

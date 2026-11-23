@@ -148,8 +148,9 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings, catalo
 
   const scanning = !!scan?.active;
   const scanPercent = Math.round((Number(scan?.progress) || 0) * 100);
-  // A library analyzed before pets existed (or with pets off): its last run's
-  // result has no pet count. Offer the pets once instead of rescanning on its own.
+  // Pets on, but the library's last run has no pet count (it ran before pets
+  // existed, or while they were off): offer the pets once instead of
+  // rescanning on its own.
   const showPetsPrompt = petsReady && !scanning && !petsPromptDismissed && allGroups.length > 0
     && !!scan?.result && !("pets" in scan.result);
   function dismissPetsPrompt() {

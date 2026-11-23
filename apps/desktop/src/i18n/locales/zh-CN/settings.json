@@ -186,7 +186,7 @@
     "petsTitle": "宠物模型",
     "petsSubtitle": "认出是哪只猫、哪只狗，和人脸在同一轮里分析，仅在这台 Mac 本地运行。",
     "petsEnabled": "识别宠物",
-    "petsEnabledHint": "默认开启。关闭后，已经认出的宠物仍会保留。",
+    "petsEnabledHint": "默认关闭。打开后，下次扫描会认出猫和狗；关闭后，已经认出的宠物仍会保留。",
     "petInstallModelHint": "可选。选择 .afpetmodel 模型包，或输入一张图片、输出一个向量的 Core ML .mlpackage。系统会先验证，再复制到 AfterFrame 存储中。",
     "petNoModel": "当前构建没有内置宠物模型，可以在下方选择兼容的模型。",
     "petBuiltInNeedsMacOS": "内置宠物模型需要 macOS {{version}} 或更高版本。",

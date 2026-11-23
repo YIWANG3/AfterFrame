@@ -187,7 +187,7 @@
     "petsTitle": "Pet model",
     "petsSubtitle": "Tells one cat or dog from another, in the same pass as faces. Runs only on this Mac.",
     "petsEnabled": "Recognize pets",
-    "petsEnabledHint": "On by default. Turning it off keeps the pets already found.",
+    "petsEnabledHint": "Off by default. Once on, the next scan finds cats and dogs; turning it off keeps the pets already found.",
     "petInstallModelHint": "Optional. Choose an .afpetmodel bundle or a Core ML .mlpackage that takes an image and returns a vector. It's validated first, then copied into AfterFrame storage.",
     "petNoModel": "This build doesn't include the pet model. Choose a compatible model below.",
     "petBuiltInNeedsMacOS": "The built-in pet model needs macOS {{version}} or later.",

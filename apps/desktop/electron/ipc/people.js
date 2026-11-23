@@ -8,8 +8,9 @@
 //
 // Pets ride along (docs/pet-recognition-design.md): the DINOv2 pet model built
 // into the app (petModel.js), or one the user chooses the same way, runs in
-// the same job and worker as the faces while "recognize pets" is on (the
-// default). Its settings live beside the people ones, under petRecognition.
+// the same job and worker as the faces while "recognize pets" is on. It is
+// off by default: the model ships either way, and the user turns pets on in
+// Settings. Its settings live beside the people ones, under petRecognition.
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -167,9 +168,9 @@ function register({
     return source && typeof source === "object" ? source : {};
   }
 
-  // Pets are recognized unless the user turned it off.
+  // Pets are recognized only once the user turns it on.
   function petsEnabled() {
-    return getPetSettings().enabled !== false;
+    return getPetSettings().enabled === true;
   }
 
   function hasBundledPetModel() {
