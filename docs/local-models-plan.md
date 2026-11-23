@@ -38,7 +38,7 @@
 
 ## 分发机制（E 之前必须有）
 
-随包档没有新机制，照深度模型的做法放 `native/` 或 sidecar 的 data 目录。
+随包档没有新机制。Core ML 模型照深度模型、人脸模型的做法：压缩包传到仓库的 `models` release，在 `apps/desktop/scripts/bundled-models.mjs` 里加一行，构建时下载到 `native/`；其他文件放 sidecar 的 data 目录。
 
 下载档需要把人物模型 0.5.5 时的下载逻辑捡回来，补上三件事：
 

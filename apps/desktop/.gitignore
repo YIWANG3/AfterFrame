@@ -3,7 +3,8 @@ native/bin-*/
 # e2e coverage data + report (npm run e2e:coverage) and the local Python coverage lib
 .coverage/
 .coverage-tools/
-native/FaceEmbedding.mlpackage/
+# Core ML models: fetched by scripts/fetch-models.mjs, never committed
+native/*.mlpackage/
 native/exiftool/
 native/ffmpeg/
 native/.cache/

@@ -73,5 +73,5 @@ words.
   `apps/desktop/electron/` (main process) or `services/sidecar/` need the dev
   app restarted.
 - **Native helpers** (`apps/desktop/native/*.swift`) are built by
-  `npm run build:native` with Xcode's toolchain. Their binaries, the face model
-  and ExifTool are fetched or built, never committed.
+  `npm run build:native` with Xcode's toolchain. Their binaries, the Core ML
+  models (face and depth) and ExifTool are fetched or built, never committed.

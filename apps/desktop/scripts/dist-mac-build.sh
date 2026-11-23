@@ -18,7 +18,7 @@ ARCH="$(node -p "require('./mac-builds.cjs').macBuild('$BUILD').arch")"
 MACOS14_FEATURES="$(node -p "require('./mac-builds.cjs').macBuild('$BUILD').macos14Features")"
 
 bash scripts/build-native.sh --build "$BUILD"
-[[ "$MACOS14_FEATURES" == "true" ]] && npm run fetch:people-model
+[[ "$MACOS14_FEATURES" == "true" ]] && npm run fetch:models
 npm run fetch:exiftool
 bash scripts/build-sidecar-mac.sh --build "$BUILD"
 [[ "$ARCH" == "x64" ]] && node scripts/install-sharp-x64.mjs

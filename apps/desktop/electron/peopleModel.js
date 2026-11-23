@@ -2,9 +2,13 @@
 //
 // Up to 0.5.5 it was a 110 MB download from Hugging Face on first use, which
 // fails from mainland China (#127). It now ships in Resources/native/ next to
-// the depth model. Its weights are over GitHub's 100 MB file limit, so it isn't
-// committed: scripts/fetch-people-model.mjs downloads and verifies it at build
-// time, and electron-builder copies native/*.mlpackage into the app.
+// the depth model. Like every bundled model it isn't committed: at build time
+// scripts/fetch-models.mjs downloads it from AfterFrame's own `models` release
+// on GitHub (scripts/bundled-models.mjs), checks it and puts it in native/,
+// and electron-builder copies native/*.mlpackage into the app. The archive on
+// the release is byte for byte the one on Hugging Face (now the fallback), so
+// archive_sha256 and manifest_hash, and with them BUNDLED_MODEL_KEY and every
+// face index built so far, are the same as before.
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -18,7 +22,7 @@ const BUNDLED_ARCFACE_R100 = Object.freeze({
   kind: "arcface",
   license: "Apache-2.0",
   license_url: "https://huggingface.co/RuiSumida/ArcFace-R100-CoreML",
-  archive_url: "https://huggingface.co/RuiSumida/ArcFace-R100-CoreML/resolve/b51b655da6b4acc72bfdbfdcd316b3cf4f698e4e/FaceEmbedding.mlpackage.tar.gz",
+  archive_url: "https://github.com/YIWANG3/AfterFrame/releases/download/models/FaceEmbedding-arcface-r100-b51b655.mlpackage.tar.gz",
   archive_sha256: "3644ff110ba03a082515d3a9fa22dbc8c1eb66054bb6bbbc0e84eb62b4771f2b",
   archive_bytes: 110376172,
   model_path: "FaceEmbedding.mlpackage",
