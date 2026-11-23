@@ -206,13 +206,34 @@ test("a description is written by hand; the AI's shows until one is, and comes b
     const row = (await rows()).find((r) => r.asset_id === id);
     return [row?.description ?? null, row?.description_source ?? null];
   };
-  // A photo with nothing: "Add a description…", typed, saved with Enter.
+  // A photo with nothing: the editor grows as the draft wraps and adds lines.
   const bare = (await rows()).find((row) => row.asset_type === "image" && !row.annotation && !row.description).asset_id;
+  const input = description.getByTestId("description-input");
+  const inputHeight = () => input.evaluate((element) => element.clientHeight);
+  const hiddenHeight = () => input.evaluate((element) => element.scrollHeight - element.clientHeight);
   await show(bare);
   await expect(description).toHaveAttribute("data-source", "none");
   await description.getByTestId("description-add").click();
-  await ctx.window.getByTestId("description-input").fill("Grandma's 80th");
-  await ctx.window.getByTestId("description-input").press("Enter");
+  const emptyHeight = await inputHeight();
+  const longText = [
+    "We met at Grandma's house for a long lunch, with plates of fruit from the garden and room at the table for everyone who stopped by.",
+    "The cousins came early to help set the table.",
+    "We carried dessert outside.",
+    "The last photo was just before sunset.",
+  ].join("\n");
+  await input.fill(longText);
+  await expect.poll(inputHeight).toBeGreaterThan(emptyHeight);
+  await expect.poll(hiddenHeight).toBe(0);
+  const expandedHeight = await inputHeight();
+  await input.press("Enter");
+  await expect.poll(() => shownOf(bare)).toEqual([longText, "user"]);
+  const saved = description.getByRole("button", { name: /We met at Grandma's house/ });
+  await saved.click();
+  await expect(input).toHaveValue(longText);
+  await expect.poll(hiddenHeight).toBe(0);
+  await input.fill("Grandma's 80th");
+  await expect.poll(inputHeight).toBeLessThan(expandedHeight);
+  await input.press("Enter");
   await expect(description).toHaveAttribute("data-source", "user");
   await expect(description).toContainText("Grandma's 80th");
   await expect.poll(() => shownOf(bare)).toEqual(["Grandma's 80th", "user"]);

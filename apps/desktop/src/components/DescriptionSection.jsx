@@ -63,7 +63,6 @@ export default function DescriptionSection({ assetId, description, source, aiCap
             <textarea
               ref={areaRef}
               value={draft}
-              rows={3}
               onChange={(event) => setDraft(event.target.value)}
               onBlur={(event) => {
                 // Switching to another app keeps the draft open, unsaved.
@@ -85,7 +84,7 @@ export default function DescriptionSection({ assetId, description, source, aiCap
               }}
               placeholder={t("description.placeholder")}
               data-testid="description-input"
-              className="w-full resize-none rounded-md border border-accent/50 bg-app px-2 py-1.5 text-[12px] leading-relaxed text-text outline-none placeholder:text-muted2"
+              className="w-full resize-none rounded-md border border-accent/50 bg-app px-2 py-1.5 text-[12px] leading-relaxed text-text outline-none placeholder:text-muted2 [field-sizing:content]"
             />
             <div className="mt-1 text-[10px] leading-snug text-muted2">{t("description.keys")}</div>
           </>
