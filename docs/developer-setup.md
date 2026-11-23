@@ -61,7 +61,8 @@ build locks (macOS-only for now, or off in the macOS 12 builds) skips there with
 `test.skip(lacks("feature"), "why")` from `e2e/helpers/app.js`. A spec that
 cannot run on the GitHub VMs (no GPU/WebGL, fs-watch timing) opts out in the
 file itself with `test.skip(!!process.env.CI, "why")` and runs locally only;
-the nightly (`e2e-nightly.yml`) adds the face model, one retry and coverage.
+the PR job fetches the depth model, and the nightly (`e2e-nightly.yml`) adds the
+face model, one retry and coverage.
 ESLint has no suppression file any more (the last entry went in #54): every
 `no-unused-vars` and `react-hooks/exhaustive-deps` finding is a hard error
 locally and in CI.
@@ -137,6 +138,23 @@ tests need it there too:
 ```bash
 npm --prefix apps/desktop run fetch:exiftool
 ```
+
+The Core ML models the Mac app ships (the ArcFace face model and Depth Anything
+V2 Small for scene depth) aren't committed either. `npm run dev` fetches them
+into `apps/desktop/native/` the first time (about 160 MB), and the `dist:mac`
+scripts do the same. They come from the repository's own
+[`models` release](https://github.com/YIWANG3/AfterFrame/releases/tag/models),
+listed with their hashes in `apps/desktop/scripts/bundled-models.mjs`; a
+download is kept in `native/.cache/`. To fetch them yourself, or just one:
+
+```bash
+npm --prefix apps/desktop run fetch:models
+npm --prefix apps/desktop run fetch:models -- depth
+```
+
+A new model goes on that release as a new file (files there are never replaced
+or deleted, and the release stays a pre-release so it never becomes "latest")
+and gets a row in `bundled-models.mjs`.
 
 mypy runs with a per-module debt list in `services/sidecar/pyproject.toml`
 (`[[tool.mypy.overrides]] … ignore_errors = true`). Modules on that list are

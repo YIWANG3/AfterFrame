@@ -7,7 +7,7 @@
 //
 // The photos are fixtures/people-images (AI-generated fictional people: Lin
 // Xi alone four times, Chen Mo three, both on a rooftop). Needs the model
-// fetched (npm run fetch:people-model) and macOS 14+; skips without it, which
+// fetched (npm run fetch:models) and macOS 14+; skips without it, which
 // is the PR CI VM.
 
 const { test, expect } = require("@playwright/test");
@@ -20,7 +20,7 @@ const MODEL = path.resolve(__dirname, "..", "native", "FaceEmbedding.mlpackage",
 const PEOPLE_IMAGES = path.resolve(__dirname, "fixtures", "people-images");
 
 test.describe("people recognition with the bundled face model", () => {
-  test.skip(process.platform !== "darwin" || !fs.existsSync(MODEL), "needs the bundled face model (npm run fetch:people-model) on macOS");
+  test.skip(process.platform !== "darwin" || !fs.existsSync(MODEL), "needs the bundled face model (npm run fetch:models) on macOS");
   test.describe.configure({ mode: "serial" });
 
   let ctx, dir;

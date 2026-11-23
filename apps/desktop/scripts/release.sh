@@ -52,8 +52,10 @@ APPS=(
   release/macos12-arm64/mac-arm64/AfterFrame.app
   release/macos12-intel/mac/AfterFrame.app
 )
-# People recognition has no download fallback since the model was bundled.
-APPS_WITH_PEOPLE=(release/mac-arm64/AfterFrame.app)
+# The builds that ship the Core ML models (scripts/bundled-models.mjs): people
+# recognition and scene depth have no download fallback, the app only has
+# what is bundled. The macOS 12 builds leave them out (mac-builds.cjs).
+APPS_WITH_MODELS=(release/mac-arm64/AfterFrame.app)
 TAG="v${VERSION}"
 NOTES="../../docs/releases/${TAG}.md"   # optional; auto-generated if absent
 
@@ -111,9 +113,10 @@ for APP in "${APPS[@]}"; do
   /usr/bin/perl "$APP/Contents/Resources/native/exiftool/exiftool" -ver >/dev/null \
     || { echo "✗ ExifTool is missing from $APP (npm run fetch:exiftool)." >&2; exit 1; }
 done
-for APP in "${APPS_WITH_PEOPLE[@]}"; do
-  [[ -f "$APP/Contents/Resources/native/FaceEmbedding.mlpackage/Manifest.json" ]] \
-    || { echo "✗ The face model is missing from $APP (npm run fetch:people-model)." >&2; exit 1; }
+for APP in "${APPS_WITH_MODELS[@]}"; do
+  # Every model, checked against the directory hash it was fetched with.
+  node scripts/fetch-models.mjs --verify "$APP/Contents/Resources/native" \
+    || { echo "✗ A Core ML model is missing from $APP or altered (npm run fetch:models)." >&2; exit 1; }
 done
 
 for dmg in "${DMGS[@]}"; do

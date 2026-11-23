@@ -80,18 +80,19 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - name: Build native tools
         run: npm run build:native --prefix apps/desktop
-      # The bundled face model (scripts/fetch-people-model.mjs): without it
-      # 62-people-real-model skips itself, and until 2026-10-14 nothing here
-      # fetched it, so its three tests had never run on CI. The ~300 MB
-      # archive is cached by the pinned constants in electron/peopleModel.js
-      # (URL, SHA-256, manifest hash) — a model bump is a new key.
-      - name: Cache the people model archive
+      # Every bundled Core ML model (scripts/fetch-models.mjs), from the
+      # `models` release. Without the face model 62-people-real-model skips
+      # itself, and until 2026-10-14 nothing here fetched it, so its three
+      # tests had never run on CI. The archives are cached by the files that
+      # pin them (URL, SHA-256, directory hash): a model added or bumped is a
+      # new key.
+      - name: Cache the model archives
         uses: actions/cache@v4
         with:
-          path: apps/desktop/native/.cache/FaceEmbedding.mlpackage.tar.gz
-          key: people-model-${{ hashFiles('apps/desktop/electron/peopleModel.js') }}
-      - name: Fetch the people model
-        run: npm run fetch:people-model --prefix apps/desktop
+          path: apps/desktop/native/.cache/*.mlpackage.tar.gz
+          key: models-${{ hashFiles('apps/desktop/scripts/bundled-models.mjs', 'apps/desktop/electron/peopleModel.js') }}
+      - name: Fetch the models
+        run: npm run fetch:models --prefix apps/desktop
       - name: Run the unit suites and the full Electron E2E suite with coverage
         # Builds the instrumented renderer itself; reports even when a spec fails.
         run: npm run coverage --prefix apps/desktop -- --retries=1

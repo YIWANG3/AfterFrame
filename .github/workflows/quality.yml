@@ -89,6 +89,17 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - name: Build native tools
         run: npm run build:native --prefix apps/desktop
+      # The depth model for 07-depth (scripts/fetch-models.mjs), from the
+      # `models` release: it isn't committed. Only depth: the face model is
+      # the nightly's. Cached by the file that pins it; after the native
+      # tools, so its compute-depth self-test runs.
+      - name: Cache the depth model archive
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/native/.cache/DepthAnythingV2SmallF16-*.mlpackage.tar.gz
+          key: depth-model-${{ hashFiles('apps/desktop/scripts/bundled-models.mjs') }}
+      - name: Fetch the depth model
+        run: npm run fetch:models --prefix apps/desktop -- depth
       - name: Build renderer
         run: npm run build --prefix apps/desktop
       # The whole suite, e2e/*.spec.js: a new spec is in CI the moment it is
