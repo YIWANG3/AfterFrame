@@ -85,7 +85,7 @@ sidecar job runner 是人物任务的唯一状态来源：它创建 `people_inde
 
 - **位置：** `Contents/Resources/native/FaceEmbedding.mlpackage`，和深度模型放在一起。版本、SHA-256 和许可证都写在 `apps/desktop/electron/peopleModel.js` 里。
 - **来源：** ONNX Model Zoo 的 `arcfaceresnet100-8.onnx`（Apache-2.0）转成的 Core ML 包。压缩包放在 AfterFrame 自己仓库的 GitHub Release `models` 上（`FaceEmbedding-arcface-r100-b51b655.mlpackage.tar.gz`），和原先 Hugging Face 上 RuiSumida/ArcFace-R100-CoreML 那个压缩包逐字节相同；Hugging Face 留作备用地址。这个 release 是预发布，不会变成 latest；上面的文件只增不改，换模型就传一个新文件。
-- **构建：** `npm run fetch:models`（`apps/desktop/scripts/fetch-models.mjs`，模型表在 `scripts/bundled-models.mjs`，深度模型也在这张表里）下载锁定版本的压缩包，校验压缩包的 SHA-256 和解包后的目录哈希，再用 People Worker 自检一次，然后放到 `native/`，由 electron-builder 打进 App。`dist:mac`、`dist:mac:release` 和 `scripts/dist-mac-build.sh`（macOS 14 的版本）都会先运行这一步，`npm run dev` 运行时失败也不会中断。`scripts/release.sh` 会按目录哈希检查打包后的 App 里的每个模型。
+- **构建：** `npm run fetch:models`（`apps/desktop/scripts/fetch-models.mjs`，模型表在 `scripts/bundled-models.mjs`，深度和宠物模型也在这张表里）下载锁定版本的压缩包，校验压缩包的 SHA-256 和解包后的目录哈希，再用 People Worker 自检一次，然后放到 `native/`，由 electron-builder 打进 App。`dist:mac`、`dist:mac:release` 和 `scripts/dist-mac-build.sh`（macOS 14 的版本）都会先运行这一步，`npm run dev` 运行时失败也不会中断。`scripts/release.sh` 会按目录哈希检查打包后的 App 里的每个模型。
 - **运行：** 用户没有选择其他模型时，内置模型就是当前模型；它不能被移除，也不写进设置。
 - **系统要求：** 模型是 Core ML 规范版本 8 的 ML Program，需要 macOS 14 或更高版本。People Worker 从 macOS 12 起就能运行，但在 macOS 12–13 上加载不了这个模型，所以那里不提供内置模型，人物页和设置会说明需要 macOS 14；用户仍可以选择兼容的旧格式模型。
 - **兼容 0.5.5 的下载：** 内置模型和 0.5.5 下载的是同一个文件，key 相同（`arcface-r100-coreml@b51b655@743cae41246e637e`），所以已经建好的人物索引继续有效。0.5.5 下载到 `people-models/` 的那份副本在启动时删除，释放约 125 MB 空间。暂停中的人物任务恢复时，会改用内置模型的当前路径。

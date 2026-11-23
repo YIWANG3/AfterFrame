@@ -1,6 +1,6 @@
 # 宠物识别与分组设计
 
-> **状态（2026-11-23）**：阶段 1、2 已在分支 `feat/pet-recognition` 实现（worker、模型、schema 16、人物任务带宠物、界面、MCP、e2e 97），见第 12 节；宠物模型还没传到 `models` release，打包脚本等阶段 0.5 合并后再加一行。实现和原设计的出入：宠物不另开任务，并进人物任务同一轮跑（5.2）。可行性原型已做完：脚本和测试集在 `research/pet-recognition-lab/`（`research/` 不进 git），本文第 3 节抄了全部结论数字，不依赖那个目录。已定：人和宠物放同一面墙、导航名改成“人物与宠物”、宠物识别默认开、用 DINOv2-S 随包、所有模型统一放 AfterFrame 自己的 GitHub Release（5.5）、模型可由用户替换、标定照片由用户准备、只被姿态检测找到的动物用分类器定猫狗。第 13 节还有 1 项待定。
+> **状态（2026-11-23）**：阶段 1、2 已在分支 `feat/pet-recognition` 实现（worker、模型、schema 16、人物任务带宠物、界面、MCP、e2e 97），见第 12 节；宠物模型已传到 `models` release，打包时由 `fetch-models.mjs` 和人脸、深度模型一起下载（5.5）。实现和原设计的出入：宠物不另开任务，并进人物任务同一轮跑（5.2）。可行性原型已做完：脚本和测试集在 `research/pet-recognition-lab/`（`research/` 不进 git），本文第 3 节抄了全部结论数字，不依赖那个目录。已定：人和宠物放同一面墙、导航名改成“人物与宠物”、宠物识别默认开、用 DINOv2-S 随包、所有模型统一放 AfterFrame 自己的 GitHub Release（5.5）、模型可由用户替换、标定照片由用户准备、只被姿态检测找到的动物用分类器定猫狗。第 13 节还有 1 项待定。
 
 相关：[people-recognition-design.md](people-recognition-design.md)（人物识别，本文大量复用它的任务、数据和界面）、[local-models-plan.md](local-models-plan.md)（模型体积和分发规则）。
 
@@ -147,7 +147,7 @@ People Worker --model … --pet-model …：人脸 + 动物检测、裁框、Cor
 | --- | --- | --- | --- |
 | 人脸 ArcFace R100（`FaceEmbedding.mlpackage`） | 压缩包 110 MB，解开 125 MB | 构建时从别人的 Hugging Face 仓库（RuiSumida/ArcFace-R100-CoreML）下载 | 按 `peopleModel.js` 的记录是 Apache-2.0 |
 | 深度 Depth Anything V2 Small（`DepthAnythingV2SmallF16.mlpackage`） | 48 MB | 直接提交在 git 里（`apps/desktop/native/`） | Apache-2.0（Small 版） |
-| 宠物 DINOv2-S（`PetEmbedding.mlpackage`） | 41 MB | 新的 | Apache-2.0 |
+| 宠物 DINOv2-S（`PetEmbedding.mlpackage`） | 压缩包 40 MB，解开 43 MB | 新的，`scripts/models/convert-pet-model.py` 转换 | Apache-2.0 |
 
 做法：
 
@@ -157,10 +157,11 @@ People Worker --model … --pet-model …：人脸 + 动物检测、裁框、Cor
 - **深度模型**：从 git 里移出来，打包时下载。git 历史里已有的那 48 MB 不会因此变小，好处是三个模型走同一套流程，以后换模型不再往仓库里加大文件。
 - **一个脚本**：`fetch-people-model.mjs` 改成 `fetch-models.mjs`，用一张表列出每个模型的文件名、地址、SHA-256、大小、许可证和自检方式；`package.json` 里原来跑 `fetch:people-model` 的地方（`predev`、`dist:mac` 等）、`.github/workflows/e2e-nightly.yml` 和 `apps/desktop/scripts/release.sh` 的检查都换成它。
 - **不动的**：exiftool、ffmpeg、Electron 是工具不是模型，各自有官方的版本化发布渠道，也锁了 SHA-256，这次不搬。
-- **进度（2026-11-23）**：已发布 <https://github.com/YIWANG3/AfterFrame/releases/tag/models>（预发布，非 latest；tag `models` 指向 main 的 `fe1ce36`；latest 仍是 v0.5.27，官网的 `releases/latest` 仍跳到 v0.5.27）。两个文件不登录也能下载，下载下来的 SHA-256 和大小核对过：
+- **进度（2026-11-23）**：已发布 <https://github.com/YIWANG3/AfterFrame/releases/tag/models>（预发布，非 latest；tag `models` 指向 main 的 `fe1ce36`；latest 仍是 v0.5.27，官网的 `releases/latest` 仍跳到 v0.5.27）。三个文件不登录也能下载，下载下来的 SHA-256 和大小核对过（宠物模型用 `fetch-models.mjs` 下载并自检过）：
   - `FaceEmbedding-arcface-r100-b51b655.mlpackage.tar.gz`，110,376,172 字节，`3644ff110ba03a082515d3a9fa22dbc8c1eb66054bb6bbbc0e84eb62b4771f2b`。和 Hugging Face 上的逐字节相同；来源是 ONNX Model Zoo 的 `arcfaceresnet100-8.onnx`，Apache-2.0。
   - `DepthAnythingV2SmallF16-c0c84db5.mlpackage.tar.gz`，45,821,437 字节，`c0c84db536218b3103c9dafdec4bf0e8d26da86cc758bb85bc2b96056035aea8`。Apple 的 `apple/coreml-depth-anything-v2-small` 原样打包，可复现（条目排序、时间清零、不记属主），解开和仓库里的逐文件相同。
-  - 代码还没改：`fetch-models.mjs`、深度模型移出 git、`peopleModel.js` 换地址都在接下来的 PR 里。下载地址是 `https://github.com/YIWANG3/AfterFrame/releases/download/models/<文件名>`。
+  - `PetEmbedding-dinov2-small-846f00a0.mlpackage.tar.gz`，40,076,226 字节，`846f00a00b5f5ca5ffe8a01886bb37a9732d23b8d836842953cb4a04b19a73cd`。从 Meta 的 `facebook/dinov2-small`（版本 `ed25f3a`）用 `scripts/models/convert-pet-model.py` 转换，Apache-2.0；只在这个 release 上，没有备用地址。
+  - 代码：`fetch-models.mjs`、深度模型移出 git、`peopleModel.js` 换地址在 #324（已合并）；宠物模型的那一行在 `feat/pet-recognition`，锁定值在 `petModel.js`。下载地址是 `https://github.com/YIWANG3/AfterFrame/releases/download/models/<文件名>`。
 - **顺序**：这是一个独立的 PR（从 main 开分支），在宠物识别阶段 1 之前做；宠物模型的文件等阶段 1 转换脚本进仓库后再传。落地时同步改 [people-recognition-design.md](people-recognition-design.md) 4.1 节里模型来源的描述，以及 `peopleModel.js` 顶部的注释。
 
 ### 5.6 给用户手动下载的模型（已定：可以下载替换）
@@ -257,7 +258,7 @@ People Worker --model … --pet-model …：人脸 + 动物检测、裁框、Cor
 
 结论见第 3 节。
 
-### 阶段 0.5：模型统一托管（独立 PR）
+### 阶段 0.5：模型统一托管（已合并，#324）
 
 见 5.5：建 `models` release，上传人脸和深度模型，`fetch-models.mjs` 替换 `fetch-people-model.mjs`，深度模型移出 git，CI 和打包检查跟着改。深度模型的“选择其他模型”补上自检和复制进 Application Support。
 
@@ -268,7 +269,7 @@ People Worker --model … --pet-model …：人脸 + 动物检测、裁框、Cor
 - schema 16（`subject` 两列、迁移和升级测试）、按模型取向量维度、物种分区聚类、宠物阈值、`pets` 筛选；人物任务带宠物（5.2）。
 - 用户替换宠物模型：自检要求图像输入、向量输出，`manifest.json` 的 `cluster_threshold` 传到聚类。
 - 验收（真实 worker、两个真模型、Commons 201 张）：17.5 秒跑完，认出 172 只动物、62 张人脸；宠物 22 组，猫的组全部干净，混了别的个体的 8 组全是同品种的狗（德牧之间、Bo 和 Sunny 之间）。产品 worker 单独评估：有动物的照片 78%，身体框向量 AUC 0.923（原型 0.920）。
-- 还没做：把 `PetEmbedding-dinov2-small-846f00a0.mlpackage.tar.gz`（40,076,226 字节，sha256 `846f00a0…`，`petModel.js` 已锁）传到 `models` release；等阶段 0.5 的 `fetch-models.mjs` 合并后加一行，`release.sh` 检查它在包里。在那之前，开发机用转换脚本把模型放进 `apps/desktop/native/`。
+- 宠物模型 `PetEmbedding-dinov2-small-846f00a0.mlpackage.tar.gz` 已传到 `models` release，`bundled-models.mjs` 里是 `pet` 那一行：`npm run fetch:models` 下载、校验、用 `people-worker --pet-model … --self-test` 自检；`release.sh` 的 `fetch-models.mjs --verify` 检查它在 arm64 macOS 14 包里且没被改过。
 
 ### 阶段 2：界面和 MCP（已实现，`feat/pet-recognition`）
 

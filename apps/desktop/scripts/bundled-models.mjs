@@ -33,6 +33,7 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const { BUNDLED_ARCFACE_R100: FACE } = require("../electron/peopleModel.js");
+const { BUNDLED_DINOV2_SMALL: PET } = require("../electron/petModel.js");
 
 const DESKTOP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -67,6 +68,29 @@ export const MODELS = Object.freeze([
         const result = JSON.parse(execFileSync(tool, ["--model", model, "--self-test"], { encoding: "utf8" }).trim());
         if (!result?.ok || Number(result.embedding_dimensions) !== FACE.embedding_dimensions) {
           throw new Error(`people-worker self-test failed: ${JSON.stringify(result)}`);
+        }
+      },
+    },
+  },
+  // DINOv2 Small for telling one cat or dog from another (Meta, Apache-2.0),
+  // converted by scripts/models/convert-pet-model.py at the repository root.
+  // Its pins live in electron/petModel.js, because the app keys pet indexes by
+  // them. Only on the models release: there is no other copy to fall back to.
+  {
+    id: "pet",
+    url: PET.archive_url,
+    sha256: PET.archive_sha256,
+    bytes: PET.archive_bytes,
+    license: PET.license,
+    target: PET.model_path,
+    dirHash: PET.manifest_hash,
+    missing: "Pet recognition needs a model chosen in Settings until this succeeds.",
+    selfTest: {
+      tool: "people-worker",
+      check(tool, model) {
+        const result = JSON.parse(execFileSync(tool, ["--pet-model", model, "--self-test"], { encoding: "utf8" }).trim());
+        if (!result?.ok || result.kind !== "pet" || Number(result.embedding_dimensions) !== PET.embedding_dimensions) {
+          throw new Error(`people-worker pet self-test failed: ${JSON.stringify(result)}`);
         }
       },
     },

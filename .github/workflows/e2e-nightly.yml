@@ -90,7 +90,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: apps/desktop/native/.cache/*.mlpackage.tar.gz
-          key: models-${{ hashFiles('apps/desktop/scripts/bundled-models.mjs', 'apps/desktop/electron/peopleModel.js') }}
+          key: models-${{ hashFiles('apps/desktop/scripts/bundled-models.mjs', 'apps/desktop/electron/peopleModel.js', 'apps/desktop/electron/petModel.js') }}
       - name: Fetch the models
         run: npm run fetch:models --prefix apps/desktop
       - name: Run the unit suites and the full Electron E2E suite with coverage

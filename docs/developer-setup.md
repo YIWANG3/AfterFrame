@@ -139,10 +139,10 @@ tests need it there too:
 npm --prefix apps/desktop run fetch:exiftool
 ```
 
-The Core ML models the Mac app ships (the ArcFace face model and Depth Anything
-V2 Small for scene depth) aren't committed either. `npm run dev` fetches them
-into `apps/desktop/native/` the first time (about 160 MB), and the `dist:mac`
-scripts do the same. They come from the repository's own
+The Core ML models the Mac app ships (the ArcFace face model, DINOv2 Small for
+pets and Depth Anything V2 Small for scene depth) aren't committed either.
+`npm run dev` fetches them into `apps/desktop/native/` the first time (about
+200 MB), and the `dist:mac` scripts do the same. They come from the repository's own
 [`models` release](https://github.com/YIWANG3/AfterFrame/releases/tag/models),
 listed with their hashes in `apps/desktop/scripts/bundled-models.mjs`; a
 download is kept in `native/.cache/`. To fetch them yourself, or just one:

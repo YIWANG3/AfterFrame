@@ -2,7 +2,9 @@
 // Apache-2.0) as a Core ML package, built by scripts/models/convert-pet-model.py
 // and published on the repository's `models` release. The People Worker runs
 // it beside the face model (--pet-model) to tell one cat or dog from another.
-// See docs/pet-recognition-design.md.
+// Like every bundled model it isn't committed: scripts/fetch-models.mjs
+// downloads the archive pinned here (a row in scripts/bundled-models.mjs) into
+// native/ at build time. See docs/pet-recognition-design.md.
 
 const path = require("node:path");
 const { canLoadBundledModel, modelKey } = require("./peopleModel");
@@ -14,7 +16,7 @@ const BUNDLED_DINOV2_SMALL = Object.freeze({
   kind: "pet",
   license: "Apache-2.0",
   license_url: "https://huggingface.co/facebook/dinov2-small",
-  archive_name: "PetEmbedding-dinov2-small-846f00a0.mlpackage.tar.gz",
+  archive_url: "https://github.com/YIWANG3/AfterFrame/releases/download/models/PetEmbedding-dinov2-small-846f00a0.mlpackage.tar.gz",
   archive_sha256: "846f00a00b5f5ca5ffe8a01886bb37a9732d23b8d836842953cb4a04b19a73cd",
   archive_bytes: 40076226,
   model_path: "PetEmbedding.mlpackage",
