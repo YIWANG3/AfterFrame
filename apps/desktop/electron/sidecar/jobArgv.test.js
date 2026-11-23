@@ -101,7 +101,10 @@ const CASES = [
   {
     builder: "peopleIndexJob",
     minimal: { jobId: "j1", modelId: "id", modelVersion: "v", modelPath: "/m", manifestHash: "h" },
-    full: { jobId: "j1", modelId: "id", modelVersion: "v", modelPath: "/m", manifestHash: "h", assetIds: ["a", "b"] },
+    full: {
+      jobId: "j1", modelId: "id", modelVersion: "v", modelPath: "/m", manifestHash: "h", assetIds: ["a", "b"],
+      pets: { modelId: "pid", modelVersion: "pv", modelPath: "/p", manifestHash: "ph", threshold: 0.58 },
+    },
     neverSent: ["--worker-path", "--limit"],
   },
 ];
@@ -166,4 +169,14 @@ test("optional values are omitted when empty, kept when set", () => {
 
   const people = jobArgv.peopleIndexJob({ jobId: "j", modelId: "i", modelVersion: "v", modelPath: "/m", manifestHash: "h", assetIds: [1, 2] });
   assert.deepEqual(people.slice(-4), ["--asset-id", "1", "--asset-id", "2"]);
+  // Without a pet model no pet flag is sent; with one, all four and the threshold.
+  assert.equal(people.some((flag) => String(flag).startsWith("--pet-")), false);
+  const withPets = jobArgv.peopleIndexJob({
+    jobId: "j", modelId: "i", modelVersion: "v", modelPath: "/m", manifestHash: "h",
+    pets: { modelId: "pid", modelVersion: "pv", modelPath: "/p", manifestHash: "ph", threshold: 0.6 },
+  });
+  assert.deepEqual(withPets.slice(-10), [
+    "--pet-model-id", "pid", "--pet-model-version", "pv", "--pet-model-path", "/p",
+    "--pet-manifest-hash", "ph", "--pet-threshold", "0.6",
+  ]);
 });

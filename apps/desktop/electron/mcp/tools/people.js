@@ -1,4 +1,4 @@
-// People (face groups) and the offline recognizer.
+// People (face groups), pets (cat and dog groups) and the offline recognizer.
 // Shape and ctx: see tools/index.js.
 
 module.exports = (ctx) => {
@@ -7,18 +7,22 @@ module.exports = (ctx) => {
     {
       name: "list_people",
       description:
-        "Recognized people (face groups) in the catalog: id, name (if the user named them), face count, state " +
+        "Recognized people and pets in the catalog: groups of one person's faces, or of one cat's or dog's " +
+        "photos. Each has an id, subject (person / cat / dog), name (if the user named it), face count, state " +
         "(candidate/confirmed/ignored) and cover thumbnail. Use the group id with search_assets person_id to " +
         "find someone's photos, or with get_person / update_person.",
       inputSchema: {
         type: "object",
         properties: {
           state: { type: "string", enum: ["candidate", "confirmed", "ignored"], description: "Filter by state; default all non-ignored" },
+          subject: { type: "string", enum: ["person", "pet", "cat", "dog"], description: "Only people, only pets (cats and dogs), only cats or only dogs; default all" },
         },
       },
       async handler(args) {
         requireCatalog();
-        const groups = await commands.listPeopleGroups({ state: args.state });
+        const all = await commands.listPeopleGroups({ state: args.state });
+        const wanted = args.subject === "pet" ? ["cat", "dog"] : args.subject ? [args.subject] : null;
+        const groups = wanted ? all.filter((group) => wanted.includes(group.subject || "person")) : all;
         return { count: groups.length, people: groups };
       },
     },
@@ -101,24 +105,29 @@ module.exports = (ctx) => {
     {
       name: "index_people",
       description:
-        "Run face recognition over the library (or specific assets) using the app's local Core ML model. " +
+        "Run face recognition over the library (or specific assets) using the app's local Core ML model, " +
+        "and pet recognition (cats and dogs) in the same pass while the user has it on (the default). " +
         "Fully offline. Long-running: returns a job_id — poll get_job_status. Fails with guidance when no " +
-        "face model is installed (the user sets one up in Settings → People).",
+        "face model is installed (the user sets one up in Settings → People & Pets).",
       inputSchema: {
         type: "object",
         properties: {
           asset_ids: { type: "array", items: { type: "string" }, description: "Limit to these assets; default whole catalog" },
+          include_pets: { type: "boolean", description: "false leaves pets out of this run; default follows the user's setting (it can't turn pets on when the user turned them off)" },
         },
       },
       async handler(args) {
         requireCatalog();
         if (!deps.startPeopleIndex) throw new Error("People indexing bridge unavailable.");
-        const status = await deps.startPeopleIndex({ assetIds: (args.asset_ids || []).map(String).filter(Boolean) });
+        const status = await deps.startPeopleIndex({
+          assetIds: (args.asset_ids || []).map(String).filter(Boolean),
+          ...(args.include_pets === false ? { pets: false } : {}),
+        });
         deps.broadcastCatalogChanged?.("jobs", { jobId: status.jobId, jobType: "people_index" });
         return {
           job_id: status.jobId,
           status: status.status,
-          note: "Recognition runs in the background — poll get_job_status. People appear in the app's People view as they are found.",
+          note: "Recognition runs in the background — poll get_job_status. People and pets appear in the app's People & Pets view as they are found.",
         };
       },
     },

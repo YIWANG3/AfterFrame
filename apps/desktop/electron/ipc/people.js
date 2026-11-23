@@ -5,6 +5,11 @@
 // app (peopleModel.js) is used by default; a model the user chooses is
 // validated locally, copied into Application Support and recorded in
 // settings. It also asks the sidecar to launch resumable indexing jobs.
+//
+// Pets ride along (docs/pet-recognition-design.md): the DINOv2 pet model built
+// into the app (petModel.js), or one the user chooses the same way, runs in
+// the same job and worker as the faces while "recognize pets" is on (the
+// default). Its settings live beside the people ones, under petRecognition.
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -23,6 +28,13 @@ const {
   modelKey,
   pathDigest,
 } = require("../peopleModel");
+const {
+  BUNDLED_DINOV2_SMALL,
+  BUNDLED_PET_MODEL_KEY,
+  bundledPetModelPath,
+  bundledPetRecord,
+  isBundledPetModel,
+} = require("../petModel");
 
 const MODEL_EXTENSIONS = new Set([".mlpackage", ".mlmodelc"]);
 const MAX_MANIFEST_BYTES = 128 * 1024;
@@ -78,9 +90,10 @@ function resolveModelInBundle(bundlePath, manifest) {
   return candidates[0];
 }
 
-function workerSelfTest(workerPath, modelPath) {
+// kind "face" (ArcFace-style, 512 values) or "pet" (an image in, a vector out).
+function workerSelfTest(workerPath, modelPath, kind = "face") {
   return new Promise((resolve, reject) => {
-    const child = spawnSafely(spawn, workerPath, ["--model", modelPath, "--self-test"]);
+    const child = spawnSafely(spawn, workerPath, [kind === "pet" ? "--pet-model" : "--model", modelPath, "--self-test"]);
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
@@ -104,7 +117,13 @@ function workerSelfTest(workerPath, modelPath) {
         reject(new Error("People model validation returned invalid JSON."));
         return;
       }
-      if (!payload?.ok || Number(payload.embedding_dimensions) !== 512) {
+      const dimensions = Number(payload?.embedding_dimensions);
+      if (kind === "pet") {
+        if (!payload?.ok || payload.kind !== "pet" || !(dimensions >= 16 && dimensions <= 4096)) {
+          reject(new Error("This Core ML model is not a compatible pet model: it needs one image input and one vector output."));
+          return;
+        }
+      } else if (!payload?.ok || dimensions !== 512) {
         reject(new Error("This Core ML model is not a compatible 512-dimensional face embedding model."));
         return;
       }
@@ -132,12 +151,51 @@ function register({
     ? path.join(resourcesPath, "native", "bin", "people-worker")
     : path.join(__dirname, "..", "..", "native", "bin", "people-worker");
   const modelStore = path.join(app.getPath("userData"), "people-models");
-  const bundledPath = bundledModelPath({ isPackaged, resourcesPath, desktopDir: path.join(__dirname, "..", "..") });
+  const petModelStore = path.join(app.getPath("userData"), "pet-models");
+  const desktopDir = path.join(__dirname, "..", "..");
+  const bundledPath = bundledModelPath({ isPackaged, resourcesPath, desktopDir });
+  const bundledPetPath = bundledPetModelPath({ isPackaged, resourcesPath, desktopDir });
   const bundledLoadable = canLoadBundledModel({ platform, ...(osRelease ? { osRelease } : {}) });
 
   function getSettings() {
     const source = readAppSettings()?.peopleRecognition;
     return source && typeof source === "object" ? source : {};
+  }
+
+  function getPetSettings() {
+    const source = readAppSettings()?.petRecognition;
+    return source && typeof source === "object" ? source : {};
+  }
+
+  // Pets are recognized unless the user turned it off.
+  function petsEnabled() {
+    return getPetSettings().enabled !== false;
+  }
+
+  function hasBundledPetModel() {
+    return bundledLoadable && fs.existsSync(bundledPetPath);
+  }
+
+  function petRecords() {
+    const configured = getPetSettings().models;
+    const stored = configured && typeof configured === "object" && !Array.isArray(configured) ? configured : {};
+    if (!hasBundledPetModel()) return stored;
+    const { [BUNDLED_PET_MODEL_KEY]: _same, ...chosen } = stored;
+    return { [BUNDLED_PET_MODEL_KEY]: bundledPetRecord(bundledPetPath), ...chosen };
+  }
+
+  function petActiveKey() {
+    const all = petRecords();
+    const chosen = getPetSettings().activeModelKey;
+    if (chosen && all[chosen]?.modelPath && fs.existsSync(all[chosen].modelPath)) return chosen;
+    return hasBundledPetModel() ? BUNDLED_PET_MODEL_KEY : null;
+  }
+
+  // The pet model a new job should run, or null (pets off, or no model).
+  function activePetRecord() {
+    if (!petsEnabled()) return null;
+    const key = petActiveKey();
+    return key ? { key, record: petRecords()[key] } : null;
   }
 
   // On macOS 12–13 the bundled model is shipped but can't load, so it is
@@ -180,7 +238,22 @@ function register({
       sizeBytes: Number(record?.sizeBytes || 0),
       installedAt: record?.installedAt || null,
       embeddingDimensions: Number(record?.embeddingDimensions || 0),
+      ...(record?.kind === "pet" ? { clusterThreshold: Number.isFinite(record?.clusterThreshold) ? record.clusterThreshold : null } : {}),
       available: exists,
+    };
+  }
+
+  function petState() {
+    const models = Object.entries(petRecords()).map(([key, record]) => publicRecord(key, record));
+    const key = petActiveKey();
+    return {
+      enabled: petsEnabled(),
+      activeModelKey: key,
+      activeModel: key ? models.find((model) => model.key === key) : null,
+      models,
+      builtInNeedsMacOS: !bundledLoadable && platform === "darwin" && fs.existsSync(bundledPetPath)
+        ? BUNDLED_DINOV2_SMALL.min_macos
+        : null,
     };
   }
 
@@ -195,16 +268,18 @@ function register({
       builtInNeedsMacOS: !bundledLoadable && platform === "darwin" && fs.existsSync(bundledPath)
         ? BUNDLED_ARCFACE_R100.min_macos
         : null,
+      pets: petState(),
     };
   }
 
-  async function persistRecord(key, record) {
+  // section: "peopleRecognition" for face models, "petRecognition" for pets.
+  async function persistRecord(key, record, section = "peopleRecognition") {
     await updateAppSettings((settings) => ({
       ...settings,
-      peopleRecognition: {
-        ...(settings.peopleRecognition || {}),
+      [section]: {
+        ...(settings[section] || {}),
         activeModelKey: key,
-        models: { ...((settings.peopleRecognition || {}).models || {}), [key]: record },
+        models: { ...((settings[section] || {}).models || {}), [key]: record },
       },
     }));
     return state();
@@ -231,15 +306,16 @@ function register({
     });
   }
 
-  async function installModel(sourceModelPath, manifest, source = "custom") {
+  async function installModel(sourceModelPath, manifest, source = "custom", kind = "face") {
+    const pet = kind === "pet";
     const sourceDigest = await pathDigest(sourceModelPath);
-    const selfTest = await workerSelfTest(workerPath, sourceModelPath);
+    const selfTest = await workerSelfTest(workerPath, sourceModelPath, kind);
     const id = safeId(manifest?.id, `custom-${sourceDigest.sha256.slice(0, 16)}`);
     const version = safeId(manifest?.version, "1");
     const key = modelKey(id, version, sourceDigest.sha256);
-    const destinationDir = path.join(modelStore, key);
+    const destinationDir = path.join(pet ? petModelStore : modelStore, key);
     const destinationModelPath = path.join(destinationDir, path.basename(sourceModelPath));
-    await fs.promises.mkdir(modelStore, { recursive: true });
+    await fs.promises.mkdir(pet ? petModelStore : modelStore, { recursive: true });
     if (!fs.existsSync(destinationModelPath)) {
       const temporaryDir = `${destinationDir}.installing-${crypto.randomUUID()}`;
       try {
@@ -256,11 +332,15 @@ function register({
         throw error;
       }
     }
+    // A pet model's similarity scale is its own: the manifest may say where
+    // two animals count as one (cosine); without it the built-in model's is used.
+    const threshold = Number(manifest?.cluster_threshold);
     return persistRecord(key, {
       id,
       version,
       name: String(manifest?.name || `Custom · ${path.basename(sourceModelPath)}`).slice(0, 120),
-      kind: String(manifest?.kind || "arcface").slice(0, 40),
+      kind: pet ? "pet" : String(manifest?.kind || "arcface").slice(0, 40),
+      ...(pet ? { clusterThreshold: threshold > 0 && threshold < 1 ? threshold : null } : {}),
       source,
       license: typeof manifest?.license === "string" ? manifest.license.slice(0, 160) : "Unverified custom model",
       licenseUrl: typeof manifest?.license_url === "string" ? manifest.license_url.slice(0, 1000) : null,
@@ -271,7 +351,7 @@ function register({
       inputName: selfTest.input_name,
       outputName: selfTest.output_name,
       modelPath: destinationModelPath,
-    });
+    }, pet ? "petRecognition" : "peopleRecognition");
   }
 
   function commandForPeopleJob(job) {
@@ -298,7 +378,27 @@ function register({
       modelPath,
       manifestHash,
       assetIds: !resolved && Array.isArray(payload.requested_asset_ids) ? payload.requested_asset_ids : [],
+      pets: petsForJob(payload),
     });
+  }
+
+  // The pet half of a task, or null. Like the face model, the built-in pet
+  // model is found wherever it is now; a task whose pet model has gone since
+  // carries on with the faces alone.
+  function petsForJob(payload) {
+    const modelId = String(payload.pet_model_id || "");
+    const modelVersion = String(payload.pet_model_version || "");
+    const manifestHash = String(payload.pet_manifest_hash || "");
+    if (!modelId || !modelVersion || !manifestHash) return null;
+    const modelPath = isBundledPetModel({ modelId, modelVersion, manifestHash }) && hasBundledPetModel()
+      ? bundledPetPath
+      : String(payload.pet_model_path || "");
+    if (!modelPath || !fs.existsSync(modelPath)) {
+      console.warn("[people] the pet model of this task is gone; continuing with faces only");
+      return null;
+    }
+    const threshold = Number(payload.pet_threshold);
+    return { modelId, modelVersion, modelPath, manifestHash, ...(threshold > 0 && threshold < 1 ? { threshold } : {}) };
   }
 
   function launchPeopleJob(job) {
@@ -340,6 +440,56 @@ function register({
     return installModel(sourceModelPath, manifest, manifest ? "bundle" : "custom");
   });
 
+  ipcMain.handle("workspace:set-pets-enabled", async (_event, enabled) => {
+    await updateAppSettings((settings) => ({
+      ...settings,
+      petRecognition: { ...(settings.petRecognition || {}), enabled: !!enabled },
+    }));
+    return state();
+  });
+
+  ipcMain.handle("workspace:pick-pet-model", async () => {
+    if (platform !== "darwin") throw new Error("Pet recognition currently requires macOS.");
+    if (!fs.existsSync(workerPath)) throw new Error("People Worker is missing. Reinstall AfterFrame and try again.");
+    const result = await dialog.showOpenDialog({
+      title: "Select pet model bundle or Core ML model",
+      properties: ["openFile", "openDirectory"],
+      filters: [{ name: "Pet model", extensions: ["afpetmodel", "mlpackage", "mlmodelc"] }],
+    });
+    if (result.canceled || !result.filePaths?.[0]) return null;
+    const selectedPath = path.resolve(result.filePaths[0]);
+    const manifest = readBundleManifest(selectedPath);
+    const sourceModelPath = resolveModelInBundle(selectedPath, manifest);
+    return installModel(sourceModelPath, manifest, manifest ? "bundle" : "custom", "pet");
+  });
+
+  ipcMain.handle("workspace:set-active-pet-model", async (_event, key) => {
+    const record = petRecords()[String(key || "")];
+    if (!record?.modelPath || !fs.existsSync(record.modelPath)) throw new Error("Selected pet model is no longer available.");
+    await updateAppSettings((settings) => ({
+      ...settings,
+      petRecognition: { ...(settings.petRecognition || {}), activeModelKey: String(key) },
+    }));
+    return state();
+  });
+
+  ipcMain.handle("workspace:remove-pet-model", async (_event, key) => {
+    if (petActiveKey() === key) throw new Error("Select another model before removing the active model.");
+    if (key === BUNDLED_PET_MODEL_KEY && hasBundledPetModel()) throw new Error("The built-in model can't be removed.");
+    const record = petRecords()[String(key || "")];
+    if (!record) return state();
+    if (record.modelPath && inside(petModelStore, record.modelPath)) {
+      await fs.promises.rm(path.dirname(record.modelPath), { recursive: true, force: true });
+    }
+    await updateAppSettings((settings) => {
+      const petRecognition = { ...(settings.petRecognition || {}) };
+      const models = { ...(petRecognition.models || {}) };
+      delete models[String(key)];
+      return { ...settings, petRecognition: { ...petRecognition, models } };
+    });
+    return state();
+  });
+
   ipcMain.handle("workspace:set-active-people-model", async (_event, key) => {
     const record = records()[String(key || "")];
     if (!record?.modelPath || !fs.existsSync(record.modelPath)) throw new Error("Selected people model is no longer available.");
@@ -378,6 +528,8 @@ function register({
       ? [...new Set(opts.assetIds.map(String).filter((value) => value.length > 0))].slice(0, 50000)
       : [];
     const { record } = active;
+    // opts.pets false leaves the pets out of this run (MCP's index_people can).
+    const pet = opts.pets === false ? null : activePetRecord();
     const job = await createJob("people_index", {
       scope: assetIds.length ? "selection" : "catalog",
       asset_count: assetIds.length || null,
@@ -386,6 +538,13 @@ function register({
       model_version: record.version,
       model_path: record.modelPath,
       manifest_hash: record.manifestHash,
+      ...(pet ? {
+        pet_model_id: pet.record.id,
+        pet_model_version: pet.record.version,
+        pet_model_path: pet.record.modelPath,
+        pet_manifest_hash: pet.record.manifestHash,
+        pet_threshold: Number.isFinite(pet.record.clusterThreshold) ? pet.record.clusterThreshold : BUNDLED_DINOV2_SMALL.cluster_threshold,
+      } : {}),
     }, { priority: Number.isFinite(opts.priority) ? opts.priority : 5 });
     launchPeopleJob(job);
     return formatJobStatus(job);
