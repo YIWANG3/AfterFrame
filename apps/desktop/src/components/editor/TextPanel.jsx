@@ -104,6 +104,14 @@ export default function TextPanel({
   onCanvasPadCommit,
   canvasBg,
   onCanvasBg,
+  // The canvas ratio (null = the photo's), the photo's corners and shadow,
+  // and the two colours the photo-colour background would use.
+  canvasAspect,
+  onCanvasAspect,
+  canvasPhoto,
+  onCanvasPhoto,
+  onCanvasPhotoCommit,
+  bgPalette,
 }) {
   const { t } = useTranslation("editor");
   const frameMode = mode === "frame";
@@ -310,7 +318,12 @@ export default function TextPanel({
               />
             </Section>
             <Section label={t("frame.canvas")}>
-              <BorderControls part="canvas" pad={canvasPad} onPad={onCanvasPad} onPadCommit={onCanvasPadCommit} bg={canvasBg} onBg={onCanvasBg} />
+              <BorderControls
+                part="canvas" pad={canvasPad} onPad={onCanvasPad} onPadCommit={onCanvasPadCommit} bg={canvasBg} onBg={onCanvasBg}
+                aspect={canvasAspect} onAspect={onCanvasAspect}
+                photo={canvasPhoto} onPhoto={onCanvasPhoto} onPhotoCommit={onCanvasPhotoCommit}
+                palette={bgPalette}
+              />
             </Section>
             <Section label={t("frame.add")}>
               <div className="mb-1.5 text-[10px] text-muted2">{t("frame.info")}</div>
@@ -617,6 +630,13 @@ export default function TextPanel({
                     onUpdate={(patch) => update(current.id, paintToFields(patch, "bg"))}
                     opacityValue={current.bgOpacity}
                     onOpacityChange={(v) => update(current.id, { bgOpacity: v })}
+                  />
+                  <SliderRow
+                    label={t("text.corner")}
+                    min={0} max={100}
+                    value={current.bgRadius ?? 0}
+                    onChange={(v) => update(current.id, { bgRadius: v })}
+                    testId="text-bg-radius"
                   />
                   {(() => {
                     const pad = getBgPadding(current);

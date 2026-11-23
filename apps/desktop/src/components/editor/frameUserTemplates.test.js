@@ -33,6 +33,24 @@ function save(layers = [model, logo, caption]) {
 const logoFor = () => ({ src: "data:logo-for-this-camera", naturalWidth: 300, naturalHeight: 100 });
 
 describe("user frame templates", () => {
+  it("keeps a photo-made background, the canvas ratio and the photo's corners", () => {
+    const bg = { mode: "blur", blur: 40 };
+    const { template } = templateFromLayers({
+      id: "user:2", name: "Story", layers: [caption], geom: landscape, pad: PAD, bg,
+      aspect: "9:16", photo: { radius: 20, shadow: 50 }, measure,
+    });
+    expect(template.canvas).toEqual({
+      pad: PAD, bg, aspect: "9:16", photo: { radius: 20, shadow: 50 },
+    });
+    expect(template.canvas.bg).not.toBe(bg);
+  });
+
+  it("saves no ratio and no photo style as nulls", () => {
+    const { template } = save();
+    expect(template.canvas.aspect).toBeNull();
+    expect(template.canvas.photo).toBeNull();
+  });
+
   it("keeps the margins, pins each layer to its nearest edge, and stores no logo pixels", () => {
     const { template, skipped } = save([model, logo, caption, handwriting]);
     expect(skipped).toBe(1); // the handwriting sticker is only a data: URL

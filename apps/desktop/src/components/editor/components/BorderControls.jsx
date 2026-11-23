@@ -12,10 +12,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookmarkPlus, ChevronDown, Copy, Link2, Link2Off, PanelTop, PanelBottom, PanelLeft, PanelRight, Pencil, Trash2 } from "lucide-react";
-import { NumberInput } from "../../../ui";
+import { NumberInput, SliderRow } from "../../../ui";
 import ColorPickerPopover from "../../collage/ColorPickerPopover";
 import { COLOR_SWATCHES } from "../textState";
-import { bgToCss } from "../render/canvasHelpers";
+import { bgToCss, gradientToCss } from "../render/canvasHelpers";
+import { DEFAULT_BG_BLUR, bgUsesPhoto, paletteGradient } from "../render/frameBackdrop";
+import { CANVAS_ASPECTS } from "../imageMath";
+import { SegGroup } from "../text/controls";
 import { isUserTemplate } from "../frameUserTemplates";
 import InlineEdit from "../../InlineEdit";
 import { confirm } from "../../confirm";
@@ -24,9 +27,12 @@ const EDGE_KEYS = ["top", "bottom", "left", "right"];
 const EDGE_ICON = { top: PanelTop, bottom: PanelBottom, left: PanelLeft, right: PanelRight };
 const toPct = (v) => Math.round((v || 0) * 100);
 const DEFAULT_GRAD = { from: "#ffffff", to: "#000000", fromOpacity: 1, toOpacity: 1, angle: 180 };
+// Backgrounds made from the photo itself, in the order the row shows them.
+const PHOTO_BGS = ["palette", "blur"];
 
 export default function BorderControls({
   templates = [], thumbs, cellAspect, onApplyPreset, onClearPreset, pad, onPad, onPadCommit, bg, onBg,
+  aspect = null, onAspect, photo = null, onPhoto, onPhotoCommit, palette = null,
   onSaveTemplate, onRenameTemplate, onDuplicateTemplate, onDeleteTemplate, part = "templates",
 }) {
   const { t } = useTranslation("editor");
@@ -44,11 +50,14 @@ export default function BorderControls({
   const edgesEqual = (p.top || 0) === (p.right || 0) && (p.top || 0) === (p.bottom || 0) && (p.top || 0) === (p.left || 0);
   useEffect(() => { if (!edgesEqual) setLinked(false); }, [edgesEqual]);
   const bgMode = bg?.mode === "gradient" ? "gradient" : "solid";
+  const photoBg = bgUsesPhoto(bg) ? bg.mode : null;
   const bgColor = bg?.color || "#ffffff";
   const grad = bg?.gradient || DEFAULT_GRAD;
   // Same renderer as the live canvas background, so the swatch preview (incl.
   // gradient opacity) can't diverge from what the border actually shows.
-  const swatchBg = bgToCss(bg || { color: bgColor });
+  const swatchBg = bgToCss(photoBg ? { color: bgColor } : (bg || { color: bgColor }));
+  const photoStyle = { radius: 0, shadow: 0, ...(photo || {}) };
+  const setPhoto = (patch) => onPhoto?.({ ...photoStyle, ...patch });
 
   const Thumb = (tpl) => {
     const thumb = thumbs?.get?.(tpl.id);
@@ -158,6 +167,20 @@ export default function BorderControls({
 
   return (
     <div className="flex flex-col gap-3.5" data-frame-canvas="true">
+      {onAspect && (
+        <div className="flex items-center gap-2" data-frame-aspect="true">
+          <span className="min-w-[48px] text-[10px] text-muted2">{t("border.aspect")}</span>
+          <SegGroup
+            className="flex-1"
+            options={[null, ...CANVAS_ASPECTS].map((key) => ({
+              key: key || "photo",
+              label: key || t("border.aspectPhoto"),
+              active: (aspect ?? null) === key,
+              onClick: () => onAspect(key),
+            }))}
+          />
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between text-[10px] text-muted2">
           <span>{t("border.margin")}</span>
@@ -194,42 +217,110 @@ export default function BorderControls({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="min-w-[48px] text-[10px] text-muted2">{t("border.background")}</span>
-        <div className="flex items-center gap-1.5">
-          {["#ffffff", "#000000", "#f2f2f2"].map((c) => (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <span className="min-w-[48px] text-[10px] text-muted2">{t("border.background")}</span>
+          <div className="flex items-center gap-1.5">
+            {["#ffffff", "#000000", "#f2f2f2"].map((c) => (
+              <button
+                key={c} type="button"
+                onClick={() => onBg({ mode: "solid", color: c })}
+                className={`h-[18px] w-[18px] rounded-full border transition ${
+                  !photoBg && bgMode === "solid" && bgColor.toLowerCase() === c ? "border-[rgb(var(--accent-color))] ring-1 ring-[rgb(var(--accent-color))]" : "border-border/70 hover:border-muted"
+                }`}
+                style={{ background: c }}
+              />
+            ))}
             <button
-              key={c} type="button"
-              onClick={() => onBg({ mode: "solid", color: c })}
-              className={`h-[18px] w-[18px] rounded-full border transition ${
-                bgMode === "solid" && bgColor.toLowerCase() === c ? "border-[rgb(var(--accent-color))] ring-1 ring-[rgb(var(--accent-color))]" : "border-border/70 hover:border-muted"
-              }`}
-              style={{ background: c }}
+              ref={swatchRef} type="button" title={t("text.editColor")}
+              onClick={() => setPickerOpen((v) => !v)}
+              className="swatch-custom ml-0.5 h-[18px] w-[18px] cursor-pointer rounded-full border border-border/70"
+              style={{ background: swatchBg, "--swatch-r": "999px" }}
             />
-          ))}
-          <button
-            ref={swatchRef} type="button" title={t("text.editColor")}
-            onClick={() => setPickerOpen((v) => !v)}
-            className="swatch-custom ml-0.5 h-[18px] w-[18px] cursor-pointer rounded-full border border-border/70"
-            style={{ background: swatchBg, "--swatch-r": "999px" }}
+          </div>
+          {pickerOpen && (
+            <ColorPickerPopover
+              anchorEl={swatchRef.current}
+              onClose={() => setPickerOpen(false)}
+              color={bgColor}
+              onChange={(hex) => onBg({ ...bg, mode: "solid", color: hex })}
+              presets={COLOR_SWATCHES}
+              availableModes={["solid", "gradient"]}
+              mode={photoBg ? "solid" : bgMode}
+              // From the photo-colour background, "gradient" starts as an
+              // editable copy of it.
+              onModeChange={(m) => onBg({
+                ...bg, mode: m,
+                gradient: photoBg === "palette" && palette ? paletteGradient(palette) : bg?.gradient || DEFAULT_GRAD,
+              })}
+              gradient={grad}
+              onGradientChange={(patch) => onBg({ ...bg, mode: "gradient", gradient: { ...grad, ...patch } })}
+              multiStop
+            />
+          )}
+        </div>
+        <div className="flex items-center gap-1 pl-[56px]" data-frame-photo-bg="true">
+          {PHOTO_BGS.map((mode) => {
+            const on = photoBg === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                data-bg-mode={mode}
+                aria-pressed={on}
+                onClick={() => onBg(on ? bg : { mode, ...(mode === "palette" ? {} : { blur: bg?.blur ?? DEFAULT_BG_BLUR }) })}
+                className={`flex h-6 items-center gap-1.5 rounded-md border px-2 text-[11px] transition-colors ${
+                  on
+                    ? "border-[rgb(var(--accent-color)/0.5)] bg-[rgb(var(--accent-color)/0.1)] text-[rgb(var(--accent-color))]"
+                    : "border-border/60 text-muted hover:border-border hover:text-text"
+                }`}
+              >
+                {mode === "palette" && palette && (
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: gradientToCss(paletteGradient(palette)) }}
+                  />
+                )}
+                {t(`border.bg.${mode}`)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {photoBg === "blur" && (
+        <SliderRow
+          compact
+          label={t("border.blur")}
+          min={0} max={100}
+          value={bg.blur ?? DEFAULT_BG_BLUR}
+          onChange={(v) => onBg({ ...bg, blur: v }, { live: true })}
+          onCommit={(v) => onBg({ ...bg, blur: v })}
+          testId="frame-bg-blur"
+        />
+      )}
+      {onPhoto && (
+        <div className="flex flex-col gap-1.5" data-frame-photo-style="true">
+          <SliderRow
+            compact
+            label={t("border.radius")}
+            min={0} max={100}
+            value={photoStyle.radius}
+            onChange={(v) => setPhoto({ radius: v })}
+            onCommit={() => onPhotoCommit?.()}
+            testId="frame-photo-radius"
+          />
+          <SliderRow
+            compact
+            label={t("border.shadow")}
+            min={0} max={100}
+            value={photoStyle.shadow}
+            onChange={(v) => setPhoto({ shadow: v })}
+            onCommit={() => onPhotoCommit?.()}
+            testId="frame-photo-shadow"
           />
         </div>
-        {pickerOpen && (
-          <ColorPickerPopover
-            anchorEl={swatchRef.current}
-            onClose={() => setPickerOpen(false)}
-            color={bgColor}
-            onChange={(hex) => onBg({ ...bg, mode: "solid", color: hex })}
-            presets={COLOR_SWATCHES}
-            availableModes={["solid", "gradient"]}
-            mode={bgMode}
-            onModeChange={(m) => onBg({ ...bg, mode: m, gradient: bg?.gradient || DEFAULT_GRAD })}
-            gradient={grad}
-            onGradientChange={(patch) => onBg({ ...bg, mode: "gradient", gradient: { ...grad, ...patch } })}
-            multiStop
-          />
-        )}
-      </div>
+      )}
     </div>
   );
 }

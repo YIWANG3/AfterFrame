@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { backgroundLightness, layerBoxes, placeLogo, placeText, swapLogo } from "./logoPlacement";
+import {
+  backgroundLightness, layerBoxes, placeLogo, placeText, readableLogoColor, readableTextColor, swapLogo,
+} from "./logoPlacement";
 import { outputGeometry } from "./frameUserTemplates";
 
 const measure = (text, { fontPx }) => String(text).length * fontPx * 0.5;
@@ -108,5 +110,25 @@ describe("where my logo goes", () => {
     expect(swapLogo({ layer: middle, geom, aspect: 1 }).x).toBeCloseTo(0.5, 6);
     // Same shape: nothing moves.
     expect(swapLogo({ layer: right, geom, aspect: 4 })).toMatchObject({ x: right.x, scale: right.scale });
+  });
+});
+
+describe("frame colours that read on what is behind them", () => {
+  it("lightens a template's dark ink on a dark background, keeping the grey line quieter", () => {
+    expect(readableTextColor("#1a1a1a", 0.2)).toBe("#f4f4f4");
+    expect(readableTextColor("#9a9a9a", 0.4)).toBe("#b8b8b8");
+    expect(readableTextColor("rgba(255,255,255,0.85)", 0.8)).toBe("#1a1a1a");
+  });
+
+  it("leaves a colour that already reads", () => {
+    expect(readableTextColor("#1a1a1a", 0.95)).toBeNull();
+    expect(readableTextColor("#f4f4f4", 0.15)).toBeNull();
+  });
+
+  it("re-tints only a plain logo that would not read", () => {
+    expect(readableLogoColor(null, 0.2)).toBe("#ffffff");
+    expect(readableLogoColor("#ffffff", 0.9)).toBe("#141414");
+    expect(readableLogoColor("#141414", 0.9)).toBeNull();
+    expect(readableLogoColor("#c9a227", 0.2)).toBeNull();
   });
 });

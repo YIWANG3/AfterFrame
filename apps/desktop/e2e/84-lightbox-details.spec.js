@@ -30,9 +30,8 @@ test.beforeAll(async () => {
   await expect(galleryCards(w()).first()).toBeVisible({ timeout: 15_000 });
   await galleryCards(w()).first().dblclick();
   await expect(photo()).toBeVisible({ timeout: 10_000 });
-  // Making room is the pinned layout; unpinned, the pane floats over the
-  // photo (85-lightbox-pin). The pin is remembered, so it holds after the
-  // close and reopen below too.
+  // Keep the controls visible for this suite's clicks. The pin is remembered
+  // when the lightbox closes and reopens.
   await pinLightboxControls(w());
 });
 

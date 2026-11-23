@@ -49,6 +49,8 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - RAW files from 1,200+ cameras read with [LibRaw](https://www.libraw.org/): the camera's embedded preview when it's big enough, a full decode when it isn't; RAW HD previews are made when you open the photo, not at import
 - Two preview tiers: fast 512px thumbnails always, plus optional 2000px HD previews (toggle in Settings → Library, off by default to save disk)
 - Optional RAW source indexing and matching by filename
+- **A RAW+JPG shot is one photo**: a camera's RAW and JPG of one shot, side by side in a folder, show as one photo badged JPG+RAW, and a rating, flag or tag applies to both files. Settings → Library shows them as two again, per catalog
+- **Missing originals in one view**: photos whose files were moved or deleted gather in Missing Originals, to relink them all from a folder (by file name, and only where the content matches) or remove them from the library
 - Photos, RAW and video in the formats photographers actually shoot — JPEG, HEIF (`.heic` / `.hif`), TIFF, PSD, 38 RAW types, AVCHD and the usual containers; the full list is in Settings → Library → Supported formats, and an import tells you which files it skipped. Anything the viewer can't decode itself is rendered on demand, so it shows at full resolution everywhere
 - Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
 - Bilingual interface (English / 简体中文) — switch live in Settings → General
@@ -75,7 +77,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - **Copy** (⌘C) puts the selected photos on the clipboard as files, like Finder: paste them in Finder, WeChat, Notes or anything that takes a file drop
 - Full metadata inspector: EXIF, camera, lens, exposure, dates
 - **A lightbox that gets out of the way**: the photo fills the window and the bars come out when the pointer reaches the top, the bottom or an arrow; the pin keeps them out, with the photo fitted between them
-- **Details in the lightbox**: **I** brings the photo's details out beside it (camera, exposure, dates, location, rating, flag, description and tags, editable there). With the bars pinned the photo makes room; unpinned, the details float over it
+- **Details in the lightbox**: **I** brings the photo's details out beside it (camera, exposure, dates, location, rating, flag, description and tags, editable there). The photo makes room for the pane with the bars pinned or unpinned
 - Star rating system (imports Lightroom XMP ratings, from the file or its `.xmp` sidecar, and follows them until you rate here)
 - Pick and reject flags as in Lightroom (**P** / **X** / **U**, with **Shift** to move on to the next photo), and **Delete Rejected Photos…** to take the rejects out of the library or move them to the Trash
 - **Add Tags…** (**T**) tags every selected photo at once. Your tags and the AI's share one list, and a description you write wins over the AI's caption

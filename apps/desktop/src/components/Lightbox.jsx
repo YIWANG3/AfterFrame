@@ -17,7 +17,7 @@ const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
 const WHEEL_ZOOM_SENSITIVITY = 0.014;
 const DETAIL_SETTLE_DELAY_MS = 180;
-const CONTROLS_HIDE_DELAY_MS = 350;
+const CONTROLS_HIDE_DELAY_MS = 500;
 
 function OverlayButton({ children, className = "", ...props }) {
   return (
@@ -135,8 +135,7 @@ export default function Lightbox({
   onIndexChange,
   // The photo's details, docked on the right: the pane (a node the caller
   // builds), whether it is out, and the toggle. Without a pane there is no
-  // button. The pane reserves space beside a pinned preview and floats
-  // above the photo when the controls are unpinned.
+  // button. The pane reserves space beside the preview.
   info = null,
   infoOpen = false,
   onToggleInfo,
@@ -406,7 +405,7 @@ export default function Lightbox({
 
   useLayoutEffect(() => {
     updateFitForLayout();
-  }, [controlsPinned]);
+  }, [controlsPinned, showInfo]);
 
   function zoomFromCenter(nextScale, previewDuringMotion = false) {
     const viewport = viewportRef.current;
@@ -786,6 +785,7 @@ export default function Lightbox({
               className="theme-dark !h-9 !w-9 aria-pressed:bg-hover aria-pressed:text-text"
               onClick={(event) => {
                 event.stopPropagation();
+                if (event.detail > 0) event.currentTarget.blur();
                 if (controlsPinned) setControlsRevealed(true);
                 setControlsPinned(!controlsPinned);
               }}
