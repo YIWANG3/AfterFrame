@@ -103,3 +103,22 @@ test("the number pad's - / 0 with ⌘ (Ctrl) work too", async () => {
   await numpad("num0");
   await expect.poll(zoomFactor).toBe(1);
 });
+
+// Off 100%, Chromium drops the fade (the mask) of a backdrop-filter that sits
+// under an ancestor's clip-path, unless that ancestor is a compositing layer
+// of its own: the lightbox bars' blur then stopped at a hard edge. #root clips
+// the window's rounded corners and carries will-change: transform for this
+// (index.css). Screenshots differ from GPU to GPU, so this holds the rule in
+// place rather than comparing pixels.
+test("zoomed out, the window's rounded clip keeps a layer of its own, so the bars' glass still fades", async () => {
+  await clickMenu("view-zoom-out");
+  await expect.poll(zoomFactor).toBe(0.9);
+  const root = await ctx.window.evaluate(() => {
+    const style = getComputedStyle(document.getElementById("root"));
+    return { willChange: style.willChange, clipPath: style.clipPath };
+  });
+  expect(root.willChange).toBe("transform");
+  if (process.platform === "darwin") expect(root.clipPath).toContain("round");
+  await clickMenu("view-zoom-reset");
+  await expect.poll(zoomFactor).toBe(1);
+});
