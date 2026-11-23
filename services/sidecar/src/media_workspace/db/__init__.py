@@ -90,6 +90,8 @@ from .locations import (
 )
 from .maintenance import delete_image_asset_from_catalog, relink_asset, relink_assets_from_folder, summary, verify_assets
 from .people import (
+    PET_CLUSTER_THRESHOLD,
+    PET_SUBJECTS,
     assign_face_to_group,
     assign_faces_to_group,
     get_asset_people,

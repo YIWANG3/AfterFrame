@@ -48,6 +48,16 @@ def _write_scope(connection: sqlite3.Connection, savepoint: str, commit: bool) -
 
 EMBEDDING_DIMENSIONS = 512
 _QUALITY_VALUES = {"standard", "low"}
+# A row in asset_faces is a face, or a cat or dog found by a pet model (its
+# own model_id, so its vectors never meet a face's). See
+# docs/pet-recognition-design.md.
+PET_SUBJECTS = ("cat", "dog")
+SUBJECTS = ("person", *PET_SUBJECTS)
+# Pet models pick their own vector size; this only rejects nonsense.
+_PET_DIMENSIONS = range(16, 4097)
+# Cosine similarity two animals need to group, for the bundled DINOv2 Small
+# (electron/petModel.js has the same number; a chosen model may bring its own).
+PET_CLUSTER_THRESHOLD = 0.58
 
 
 def upsert_face_model(
@@ -154,6 +164,7 @@ def replace_asset_faces(
     faces: Iterable[dict[str, Any]],
     file_size: int | None = None,
     file_mtime: float | None = None,
+    pets: bool = False,
     commit: bool = True,
 ) -> list[dict[str, object]]:
     """Atomically replace one asset's automatic face records for a model.
@@ -161,8 +172,9 @@ def replace_asset_faces(
     Re-analysis invalidates automatic membership for the replaced faces through
     foreign-key cascades. Confirmed group policy is handled by the future
     clustering/correction layer; this low-level writer only persists model output.
+    With ``pets`` the records are the cats and dogs a pet model found.
     """
-    prepared = [_validate_face(face) for face in faces]
+    prepared = [_validate_face(face, pets=pets) for face in faces]
     savepoint = "people_replace_faces"
     with _write_scope(connection, savepoint, commit):
         connection.execute(
@@ -180,8 +192,8 @@ def replace_asset_faces(
                 INSERT INTO asset_faces (
                     face_id, asset_id, model_id, model_version, bbox_json,
                     landmarks_json, quality, detection_confidence, embedding_blob,
-                    thumbnail_key
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    thumbnail_key, subject
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     face_id,
@@ -194,6 +206,7 @@ def replace_asset_faces(
                     face["confidence"],
                     sqlite3.Binary(face["embedding_blob"]),
                     face.get("thumbnail_key"),
+                    face["subject"],
                 ),
             )
             inserted.append({"face_id": face_id, **_public_face(face)})
@@ -237,7 +250,7 @@ def list_asset_faces(
     rows = connection.execute(
         """
         SELECT face_id, bbox_json, landmarks_json, quality, detection_confidence,
-               embedding_blob, thumbnail_key, created_at
+               embedding_blob, thumbnail_key, subject, created_at
         FROM asset_faces
         WHERE asset_id = ? AND model_id = ? AND model_version = ?
         ORDER BY created_at ASC, face_id ASC
@@ -253,6 +266,7 @@ def list_asset_faces(
             "quality": row["quality"],
             "confidence": float(row["detection_confidence"]),
             "thumbnail_key": row["thumbnail_key"],
+            "subject": row["subject"],
             "created_at": row["created_at"],
         }
         if include_embedding:
@@ -268,13 +282,16 @@ def list_people_index_candidates(
     model_version: str,
     asset_ids: Iterable[str] | None = None,
     limit: int | None = None,
+    pet_model_id: str | None = None,
+    pet_model_version: str | None = None,
 ) -> list[dict[str, object]]:
     """Return deterministic image assets and their current model-specific hash.
 
     The worker still decodes an asset to calculate people_input_hash, but a
-    matching value lets it skip Vision/Core ML inference entirely.
+    matching value lets it skip Vision/Core ML inference entirely. With a pet
+    model, each row also carries that model's index record (``pet_*``).
     """
-    params: list[object] = [model_id, model_version]
+    params: list[object] = [pet_model_id or "", pet_model_version or "", model_id, model_version]
     asset_clause = ""
     ids = list(asset_ids or [])
     if ids:
@@ -289,8 +306,14 @@ def list_people_index_candidates(
         f"""
         SELECT assets.asset_id, assets.canonical_path,
                people_asset_index.input_hash, people_asset_index.status AS index_status,
-               people_asset_index.file_size, people_asset_index.file_mtime
+               people_asset_index.file_size, people_asset_index.file_mtime,
+               pet.input_hash AS pet_input_hash, pet.status AS pet_index_status,
+               pet.file_size AS pet_file_size, pet.file_mtime AS pet_file_mtime
         FROM assets
+        LEFT JOIN people_asset_index AS pet
+          ON pet.asset_id = assets.asset_id
+         AND pet.model_id = ?
+         AND pet.model_version = ?
         LEFT JOIN people_asset_index
           ON people_asset_index.asset_id = assets.asset_id
          AND people_asset_index.model_id = ?
@@ -326,7 +349,8 @@ def rebuild_candidate_groups(
     blocks the transitive chains that single-link merging produces. Faces that
     appear in the same photo are different people by default (a cannot-link),
     so clusters sharing an asset never merge automatically. Named and confirmed
-    groups are deliberately left untouched.
+    groups are deliberately left untouched. Cats and dogs never merge either,
+    and each group records what its members are.
     """
     import numpy as np
 
@@ -399,7 +423,7 @@ def rebuild_candidate_groups(
         # must not reshuffle into new candidates.
         rows = connection.execute(
             """
-            SELECT f.face_id, f.asset_id, f.embedding_blob, f.quality
+            SELECT f.face_id, f.asset_id, f.embedding_blob, f.quality, f.subject
             FROM asset_faces AS f
             WHERE f.model_id = ? AND f.model_version = ?
               AND NOT EXISTS (
@@ -410,16 +434,22 @@ def rebuild_candidate_groups(
             """,
             (model_id, model_version),
         ).fetchall()
+        # One model, one vector size (512 for faces, the pet model's own for
+        # pets); a row of another size can't be compared, so it sits out.
+        if rows:
+            blob_size = len(rows[0]["embedding_blob"])
+            rows = [row for row in rows if len(row["embedding_blob"]) == blob_size]
         if len(rows) < 2:
             return {"faces": len(rows), "groups": 0, "members": 0}
 
         vectors = np.vstack([
-            np.frombuffer(row["embedding_blob"], dtype="<f4", count=EMBEDDING_DIMENSIONS)
+            np.frombuffer(row["embedding_blob"], dtype="<f4")
             for row in rows
         ]).astype(np.float32, copy=False)
         vectors /= np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), np.finfo(np.float32).eps)
         low_quality = np.asarray([row["quality"] == "low" for row in rows], dtype=bool)
         asset_ids = [row["asset_id"] for row in rows]
+        subjects = [row["subject"] for row in rows]
 
         # Collect above-threshold candidate edges blockwise: at 10k faces a
         # 512-row block occupies ~20 MB, and capping neighbors per face keeps
@@ -442,6 +472,8 @@ def rebuild_candidate_groups(
                     candidates = candidates[strongest]
                 for candidate in candidates.tolist():
                     if asset_ids[global_index] == asset_ids[candidate]:
+                        continue
+                    if subjects[global_index] != subjects[candidate]:
                         continue
                     edges.append((float(similarities[local_index, candidate]), int(candidate), global_index))
 
@@ -504,10 +536,10 @@ def rebuild_candidate_groups(
             group_id = f"person_{uuid4().hex}"
             connection.execute(
                 """
-                INSERT INTO person_groups (group_id, model_id, model_version, cover_face_id, state)
-                VALUES (?, ?, ?, ?, 'candidate')
+                INSERT INTO person_groups (group_id, model_id, model_version, cover_face_id, state, subject)
+                VALUES (?, ?, ?, ?, 'candidate', ?)
                 """,
-                (group_id, model_id, model_version, rows[cover_index]["face_id"]),
+                (group_id, model_id, model_version, rows[cover_index]["face_id"], subjects[cover_index]),
             )
             connection.executemany(
                 """
@@ -549,11 +581,13 @@ def list_person_groups(
             pg.state,
             pg.model_id,
             pg.model_version,
+            pg.subject,
             pg.created_at,
             COUNT(DISTINCT pgf.face_id) AS face_count,
             cover.face_id AS cover_face_id,
             cover.asset_id AS cover_asset_id,
             cover.bbox_json AS cover_bbox_json,
+            cover.landmarks_json AS cover_landmarks_json,
             cover_asset.canonical_path AS cover_image_path,
             preview.relative_path AS cover_preview_relative_path
         FROM person_groups AS pg
@@ -595,15 +629,26 @@ def list_person_groups(
     for row in rows:
         payload = dict(row)
         bbox_json = payload.pop("cover_bbox_json", None)
-        payload["cover_bbox"] = json.loads(bbox_json) if bbox_json else None
+        landmarks_json = payload.pop("cover_landmarks_json", None)
+        payload["cover_bbox"] = _cover_box(payload["subject"], bbox_json, landmarks_json)
         result.append(payload)
     return result
+
+
+def _cover_box(subject: object, bbox_json: str | None, landmarks_json: str | None) -> list[float] | None:
+    """The part of the photo a tile shows: the face, or a pet's head when the
+    pose found one (its landmarks), else the pet's whole body."""
+    if subject in PET_SUBJECTS and landmarks_json:
+        head = json.loads(landmarks_json)
+        if isinstance(head, list) and len(head) == 4:
+            return [float(value) for value in head]
+    return json.loads(bbox_json) if bbox_json else None
 
 
 def _person_group_row(connection: sqlite3.Connection, group_id: str) -> dict[str, object]:
     row = connection.execute(
         """
-        SELECT pg.group_id, pg.name, pg.state, pg.model_id, pg.model_version,
+        SELECT pg.group_id, pg.name, pg.state, pg.model_id, pg.model_version, pg.subject,
                COALESCE(
                    pg.cover_face_id,
                    (
@@ -655,17 +700,17 @@ def list_similar_person_groups(
         JOIN person_group_faces AS pgf
             ON pgf.group_id = pg.group_id AND pgf.membership_state != 'rejected'
         JOIN asset_faces AS f ON f.face_id = pgf.face_id
-        WHERE pg.model_id = ? AND pg.model_version = ?
+        WHERE pg.model_id = ? AND pg.model_version = ? AND pg.subject = ?
           AND (
               pg.group_id = ?
               OR (pg.name IS NOT NULL AND TRIM(pg.name) != '' AND pg.state != 'ignored')
           )
         """,
-        (source["model_id"], source["model_version"], group_id),
+        (source["model_id"], source["model_version"], source["subject"], group_id),
     ).fetchall()
     sums: dict[str, np.ndarray] = {}
     for row in rows:
-        vector = np.frombuffer(row["embedding_blob"], dtype="<f4", count=EMBEDDING_DIMENSIONS).astype(np.float64)
+        vector = np.frombuffer(row["embedding_blob"], dtype="<f4").astype(np.float64)
         norm = float(np.linalg.norm(vector))
         if norm <= 0:
             continue
@@ -923,7 +968,7 @@ def assign_face_to_group(
 ) -> dict[str, object]:
     """User correction: move one face into a specific person group."""
     face = connection.execute(
-        "SELECT model_id, model_version FROM asset_faces WHERE face_id = ?",
+        "SELECT model_id, model_version, subject FROM asset_faces WHERE face_id = ?",
         (face_id,),
     ).fetchone()
     if face is None:
@@ -931,6 +976,8 @@ def assign_face_to_group(
     target = _person_group_row(connection, group_id)
     if (face["model_id"], face["model_version"]) != (target["model_id"], target["model_version"]):
         raise ValueError("face and person group belong to different model versions")
+    if face["subject"] != target["subject"]:
+        raise ValueError(f"a {face['subject']} can't join a group of {target['subject']}s")
     existing = connection.execute(
         "SELECT group_id FROM person_group_faces WHERE face_id = ?",
         (face_id,),
@@ -1039,6 +1086,8 @@ def merge_person_groups(
     target = _person_group_row(connection, target_group_id)
     if (source["model_id"], source["model_version"]) != (target["model_id"], target["model_version"]):
         raise ValueError("person groups from different model versions cannot be merged")
+    if source["subject"] != target["subject"]:
+        raise ValueError(f"a group of {source['subject']}s can't merge into a group of {target['subject']}s")
     savepoint = "people_merge_groups"
     with _write_scope(connection, savepoint, commit):
         connection.execute(
@@ -1061,7 +1110,7 @@ def get_asset_people(connection: sqlite3.Connection, *, asset_id: str) -> dict[s
     """Compact Inspector payload; the gallery only needs the has_face boolean."""
     rows = connection.execute(
         """
-        SELECT f.face_id, f.quality, f.detection_confidence, f.bbox_json,
+        SELECT f.face_id, f.quality, f.detection_confidence, f.bbox_json, f.subject,
                pg.group_id, pg.name, pg.state, pg.model_id, pg.model_version
         FROM asset_faces AS f
         LEFT JOIN person_group_faces AS pgf
@@ -1077,19 +1126,42 @@ def get_asset_people(connection: sqlite3.Connection, *, asset_id: str) -> dict[s
         "quality": row["quality"],
         "confidence": float(row["detection_confidence"]),
         "bounding_box": json.loads(row["bbox_json"]),
+        "subject": row["subject"],
         "group_id": row["group_id"],
         "name": row["name"],
         "group_state": row["state"],
         "model_id": row["model_id"],
         "model_version": row["model_version"],
     } for row in rows]
-    return {"has_face": bool(faces), "face_count": len(faces), "faces": faces}
+    # has_face / face_count stay about people (the gallery's face badge);
+    # the pets are counted beside them and listed in the same `faces`.
+    people = [face for face in faces if face["subject"] == "person"]
+    return {
+        "has_face": bool(people),
+        "face_count": len(people),
+        "pet_count": len(faces) - len(people),
+        "faces": faces,
+    }
 
 
-def _validate_face(face: dict[str, Any]) -> dict[str, Any]:
+def _validate_face(face: dict[str, Any], *, pets: bool = False) -> dict[str, Any]:
     bbox = _numbers(face.get("bounding_box"), expected=4, label="bounding_box")
-    landmarks = _numbers(face.get("landmarks"), expected=10, label="landmarks")
-    embedding = _numbers(face.get("embedding"), expected=EMBEDDING_DIMENSIONS, label="embedding")
+    if pets:
+        subject = str(face.get("subject") or "")
+        if subject not in PET_SUBJECTS:
+            raise ValueError(f"unsupported pet subject: {subject!r}")
+        # The head box, or nothing when the pose found no head.
+        raw_landmarks = face.get("landmarks") or []
+        landmarks = _numbers(raw_landmarks, expected=4, label="landmarks") if raw_landmarks else []
+        raw_embedding = face.get("embedding")
+        size = len(raw_embedding) if isinstance(raw_embedding, (list, tuple)) else 0
+        if size not in _PET_DIMENSIONS:
+            raise ValueError("pet embedding must have between 16 and 4096 values")
+        embedding = _numbers(raw_embedding, expected=size, label="embedding")
+    else:
+        subject = "person"
+        landmarks = _numbers(face.get("landmarks"), expected=10, label="landmarks")
+        embedding = _numbers(face.get("embedding"), expected=EMBEDDING_DIMENSIONS, label="embedding")
     quality = str(face.get("quality") or "")
     if quality not in _QUALITY_VALUES:
         raise ValueError(f"unsupported face quality: {quality!r}")
@@ -1108,8 +1180,9 @@ def _validate_face(face: dict[str, Any]) -> dict[str, Any]:
         "landmarks": landmarks,
         "quality": quality,
         "confidence": confidence,
-        "embedding_blob": struct.pack(f"<{EMBEDDING_DIMENSIONS}f", *embedding),
+        "embedding_blob": struct.pack(f"<{len(embedding)}f", *embedding),
         "thumbnail_key": face.get("thumbnail_key"),
+        "subject": subject,
     }
 
 
@@ -1123,9 +1196,9 @@ def _numbers(value: Any, *, expected: int, label: str) -> list[float]:
 
 
 def _decode_embedding(blob: bytes) -> list[float]:
-    if len(blob) != EMBEDDING_DIMENSIONS * 4:
+    if not blob or len(blob) % 4:
         raise ValueError("stored embedding has an unexpected byte length")
-    return list(struct.unpack(f"<{EMBEDDING_DIMENSIONS}f", blob))
+    return list(struct.unpack(f"<{len(blob) // 4}f", blob))
 
 
 def _public_face(face: dict[str, Any]) -> dict[str, object]:
@@ -1135,4 +1208,5 @@ def _public_face(face: dict[str, Any]) -> dict[str, object]:
         "quality": face["quality"],
         "confidence": face["confidence"],
         "thumbnail_key": face.get("thumbnail_key"),
+        "subject": face["subject"],
     }

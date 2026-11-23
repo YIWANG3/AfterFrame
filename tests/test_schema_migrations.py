@@ -251,6 +251,38 @@ class ColorsMigrationTest(unittest.TestCase):
         self.assertEqual(connection.execute("SELECT COUNT(*) FROM collection_items").fetchone()[0], 1)
 
 
+    def test_v15_faces_and_groups_become_people(self) -> None:
+        # Pets (v16): face rows and person groups get a subject; everything a
+        # v15 catalog has is a person, and its rows come through untouched.
+        connection = sqlite3.connect(":memory:")
+        self.addCleanup(connection.close)
+        connection.row_factory = sqlite3.Row
+        init_db(connection)
+        connection.execute(
+            "INSERT INTO assets (asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension, fingerprint, file_size, modified_time) "
+            "VALUES ('image_a', 'image', '/p/a.jpg', 'a', 'a', 'a', '.jpg', 'fp', 1, '2026-01-01')"
+        )
+        connection.execute("INSERT INTO face_models (model_id, model_version, kind, manifest_hash) VALUES ('arcface', '1', 'arcface', 'h')")
+        connection.execute(
+            "INSERT INTO asset_faces (face_id, asset_id, model_id, model_version, bbox_json, landmarks_json, quality, detection_confidence, embedding_blob) "
+            "VALUES ('face_1', 'image_a', 'arcface', '1', '[0,0,1,1]', '[]', 'standard', 0.9, x'00')"
+        )
+        connection.execute("INSERT INTO person_groups (group_id, model_id, model_version, name, state) VALUES ('person_1', 'arcface', '1', 'Ann', 'confirmed')")
+        connection.execute("INSERT INTO person_group_faces (group_id, face_id) VALUES ('person_1', 'face_1')")
+        connection.execute("ALTER TABLE asset_faces DROP COLUMN subject")
+        connection.execute("ALTER TABLE person_groups DROP COLUMN subject")
+        connection.execute("UPDATE catalog_info SET schema_version = 15")
+        connection.execute("PRAGMA user_version = 0")
+        connection.commit()
+
+        init_db(connection)
+
+        self.assertEqual(connection.execute("SELECT schema_version FROM catalog_info").fetchone()[0], SCHEMA_VERSION)
+        self.assertEqual(connection.execute("SELECT face_id, subject FROM asset_faces").fetchall()[0][:], ("face_1", "person"))
+        self.assertEqual(connection.execute("SELECT name, subject FROM person_groups").fetchall()[0][:], ("Ann", "person"))
+        self.assertEqual(connection.execute("SELECT COUNT(*) FROM person_group_faces").fetchone()[0], 1)
+
+
 class CaptureTimeMigrationTest(unittest.TestCase):
     def test_photo_capture_times_lose_their_false_utc_label(self) -> None:
         # EXIF's clock time was stored as +00:00 and shown shifted by the

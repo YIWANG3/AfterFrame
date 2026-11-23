@@ -287,12 +287,28 @@ def _tag_group(filters: dict) -> list[Clause]:
 
 
 def _people(filters: dict) -> list[Clause]:
-    faces = "EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id)"
+    faces = "EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id AND face.subject = 'person')"
     if filters.get("people") == "with_faces":
         return [(faces, [])]
     if filters.get("people") == "without_faces":
         return [(f"NOT {faces}", [])]
     return []
+
+
+_PET_VALUES = {"any": ("cat", "dog"), "cat": ("cat",), "dog": ("dog",)}
+
+
+def _pets(filters: dict) -> list[Clause]:
+    """Photos with a cat or dog the pet model found (any / cat / dog), or
+    none. Detection alone: the animal needn't be in a group or named."""
+    value = filters.get("pets")
+    if value == "none":
+        return [("NOT EXISTS (SELECT 1 FROM asset_faces AS pet WHERE pet.asset_id = assets.asset_id AND pet.subject IN ('cat', 'dog'))", [])]
+    subjects = _PET_VALUES.get(str(value)) if value else None
+    if not subjects:
+        return []
+    cond, params = _in("pet.subject", list(subjects))
+    return [(f"EXISTS (SELECT 1 FROM asset_faces AS pet WHERE pet.asset_id = assets.asset_id AND {cond})", params)]
 
 
 def _annotated(filters: dict) -> list[Clause]:
@@ -518,6 +534,7 @@ FACETS: tuple[Facet, ...] = (
     Facet("tag_group", ("tag_group",), _tag_group),
     Facet("extension", ("extension",), _extension),
     Facet("people", ("people",), _people),
+    Facet("pets", ("pets",), _pets),
     Facet("annotated", ("annotated",), _annotated),
     Facet("has_raw", ("has_raw",), _has_raw),
     Facet("person_group", ("person_group",), _person_group),

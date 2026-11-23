@@ -34,6 +34,7 @@ from .ai_repaint import (
 from .catalog import ensure_catalog
 from .config import Thresholds
 from .db import (
+    PET_CLUSTER_THRESHOLD,
     add_collection_items,
     attach_asset_to_resource_set,
     get_job,
@@ -172,6 +173,32 @@ def _drain_stderr(stream: Any, tail: deque[str]) -> None:
             tail.append(line.rstrip("\n"))
 
 
+def _index_unchanged(file_stat: os.stat_result | None, known_hash: object, size: object, mtime: object) -> bool:
+    """An indexed file whose size and mtime are what the index recorded."""
+    return bool(
+        known_hash
+        and file_stat is not None
+        and size == file_stat.st_size
+        and isinstance(mtime, (int, float))
+        and abs(float(mtime) - file_stat.st_mtime) < 1e-6
+    )
+
+
+def _refresh_index_stat(connection, file_stat: os.stat_result | None, asset_id: str, model_id: str, model_version: str) -> None:
+    """The pixel hash matched but the stat gate missed (or had no record):
+    store the stat so the next scan skips this file without decoding it."""
+    if file_stat is None:
+        return
+    connection.execute(
+        """
+        UPDATE people_asset_index
+        SET file_size = ?, file_mtime = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE asset_id = ? AND model_id = ? AND model_version = ?
+        """,
+        (file_stat.st_size, file_stat.st_mtime, asset_id, model_id, model_version),
+    )
+
+
 def run_people_index_job(
     connection,
     job_id: str,
@@ -184,12 +211,21 @@ def run_people_index_job(
     asset_ids: list[str] | None = None,
     limit: int | None = None,
     cluster_every: int = 300,
+    pet_model_id: str | None = None,
+    pet_model_version: str | None = None,
+    pet_model_path: Path | None = None,
+    pet_manifest_hash: str | None = None,
+    pet_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Run one resumable batch through the precompiled native people worker.
 
     The sidecar owns the child process and all database writes. A worker result
     is committed at an asset boundary, then the job cursor advances, so a crash
     never leaves a partially-written face set or an ambiguous resume point.
+
+    With a pet model the same pass finds cats and dogs too (one decode per
+    photo): they are written under the pet model's id, each half keeps its
+    own index record and skips on its own, and both are clustered at the end.
     """
     job = get_job(connection, job_id)
     if not job:
@@ -201,6 +237,11 @@ def run_people_index_job(
         raise FileNotFoundError("People Worker is not available; PEOPLE_WORKER_PATH must point to the packaged binary")
     if not model_path.exists():
         raise FileNotFoundError(f"People model is missing: {model_path}")
+    pets = bool(pet_model_id and pet_model_version and pet_model_path and pet_manifest_hash)
+    if pets and pet_model_path is not None and not pet_model_path.exists():
+        raise FileNotFoundError(f"Pet model is missing: {pet_model_path}")
+    pet_id = str(pet_model_id) if pets else ""
+    pet_version = str(pet_model_version) if pets else ""
 
     def checkpoint() -> None:
         _check_cancel(connection, job_id)
@@ -222,12 +263,23 @@ def run_people_index_job(
         manifest_hash=manifest_hash,
         commit=False,
     )
+    if pets:
+        upsert_face_model(
+            connection,
+            model_id=pet_id,
+            model_version=pet_version,
+            kind="pet",
+            manifest_hash=str(pet_manifest_hash),
+            commit=False,
+        )
     candidates = list_people_index_candidates(
         connection,
         model_id=model_id,
         model_version=model_version,
         asset_ids=requested_ids,
         limit=limit,
+        pet_model_id=pet_id or None,
+        pet_model_version=pet_version or None,
     )
     resolved_asset_ids = [str(candidate["asset_id"]) for candidate in candidates]
     cursor = _as_dict(job.get("resume_cursor"))
@@ -239,9 +291,16 @@ def run_people_index_job(
         "model_id": model_id,
         "model_version": model_version,
         "model_path": str(model_path.resolve()),
+        **({
+            "pet_model_id": pet_id,
+            "pet_model_version": pet_version,
+            "pet_model_path": str(Path(str(pet_model_path)).resolve()),
+            "pet_manifest_hash": pet_manifest_hash,
+            "pet_threshold": pet_threshold,
+        } if pets else {}),
         "resolved_asset_ids": resolved_asset_ids,
         "phase": "people_index",
-        "phase_label": "Analyze People",
+        "phase_label": "Analyze People and Pets" if pets else "Analyze People",
         "phase_index": 1,
         "phase_count": 2,
     }
@@ -252,6 +311,7 @@ def run_people_index_job(
         "skipped": int(prior_result.get("skipped", 0) or 0),
         "faces": int(prior_result.get("faces", 0) or 0),
         "failed": int(prior_result.get("failed", 0) or 0),
+        **({"pets": int(prior_result.get("pets", 0) or 0)} if pets else {}),
     }
     update_job(
         connection,
@@ -266,12 +326,24 @@ def run_people_index_job(
         error_text=None,
     )
 
+    def cluster_pets() -> dict[str, int] | None:
+        if not pets:
+            return None
+        return rebuild_candidate_groups(
+            connection,
+            model_id=pet_id,
+            model_version=pet_version,
+            threshold=pet_threshold if pet_threshold is not None else PET_CLUSTER_THRESHOLD,
+            checkpoint=checkpoint,
+            commit=False,
+        )
+
     def cluster_and_finish(resume_cursor: dict[str, int]) -> dict[str, Any]:
         """Phase 2: group the faces into candidates, then mark the job done."""
         clustering_payload = {
             **payload,
             "phase": "people_cluster",
-            "phase_label": "Build People Candidates",
+            "phase_label": "Build People and Pet Candidates" if pets else "Build People Candidates",
             "phase_index": 2,
             "phase_count": 2,
         }
@@ -289,11 +361,13 @@ def run_people_index_job(
             checkpoint=checkpoint,
             commit=False,
         )
+        pet_grouping = cluster_pets()
         connection.commit()
         final = {
             **stats,
             "groups": grouping["groups"],
             "group_members": grouping["members"],
+            **({"pet_groups": pet_grouping["groups"]} if pet_grouping is not None else {}),
             "current_phase": None,
         }
         update_job(
@@ -334,7 +408,8 @@ def run_people_index_job(
 
     try:
         worker = subprocess.Popen(
-            [str(resolved_worker), "--model", str(model_path), "--serve"],
+            [str(resolved_worker), "--model", str(model_path),
+             *(["--pet-model", str(pet_model_path)] if pets else []), "--serve"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -353,22 +428,20 @@ def run_people_index_job(
             _check_pause(connection, job_id)
             candidate = candidates[position]
             known_hash = candidate.get("input_hash") if candidate.get("index_status") == "indexed" else None
+            known_pet_hash = candidate.get("pet_input_hash") if candidate.get("pet_index_status") == "indexed" else None
             # Cheap pre-decode gate: an already-indexed file with unchanged
             # size+mtime skips without a worker round trip (no decode, no pixel
             # hash). Any stat difference falls through to the worker's
             # pixel-level check, which still catches content edits that a
-            # restored mtime would hide.
+            # restored mtime would hide. With pets, both halves must pass.
             file_stat = None
             try:
                 file_stat = os.stat(str(candidate["canonical_path"]))
             except OSError:
                 pass
-            if (
-                known_hash
-                and file_stat is not None
-                and candidate.get("file_size") == file_stat.st_size
-                and isinstance(candidate.get("file_mtime"), (int, float))
-                and abs(float(str(candidate["file_mtime"])) - file_stat.st_mtime) < 1e-6
+            if _index_unchanged(file_stat, known_hash, candidate.get("file_size"), candidate.get("file_mtime")) and (
+                not pets
+                or _index_unchanged(file_stat, known_pet_hash, candidate.get("pet_file_size"), candidate.get("pet_file_mtime"))
             ):
                 stats["skipped"] = int(stats["skipped"]) + 1
                 advance_cursor(position)
@@ -377,6 +450,7 @@ def run_people_index_job(
                 "id": str(candidate["asset_id"]),
                 "asset_path": str(candidate["canonical_path"]),
                 **({"known_input_hash": known_hash} if known_hash else {}),
+                **({"known_pet_input_hash": known_pet_hash} if pets and known_pet_hash else {}),
             }
             worker.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
             worker.stdin.flush()
@@ -389,25 +463,13 @@ def run_people_index_job(
             if str(response.get("id", "")) != str(candidate["asset_id"]):
                 raise RuntimeError("People Worker returned a response for an unexpected asset")
             if response.get("ok"):
+                input_hash = response.get("input_hash")
+                if not isinstance(input_hash, str) or not input_hash:
+                    raise RuntimeError("People Worker returned no input_hash")
+                analyzed = False
                 if response.get("skipped"):
-                    stats["skipped"] = int(stats["skipped"]) + 1
-                    # The pixel hash matched but the stat gate missed (or had no
-                    # record): refresh the stored stat so the next scan skips
-                    # this file without decoding it.
-                    if file_stat is not None:
-                        connection.execute(
-                            """
-                            UPDATE people_asset_index
-                            SET file_size = ?, file_mtime = ?, updated_at = CURRENT_TIMESTAMP
-                            WHERE asset_id = ? AND model_id = ? AND model_version = ?
-                            """,
-                            (file_stat.st_size, file_stat.st_mtime,
-                             str(candidate["asset_id"]), model_id, model_version),
-                        )
+                    _refresh_index_stat(connection, file_stat, str(candidate["asset_id"]), model_id, model_version)
                 else:
-                    input_hash = response.get("input_hash")
-                    if not isinstance(input_hash, str) or not input_hash:
-                        raise RuntimeError("People Worker returned no input_hash")
                     faces = response.get("faces")
                     if not isinstance(faces, list):
                         raise RuntimeError("People Worker returned an invalid faces payload")
@@ -422,9 +484,46 @@ def run_people_index_job(
                         file_mtime=file_stat.st_mtime if file_stat is not None else None,
                         commit=False,
                     )
-                    stats["analyzed"] = int(stats["analyzed"]) + 1
                     stats["faces"] = int(stats["faces"]) + len(faces)
+                    analyzed = True
+                if pets:
+                    animals = response.get("animals")
+                    if response.get("animals_skipped"):
+                        _refresh_index_stat(connection, file_stat, str(candidate["asset_id"]), pet_id, pet_version)
+                    elif isinstance(animals, list):
+                        replace_asset_faces(
+                            connection,
+                            asset_id=str(candidate["asset_id"]),
+                            model_id=pet_id,
+                            model_version=pet_version,
+                            input_hash=input_hash,
+                            faces=animals,
+                            file_size=file_stat.st_size if file_stat is not None else None,
+                            file_mtime=file_stat.st_mtime if file_stat is not None else None,
+                            pets=True,
+                            commit=False,
+                        )
+                        stats["pets"] = int(stats.get("pets", 0)) + len(animals)
+                        analyzed = True
+                    else:
+                        # The pet half failed while the faces came back: record
+                        # it for the pet model only, so the next scan retries.
+                        upsert_people_asset_index(
+                            connection,
+                            asset_id=str(candidate["asset_id"]),
+                            model_id=pet_id,
+                            model_version=pet_version,
+                            input_hash=None,
+                            status="failed",
+                            face_count=0,
+                            error_text=str(response.get("animals_error") or "People Worker returned no animals"),
+                            commit=False,
+                        )
+                if analyzed:
+                    stats["analyzed"] = int(stats["analyzed"]) + 1
                     analyzed_since_cluster += 1
+                else:
+                    stats["skipped"] = int(stats["skipped"]) + 1
                 connection.commit()
                 # Long scans should surface people progressively, not only at
                 # the end: re-cluster periodically so candidates appear on the
@@ -437,8 +536,11 @@ def run_people_index_job(
                         checkpoint=checkpoint,
                         commit=False,
                     )
+                    interim_pets = cluster_pets()
                     connection.commit()
                     stats["groups"] = interim["groups"]
+                    if interim_pets is not None:
+                        stats["pet_groups"] = interim_pets["groups"]
                     analyzed_since_cluster = 0
             else:
                 upsert_people_asset_index(

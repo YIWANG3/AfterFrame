@@ -77,7 +77,7 @@ _BROWSE_SELECT_COLUMNS = f"""\
             anno.detected_text AS anno_detected_text,
             anno.created_at AS anno_created_at,
             anno.updated_at AS anno_updated_at,
-            EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id) AS has_face"""
+            EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id AND face.subject = 'person') AS has_face"""
 
 _RESOURCE_SET_JOINS = f"""\
         LEFT JOIN assets AS raw_assets

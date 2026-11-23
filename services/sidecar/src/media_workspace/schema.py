@@ -1,6 +1,6 @@
 # Catalog schema version. This is the only authoritative version declaration;
 # migration code and the public db package both import it from here.
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 
 SCHEMA_STATEMENTS = [
@@ -297,6 +297,9 @@ SCHEMA_STATEMENTS = [
         detection_confidence REAL NOT NULL,
         embedding_blob BLOB NOT NULL,
         thumbnail_key TEXT,
+        -- 'person', or 'cat' / 'dog' for a pet model's row: then bbox_json is
+        -- the animal's body and landmarks_json its head box (or []).
+        subject TEXT NOT NULL DEFAULT 'person',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE,
         FOREIGN KEY(model_id, model_version) REFERENCES face_models(model_id, model_version) ON DELETE CASCADE
@@ -310,6 +313,8 @@ SCHEMA_STATEMENTS = [
         name TEXT,
         state TEXT NOT NULL DEFAULT 'candidate' CHECK (state IN ('candidate', 'confirmed', 'ignored')),
         cover_face_id TEXT,
+        -- What its members are: 'person', 'cat' or 'dog' (never mixed).
+        subject TEXT NOT NULL DEFAULT 'person',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(model_id, model_version) REFERENCES face_models(model_id, model_version) ON DELETE CASCADE,
