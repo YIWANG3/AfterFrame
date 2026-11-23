@@ -1,6 +1,6 @@
 # 宠物识别与分组设计
 
-> **状态（2026-11-23）**：开发中，分支 `feat/pet-recognition`。可行性原型已做完：脚本和测试集在 `research/pet-recognition-lab/`（`research/` 不进 git），本文第 3 节抄了全部结论数字，不依赖那个目录。已定：人和宠物放同一面墙、导航名改成“人物与宠物”、宠物识别默认开、用 DINOv2-S 随包、所有模型统一放 AfterFrame 自己的 GitHub Release（5.5）、模型可由用户替换、标定照片由用户准备。第 13 节还有 2 项待定。
+> **状态（2026-11-23）**：阶段 1、2 已在分支 `feat/pet-recognition` 实现（worker、模型、schema 16、人物任务带宠物、界面、MCP、e2e 97），见第 12 节；宠物模型还没传到 `models` release，打包脚本等阶段 0.5 合并后再加一行。实现和原设计的出入：宠物不另开任务，并进人物任务同一轮跑（5.2）。可行性原型已做完：脚本和测试集在 `research/pet-recognition-lab/`（`research/` 不进 git），本文第 3 节抄了全部结论数字，不依赖那个目录。已定：人和宠物放同一面墙、导航名改成“人物与宠物”、宠物识别默认开、用 DINOv2-S 随包、所有模型统一放 AfterFrame 自己的 GitHub Release（5.5）、模型可由用户替换、标定照片由用户准备、只被姿态检测找到的动物用分类器定猫狗。第 13 节还有 1 项待定。
 
 相关：[people-recognition-design.md](people-recognition-design.md)（人物识别，本文大量复用它的任务、数据和界面）、[local-models-plan.md](local-models-plan.md)（模型体积和分发规则）。
 
@@ -85,33 +85,36 @@ Meta 官方 PyTorch 权重转成 mlprogram，fp16，最低 macOS 14。ImageNet �
 ```text
 renderer：人物页（加宠物）/ Inspector / 筛选 / 设置
    │ 现有 IPC
-Electron main：解析 People Worker 和宠物模型路径，启动 pet_index 任务
+Electron main：解析 People Worker 和两个模型的路径，启动 people_index 任务（带上宠物模型）
    │ 环境变量 + CLI 参数
-sidecar job runner：pet_index 任务、写 asset_faces、聚类
+sidecar job runner：同一个任务里写人脸和猫狗的 asset_faces、各自聚类
    │ NDJSON（stdin / stdout）
-People Worker --kind pets：动物检测、裁框、Core ML DINOv2-S 向量
+People Worker --model … --pet-model …：人脸 + 动物检测、裁框、Core ML 向量
 ```
 
-### 5.1 Worker
+### 5.1 Worker（已实现）
 
-不新建二进制，给 `people-worker.swift` 加一个模式：`people-worker --kind pets --model DINOv2Small.mlpackage --serve`。读图、方向处理、`input_hash`、NDJSON 协议、stdout 只走协议这些都已经有了。
+不新建二进制，`people-worker.swift` 多收一个 `--pet-model`：`people-worker --model FaceEmbedding.mlpackage --pet-model PetEmbedding.mlpackage --serve`。每张照片只解码一次，人脸和猫狗在同一轮里出结果；`--pet-model X --self-test` 单独验一个宠物模型（设置里选模型时用）。读图、方向处理、`input_hash`、NDJSON 协议、stdout 只走协议都沿用。
 
-每张照片的流程（就是原型 `pet-probe.swift` 的做法）：
+每张照片的流程（原型 `pet-probe.swift` 的做法）：
 
-1. 按方向读图，长边最多 1600。
-2. 同一个 handler 上跑 `VNRecognizeAnimalsRequest` 和 `VNDetectAnimalBodyPoseRequest`。
-3. 识别器的框外扩 5%。姿态检测找到、但头部（或关键点中心）不在任何识别器框里的，用全部关键点（置信度 > 0.2，至少 5 个）的范围外扩 15% 再加 8 像素当身体框，太小（< 64 像素）的丢掉。
-4. 头部框：耳、眼、鼻关键点（置信度 > 0.3，至少 3 个且含眼或鼻）的范围，取正方形边长 1.6 倍，向下偏 8%（关键点到鼻子为止，嘴和下巴在下面）。只用来做封面，不参与向量。
-5. 身体框用灰色（128）补成正方形，缩到 224，进 Core ML，取 `embedding`（CLS），L2 归一化。
-6. 返回：`{"id","ok","input_hash","animals":[{"species":"cat|dog","source":"recognizer|pose","bbox":[…],"head_bbox":[…]|null,"keypoints":{…},"confidence":…,"quality":"standard|low","embedding":[…]}]}`。
+1. 用人脸那条路解码（按方向，长边最多 4096）。
+2. 同一个 handler 上跑 `VNRecognizeAnimalsRequest` 和 `VNDetectAnimalBodyPoseRequest`（后者要 macOS 14，代码里有可用性判断，macOS 12 的包照样能编）。
+3. 识别器的框外扩 5%。姿态检测找到、但头部（或关键点中心）不在任何识别器框里的，用全部关键点（置信度 > 0.2，至少 5 个）的范围外扩 15% 再加 8 像素当身体框。短边小于 64 像素的丢掉，小于 128 像素或只靠姿态找到的标 `low`。
+4. 只靠姿态找到的，接口不说是猫是狗：在身体框上跑 `VNClassifyImageRequest`，取 cat / adult_cat / kitten / feline 和 dog / canine / bulldog / sheepdog 两边的最高分，都不到 0.1 就丢掉。Commons 测试集上实测：阈值 0.1 留下 36 只、错 1 只；0.3 留下 27 只、错 1 只；不设阈值 42 只、错 3 只。
+5. 头部框：耳、眼、鼻关键点（置信度 > 0.3，至少 3 个且含眼或鼻）的范围，取正方形边长 1.6 倍，向下偏 8%。只用来做封面，不参与向量。
+6. 身体框用灰色（128）补成正方形，缩到模型的输入尺寸，进 Core ML，L2 归一化。
+7. 返回在原来的 `faces` 旁边多 `animals`（每只：`subject` cat / dog、`bounding_box` 身体框、`landmarks` 头部框或空、`confidence`、`quality`、`source` recognizer / pose、`embedding`）和 `animals_skipped`。请求带 `known_pet_input_hash`，和人脸各自按哈希跳过。宠物这半出错时 `animals` 为 null、写进 `animals_error`，人脸照常返回。
 
-只被姿态检测找到的动物，接口不告诉你是猫还是狗。原型里这类占 21%（34 / 162）。第一版的做法待定（第 13 节待定第 1 条）。
+### 5.2 sidecar（已实现，和原设计不同：不另开任务）
 
-### 5.2 sidecar
+原设计是单独的 `pet_index` 任务。实现时发现每个任务都是一个立即启动的独立进程，两个任务会同时跑、同时开两个 worker，违反人物设计稿“只跑一个 worker”的规矩，排队又要另做。所以宠物并进 `people_index`：
 
-- 新任务类型 `pet_index`，由 `run_people_index_job` 泛化而来（按 `kind` 选 worker 模式和聚类参数），沿用 priority、暂停、恢复游标、按资产提交事务那一套。`tasks.js` 里 people_index 恢复时要重启 worker 的分支同样适用于 pet_index。
-- `upsert_face_model` 写 `kind = 'pet-dinov2-s'`。
-- 聚类见第 7 节。
+- `run_people_index_job` 多收 `--pet-model-id / -version / -path / --pet-manifest-hash / --pet-threshold`，同一个 worker 进程同时加载两个模型。
+- 人脸和宠物各有自己的 `people_asset_index` 记录（按各自的 model_id），各自按 stat 和像素哈希跳过：两半都没变才整张跳过；老图库只缺宠物时，worker 拿到人脸的哈希会跳过人脸、只算宠物。宠物出错只给宠物记失败，下次重试。
+- 任务结果多一个 `pets`（找到几只）和 `pet_groups`；阶段名是 `people_pets_index` / `people_pets_cluster`（界面显示“分析人物与宠物”）。中途每 300 张重新聚类时宠物也一起聚。
+- 代价：不能只暂停宠物；设置里可以整个关掉。
+- `upsert_face_model` 写 `kind = 'pet'`。聚类见第 7 节。
 
 ### 5.3 模型分发（已定：DINOv2-S 随包）
 
@@ -233,18 +236,17 @@ People Worker --kind pets：动物检测、裁框、Core ML DINOv2-S 向量
 - `search_assets` 的 `people` 条件加 `with_cats` / `with_dogs`（或单独的 `animals` 条件），`person_id` 对宠物组直接可用。
 - 同步更新 `docs/agent-native-mcp.md`。
 
-## 10. 什么时候跑
+## 10. 什么时候跑（已实现）
 
 “同时识别宠物”默认开（已定）。和人物一样，不经用户同意不扫全库：
 
-- 用户点“分析整个图库”或开了“导入后自动分析”时，宠物和人物一起排队；单张“重新分析”同时重跑两者。
-- 宠物是独立的 `pet_index` 任务，排在人物任务后面，可以单独暂停、取消。
-- **升级上来的图库**：人物早就分析过了，宠物还没有。不自动补扫全库；“人物与宠物”页顶部提示一次“分析宠物”，用户点了才跑，关掉就不再出现。之后导入的新照片按“导入后自动分析”的开关正常带上宠物。
-- 用户在设置里关掉开关：不再新跑宠物任务，正在跑的照常可以取消；已有的宠物组保留，开关打开后接着用，不用重扫。
+- 用户点“扫描”、“分析整个图库”或开了“导入后自动分析”时，开着宠物识别就带上宠物模型，在同一个任务里跑；单张“重新分析”也一样。
+- **升级上来的图库**：如果最近一次人物分析的结果里没有 `pets`（宠物出现之前跑的，或当时关着），“人物与宠物”页顶部提示一次“分析宠物”，点了才跑（人脸按哈希跳过，只算宠物），点“以后再说”就不再出现（按图库记在本机）。
+- 关掉开关：之后的任务不带宠物；已有的宠物组保留，打开后接着用。
 
 ## 11. 测试
 
-- **单测**：sidecar 聚类的物种分区、按模型取维度、同一张照片不合并；schema 升级；worker 的 `--kind pets --self-test`（用一张许可清楚的测试图）。
+- **单测**（已有）：`tests/test_pets.py`（存储、物种分区聚类、按模型取维度、封面裁头、筛选、更正不跨物种）、`tests/test_people_job.py`（宠物随人物任务一起跑、各自跳过、老图库只补宠物、宠物出错不影响人脸）、v15 → v16 升级、`electron/petModel.test.js`、`jobArgv` 的宠物参数。worker 的 `--pet-model X --self-test` 用空白图自检。
 - **e2e**：新 spec（编号接在现有的 96 之后），用预先算好向量的固定库（仿 `e2e/fixtures/people-catalog.afcatalog`，由种子脚本生成，需要本机有模型和 worker；`.gitignore` 里要像人物固定库那样放行它的 `catalog.sqlite3`）。覆盖：宠物出现在人物页且有标记，“宠物”筛选，命名后在图库按它筛选，Inspector 列出宠物，猫狗之间不能合并。
 - **评估**：`research/pet-recognition-lab` 的 Commons 测试集做回归（换模型、改阈值时对比 AUC 和 F1）；家庭图库照片用来定阈值。
 - **家庭图库照片（已定：由你准备）**：一个文件夹，每只宠物一个子文件夹，原型的 `analyze.py` 直接能用（第一层文件夹就是哪一只）。最好覆盖：只有一只的家、同品种两只的家、猫狗都有的家，每只几十到几百张，混进一些没有宠物和有别人家宠物的照片。照片只留在本机，不进仓库。
@@ -259,20 +261,20 @@ People Worker --kind pets：动物检测、裁框、Core ML DINOv2-S 向量
 
 见 5.5：建 `models` release，上传人脸和深度模型，`fetch-models.mjs` 替换 `fetch-people-model.mjs`，深度模型移出 git，CI 和打包检查跟着改。深度模型的“选择其他模型”补上自检和复制进 Application Support。
 
-### 阶段 1：worker、模型、任务、数据
+### 阶段 1：worker、模型、任务、数据（已实现，`feat/pet-recognition`）
 
-- worker 的宠物模式和自检；只被姿态检测找到的动物的物种处理（第 13 节待定第 1 条）。
-- 转换脚本进仓库，把宠物模型传到 `models` release，在 `fetch-models.mjs` 的表里加一行（5.5），`petModel.js`，打包检查。
-- 按 5.6 把 DINOv2-B 的 `.afpetmodel` zip 传到 `models` release，release 说明写上测试集数字。
-- 用户替换模型：自检检查 `image` / `embedding` 接口，`manifest.json` 的 `cluster_threshold` 传到聚类。
-- schema：`subject` 两列、按模型取维度；`pet_index` 任务；聚类加物种分区和按模型的阈值。
-- 验收：在 Commons 测试集上跑产品流水线（不是原型脚本），检测率和分组质量不低于第 3 节 DINOv2-S 的数字。
+- worker 的 `--pet-model` 和自检；只靠姿态找到的动物用分类器定猫狗（5.1）。
+- `scripts/models/convert-pet-model.py`（从 Meta 官方权重、锁定版本转换，转完和 PyTorch 对一遍）、`electron/petModel.js`。
+- schema 16（`subject` 两列、迁移和升级测试）、按模型取向量维度、物种分区聚类、宠物阈值、`pets` 筛选；人物任务带宠物（5.2）。
+- 用户替换宠物模型：自检要求图像输入、向量输出，`manifest.json` 的 `cluster_threshold` 传到聚类。
+- 验收（真实 worker、两个真模型、Commons 201 张）：17.5 秒跑完，认出 172 只动物、62 张人脸；宠物 22 组，猫的组全部干净，混了别的个体的 8 组全是同品种的狗（德牧之间、Bo 和 Sunny 之间）。产品 worker 单独评估：有动物的照片 78%，身体框向量 AUC 0.923（原型 0.920）。
+- 还没做：把 `PetEmbedding-dinov2-small-846f00a0.mlpackage.tar.gz`（40,076,226 字节，sha256 `846f00a0…`，`petModel.js` 已锁）传到 `models` release；等阶段 0.5 的 `fetch-models.mjs` 合并后加一行，`release.sh` 检查它在包里。在那之前，开发机用转换脚本把模型放进 `apps/desktop/native/`。
 
-### 阶段 2：界面和 MCP
+### 阶段 2：界面和 MCP（已实现，`feat/pet-recognition`）
 
-- 人物页混排、爪印标记、筛选；封面裁头；Inspector；“含猫 / 含狗”筛选；设置开关；JobDock 文案；中英文案。
-- MCP 扩展和文档。
-- e2e spec 和固定库。
+- 改名“人物与宠物”；同一面墙、爪印、“全部 / 人物 / 宠物”切换、封面裁头；命名和更正只在同物种里选；Inspector 列出宠物和物种；“含宠物”筛选（宠物 / 猫 / 狗）；设置里的开关和宠物模型；“分析宠物”提示。
+- MCP：`list_people` 的 `subject`、`index_people` 的 `include_pets`、`search_assets` 的 `pets`；`docs/agent-native-mcp.md` 已加状态行。
+- e2e：新 spec 97-pets；`launchApp` 多了 `petModel`（和 `peopleModel` 一样三种）；改名涉及的 02 / 10 / 31 / 44 / 62 / 71 / 72 / 84 已更新。
 
 ### 阶段 3：标定和改进
 
@@ -287,6 +289,7 @@ People Worker --kind pets：动物检测、裁框、Core ML DINOv2-S 向量
 - 人和宠物放同一面墙，加“全部 / 人物 / 宠物”筛选（第 8 节）。
 - 导航名“人物”改成“人物与宠物”（People & Pets），涉及的文案见第 8 节。
 - 所有模型统一放 AfterFrame 自己仓库的 GitHub Release，人脸和深度模型也搬过去（5.5）。
+- 只被姿态检测找到的动物：在身体框上跑 `VNClassifyImageRequest` 定猫狗，两边都不到 0.1 就丢掉（实测 36 只错 1 只，5.1）。
 - 同一个 release 也给用户手动下载可选模型，用“选择其他模型”导入；只放许可证允许商用、我们验证过的；第一个可选模型是 DINOv2-B，跟宠物阶段 1 一起上（5.6）。深度模型的“选择其他模型”要补上自检和复制。
 - 宠物识别默认开，跟着人物分析一起跑，设置里可以关（第 10 节）。这改变了现有行为：“分析整个图库”和“导入后自动分析”会多跑一个宠物任务、多花一点时间，PR 里要写明。
 - 用 DINOv2-S，随 App 内置，用户不用下载（5.3）。
@@ -295,5 +298,4 @@ People Worker --kind pets：动物检测、裁框、Core ML DINOv2-S 向量
 
 待定：
 
-1. **只被姿态检测找到的动物（原型里占 21%）怎么定猫狗**：一是在身体框上跑 `VNClassifyImageRequest`，看“cat”“dog”哪个分高，原型没验证过，阶段 1 先测；二是第一版直接丢掉，少认一部分。推荐先测第一种，不行就丢。
-2. **可选模型要不要在魔搭放一份国内镜像**：GitHub release 在国内常常下不动。推荐放：只多一个上传步骤，文件和哈希一样；不放的话，国内用户基本只能用内置模型。
+1. **可选模型要不要在魔搭放一份国内镜像**：GitHub release 在国内常常下不动。推荐放：只多一个上传步骤，文件和哈希一样；不放的话，国内用户基本只能用内置模型。
