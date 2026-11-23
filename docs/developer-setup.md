@@ -92,6 +92,7 @@ directory; two can only be rebuilt on the machine that made them.
 | `people-images/` | `seed-people-catalog.js` | only if a file is missing: the gitignored `marketing/demo-people/output` sources — author's Mac only |
 | `people-catalog.afcatalog/` | `seed-people-catalog.js` | macOS, the native people-worker and an installed ArcFace model under `~/Library/Application Support/AfterFrame/people-models/` — in practice the author's Mac |
 | `raw/` | `raw/make-raw-fixtures.py` | a real camera DNG and Adobe DNG Converter (macOS); the committed pair is from the author's phone |
+| `pet-images/` | nothing — committed as-is | the author's cat and public-domain Commons photos, downscaled with no EXIF; sources and the similarity margins in `pet-images/SOURCES.md` |
 | `heic/`, `test-videos/` | nothing — committed as-is | — |
 
 A re-seed is not a no-op diff. Both seed scripts wipe the catalog and give

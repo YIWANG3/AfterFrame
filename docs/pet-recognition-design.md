@@ -276,6 +276,7 @@ People Worker --model … --pet-model …：人脸 + 动物检测、裁框、Cor
 - 改名“人物与宠物”；同一面墙、爪印、“全部 / 人物 / 宠物”切换、封面裁头；命名和更正只在同物种里选；Inspector 列出宠物和物种；“含宠物”筛选（宠物 / 猫 / 狗）；设置里的开关和宠物模型；“分析宠物”提示。
 - MCP：`list_people` 的 `subject`、`index_people` 的 `include_pets`、`search_assets` 的 `pets`；`docs/agent-native-mcp.md` 已加状态行。
 - e2e：新 spec 97-pets；`launchApp` 多了 `petModel`（和 `peopleModel` 一样三种）；改名涉及的 02 / 10 / 31 / 44 / 62 / 71 / 72 / 84 已更新。
+- e2e：98-pets-real-model 用真模型跑整条链路（仿 62），本机和夜间任务有两个模型时才跑。照片在 `e2e/fixtures/pet-images/`：维护者家的猫 4 张、公有领域的另一只猫 1 张和狗 2 张，来源见那里的 `SOURCES.md`；挑的时候按 0.58 留足了余量（猫 4 张之间最低 0.69、狗 0.96、另一只猫和这只最多 0.27）。
 
 ### 阶段 3：标定和改进
 
