@@ -86,7 +86,7 @@ test("a camera can be excluded, and a photo with no camera is not that camera ei
 });
 
 test("not in a folder saves as a smart collection that follows the folder", async () => {
-  await bar().getByRole("button", { name: "Folder", exact: true }).click();
+  await bar().getByRole("button", { name: "Collection", exact: true }).click();
   await option(folderId).click();
   await ctx.window.locator("[data-facet-mode='exclude']").click();
   await ctx.window.keyboard.press("Escape");

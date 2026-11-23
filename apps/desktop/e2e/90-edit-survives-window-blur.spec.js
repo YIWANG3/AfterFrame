@@ -97,7 +97,7 @@ test("a description being typed survives switching apps; Enter saves it, Escape 
 test("a folder name being typed survives switching apps", async () => {
   const field = () => w().getByTestId("sidebar-folder-scroll").locator("input");
 
-  await w().getByTitle("New folder", { exact: true }).click();
+  await w().getByTitle("New collection", { exact: true }).click();
   await field().fill("Trip to");
   await switchAway();
   await expect(field()).toBeVisible();
@@ -113,7 +113,7 @@ test("a folder name being typed survives switching apps", async () => {
   expect(await folderNames()).not.toContain("Trip to");
 
   // A click elsewhere still commits the name.
-  await w().getByTitle("New folder", { exact: true }).click();
+  await w().getByTitle("New collection", { exact: true }).click();
   await field().fill("Clicked away");
   await galleryCards(w()).first().click();
   await expect(field()).toHaveCount(0);

@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Link2, Type, ExternalLink, RefreshCw, Flag, FlagOff, Tag, X, Copy, ScanSearch } from "lucide-react";
+import { FolderPlus, FolderMinus, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Link2, Type, ExternalLink, RefreshCw, Flag, FlagOff, Tag, X, Copy, ScanSearch, Album } from "lucide-react";
 import api from "../api";
 import { Z } from "../ui";
 import useDismiss from "../ui/useDismiss";
@@ -203,7 +203,7 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
               className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
               onClick={() => { onAddTo(targetFolder.collection_id); onClose(); }}
             >
-              <Folder className="h-3.5 w-3.5 shrink-0" />
+              <Album className="h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{targetFolder.name}</span>
               {/* A visual hint only: the button's name stays the folder's. */}
               <span className="text-[10px] text-muted2" aria-hidden="true">{shortcutLabel("folder.addToTarget")}</span>
@@ -220,7 +220,7 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
                 style={{ paddingLeft: `${12 + depth * 14}px` }}
                 onClick={() => { onAddTo(col.collection_id); onClose(); }}
               >
-                <Folder className="h-3.5 w-3.5 shrink-0" />
+                <Album className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{col.name}</span>
               </button>
             ))}

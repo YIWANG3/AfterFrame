@@ -1,7 +1,7 @@
 import api from "../api";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Download, Loader2, X, ChevronDown, Folder, Images, LayoutGrid, ArrowUpDown, Search } from "lucide-react";
+import { Check, Download, Loader2, X, ChevronDown, Images, LayoutGrid, ArrowUpDown, Search, Album } from "lucide-react";
 import { browseCount, fileName, localFileUrl, pathSeparator } from "../utils/format";
 import CollageCanvas from "./collage/CollageCanvas";
 import { flattenForPicker } from "./folderTree";
@@ -356,7 +356,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
                       style={{ paddingLeft: `${12 + (col.depth || 0) * 14}px` }}
                       onClick={() => { setSource(col.collection_id); setShowDropdown(false); }}
                     >
-                      <Folder className="h-3.5 w-3.5 shrink-0 text-muted2" />
+                      <Album className="h-3.5 w-3.5 shrink-0 text-muted2" />
                       <span className="truncate">{col.name}</span>
                     </button>
                   ))}

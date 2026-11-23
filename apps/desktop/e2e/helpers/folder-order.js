@@ -3,7 +3,7 @@ const { expect } = require('@playwright/test');
 async function exerciseFolderOrder(page, { reload = false } = {}) {
   const scroll = page.getByTestId('sidebar-folder-scroll');
   for (const name of ['Order Zulu', 'Order Alpha', 'Order Middle']) {
-    await page.getByTitle('New folder', { exact: true }).click();
+    await page.getByTitle('New collection', { exact: true }).click();
     await scroll.locator('input').fill(name);
     await scroll.locator('input').press('Enter');
     // Right after launch the create waits on the serial sidecar behind the
@@ -24,7 +24,8 @@ async function exerciseFolderOrder(page, { reload = false } = {}) {
     await page.reload();
     await expect.poll(order).toEqual(expected);
   }
-  await page.getByTitle('Show covers', { exact: true }).click();
+  await page.getByTestId('sidebar-more-collections').click();
+  await page.locator("[data-section-more-menu] [data-menu-item='view']").click();
   const box = await row('Order Alpha').boundingBox();
   await row('Order Middle').dragTo(row('Order Alpha'), { targetPosition: { x: 20, y: box.height - 2 } });
   const final = expected.filter((id) => id !== sourceId);
@@ -74,7 +75,7 @@ async function exerciseFolderSearchAndSort(page) {
     .map((r) => r.querySelector('span.truncate')?.textContent || '')
     .filter((name) => name.startsWith('Sort ')));
   for (const name of ['Sort alpha 10', 'Sort Bravo', 'Sort alpha 2']) {
-    await page.getByTitle('New folder', { exact: true }).click();
+    await page.getByTitle('New collection', { exact: true }).click();
     await scroll.locator('input').fill(name);
     await scroll.locator('input').press('Enter');
     await expect.poll(async () => (await names())[0], { timeout: 15_000 }).toBe(name);
@@ -82,7 +83,7 @@ async function exerciseFolderSearchAndSort(page) {
   await expect.poll(names).toEqual(['Sort alpha 2', 'Sort Bravo', 'Sort alpha 10']);
 
   const sortBy = async (label) => {
-    await page.getByTitle('Sort folders', { exact: true }).click();
+    await page.getByTestId('sidebar-more-collections').click();
     await page.getByTestId('folder-sort-menu').getByRole('button', { name: label, exact: true }).click();
   };
   await sortBy('Name');
@@ -100,12 +101,12 @@ async function exerciseFolderSearchAndSort(page) {
   await sortedTransfer.dispose();
   await expect(scroll.locator('[data-folder-insertion]')).toHaveCount(0);
 
-  await page.getByTitle('Search folders', { exact: true }).click();
-  const search = page.getByPlaceholder('Search folders');
+  await page.getByTitle('Search collections', { exact: true }).click();
+  const search = page.getByPlaceholder('Search collections');
   await search.fill('ALPHA');
   await expect.poll(names).toEqual(['Sort alpha 2', 'Sort alpha 10']);
   await search.fill('zzz');
-  await expect(scroll).toContainText('No folders match “zzz”');
+  await expect(scroll).toContainText('No collections match “zzz”');
   await search.press('Escape');
   await expect(search).toHaveCount(0);
 

@@ -4,10 +4,11 @@ import i18n, { SUPPORTED_LOCALES } from "../../i18n";
 import api from "../../api";
 import { FieldRow, Group } from "./SettingsPrimitives";
 import SettingsTransfer from "./SettingsTransfer";
+import SidebarSettingsGroup from "./SidebarSettingsGroup";
 import { Select } from "../../ui";
 
 // General app settings: interface language, color theme, interface scale,
-// backup & transfer.
+// which entries the sidebar shows, backup & transfer.
 
 // The choices electron/uiScale.js accepts (the window's page zoom).
 const UI_SCALES = [0.8, 0.9, 1, 1.1, 1.25];
@@ -69,6 +70,7 @@ export default function GeneralSettings({ theme = "dark", setTheme }) {
         </Select>
       </FieldRow>
       </Group>
+      <SidebarSettingsGroup />
       <SettingsTransfer theme={theme} />
     </div>
   );

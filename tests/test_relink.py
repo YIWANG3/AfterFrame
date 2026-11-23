@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -182,11 +183,15 @@ class RelinkFromFolderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             connection, paths, ids = self._missing(root, ["a.jpg"])
-            # Moved, then imported again at the new place: a second record.
+            # Copied and imported at the new place while the original was
+            # still there: a second record of its own (a move would have been
+            # claimed by the import, tests/test_claim_moved.py). Then the
+            # original goes.
             moved = root / "moved"
             moved.mkdir()
-            paths[0].rename(moved / "a.jpg")
+            shutil.copyfile(paths[0], moved / "a.jpg")
             resolve_image_batch(connection, [moved / "a.jpg"], refresh=True)
+            paths[0].unlink()
             verify_assets(connection)
 
             result = relink_assets_from_folder(connection, moved, [ids["a.jpg"]])

@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Check, ChevronDown, CornerDownRight, Folder, FolderCog, FolderPlus, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X,
+  Check, ChevronDown, CornerDownRight, FolderCog, FolderPlus, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X, Album,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import api from "../api";
@@ -18,6 +18,7 @@ import { Button, cx, Z } from "../ui";
 import useDismiss from "../ui/useDismiss";
 import { localFileUrl } from "../utils/format";
 import FaceMenu from "./FaceMenu";
+import { ManagerEmptyState, ToolbarIconButton, ToolbarSortDropdown } from "./managerChrome";
 import { canDropInto, flattenForPicker, parentIdOf, parentPathOf } from "./folderTree";
 import InlineEdit from "./InlineEdit";
 import Popover, { ACTION_CHIP } from "./filters/Popover";
@@ -52,48 +53,19 @@ const readPref = (key, allowed, fallback) => {
 };
 const writePref = (key, value) => { try { localStorage.setItem(key, value); } catch { /* private mode */ } };
 
-function IconButton({ className = "", ...props }) {
-  return <Button variant="icon" className={cx("cursor-pointer disabled:hover:bg-transparent", className)} {...props} />;
-}
+const IconButton = ToolbarIconButton;
 
 // Toolbar.jsx's sort button, over this page's sorts.
 function SortDropdown({ sort, setSort }) {
   const { t } = useTranslation("nav");
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useDismiss(ref, () => setOpen(false), { enabled: open });
   return (
-    <div ref={ref} className="relative ml-1">
-      <button
-        type="button"
-        data-testid="folders-sort"
-        title={t("folders.sortTitle")}
-        className="flex h-8 w-[120px] cursor-pointer items-center justify-center rounded-md border border-border/70 bg-app px-2 text-[12px] text-text outline-none transition-colors hover:border-border focus:border-accent/50"
-        onClick={() => setOpen((c) => !c)}
-      >
-        <span className="truncate">{t(`folders.sort.${sort}`)}</span>
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 min-w-[170px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ zIndex: Z.dropdown }}>
-          {FOLDER_PAGE_SORTS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={cx(
-                "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors hover:bg-hover",
-                sort === value ? "text-text" : "text-muted",
-              )}
-              onClick={() => { setSort(value); setOpen(false); }}
-            >
-              <span className="flex h-3.5 w-3.5 items-center justify-center">
-                {sort === value && <Check className="h-3 w-3 text-accent" />}
-              </span>
-              {t(`folders.sort.${value}`)}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <ToolbarSortDropdown
+      value={sort}
+      onChange={setSort}
+      options={FOLDER_PAGE_SORTS.map((value) => ({ value, label: t(`folders.sort.${value}`) }))}
+      title={t("folders.sortTitle")}
+      testId="folders-sort"
+    />
   );
 }
 
@@ -151,7 +123,7 @@ function MoveToMenu({ position, collections, sourceIds, onPick, onClose }) {
       <div className="popover-scroll max-h-[300px] overflow-y-auto">
         {row("root", 0, <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted2" />, t("folders.topLevel"), () => onPick(null), "root")}
         {options.map(({ folder, depth }) => row(
-          folder.collection_id, depth, <Folder className="h-3.5 w-3.5 shrink-0 text-muted2" />, folder.name, () => onPick(folder.collection_id), folder.collection_id,
+          folder.collection_id, depth, <Album className="h-3.5 w-3.5 shrink-0 text-muted2" />, folder.name, () => onPick(folder.collection_id), folder.collection_id,
         ))}
       </div>
     </div>,
@@ -166,7 +138,7 @@ function CoverMosaic({ paths, className = "" }) {
   if (!n) {
     return (
       <div className={cx("flex items-center justify-center bg-[var(--fill-2)] text-muted2", className)}>
-        <Folder className="h-6 w-6 stroke-[1.4]" />
+        <Album className="h-6 w-6 stroke-[1.4]" />
       </div>
     );
   }
@@ -203,6 +175,8 @@ export default function FoldersView({
   // (App.jsx importIntoFolders). Absent where there is no file system.
   onImportInto,
   pushToast,
+  // The manager's tabs (ManagerTabs.jsx), shown where the title was.
+  tabs = null,
 }) {
   const { t, i18n } = useTranslation("nav");
   const locale = i18n.language || undefined;
@@ -334,7 +308,7 @@ export default function FoldersView({
     const single = targets.length === 1;
     return [
       ...(single ? [
-        { key: "open", icon: Folder, label: t("folders.open"), onClick: () => onOpenFolder?.(folder.collection_id) },
+        { key: "open", icon: Album, label: t("folders.open"), onClick: () => onOpenFolder?.(folder.collection_id) },
         { key: "rename", icon: Pencil, label: t("folders.rename"), onClick: () => setEditingId(folder.collection_id) },
         { key: "subfolder", icon: FolderPlus, label: t("folders.newSubfolder"), onClick: () => { setCreating({ parentId: folder.collection_id }); scrollRef.current?.scrollTo({ top: 0 }); } },
       ] : []),
@@ -423,11 +397,18 @@ export default function FoldersView({
         <IconButton title={t("folders.newFolder")} aria-label={t("folders.newFolder")} data-testid="folders-new" onClick={() => { setCreating({ parentId: null }); scrollRef.current?.scrollTo({ top: 0 }); }}>
           <Plus className="h-4 w-4 stroke-[1.8]" />
         </IconButton>
-        <div className="ml-2 mr-2 flex min-w-0 flex-1 items-center gap-2 text-muted2">
-          <FolderCog className="h-4 w-4 shrink-0" />
-          <h1 className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">{t("folders.title")}</h1>
-          <span data-testid="folders-count" className="shrink-0 text-[12px] text-muted3">· {manual.length}</span>
-        </div>
+        {tabs ? (
+          <div className="ml-2 mr-2 min-w-0 flex-1">
+            {tabs}
+            <span data-testid="folders-count" className="sr-only">· {manual.length}</span>
+          </div>
+        ) : (
+          <div className="ml-2 mr-2 flex min-w-0 flex-1 items-center gap-2 text-muted2">
+            <FolderCog className="h-4 w-4 shrink-0" />
+            <h1 className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">{t("folders.title")}</h1>
+            <span data-testid="folders-count" className="shrink-0 text-[12px] text-muted3">· {manual.length}</span>
+          </div>
+        )}
 
         <label className="relative block min-w-[96px] max-w-[176px] flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
@@ -444,8 +425,9 @@ export default function FoldersView({
         <SortDropdown sort={sort} setSort={setSort} />
 
         {/* Not `toolbar-modes`: the skin hides that class on a narrow toolbar
-            (index.css container query), and this toggle must stay reachable. */}
-        <div className="ml-1 flex items-center gap-0.5">
+            (index.css container query), and this toggle must stay reachable.
+            `toolbar-group` is the same glass pill, never hidden. */}
+        <div className="toolbar-group flex items-center gap-0.5">
           <IconButton title={t("folders.viewGrid")} aria-label={t("folders.viewGrid")} aria-pressed={view === "grid"} data-testid="folders-view-grid" className={view === "grid" ? "bg-selected text-accent" : ""} onClick={() => setView("grid")}>
             <LayoutGrid className="h-3.5 w-3.5 stroke-[1.6]" />
           </IconButton>
@@ -532,12 +514,12 @@ export default function FoldersView({
         )}
 
         {!manual.length && !creating ? (
-          <div className="flex h-[260px] flex-col items-center justify-center gap-3 rounded-[18px] bg-[var(--fill)] text-center">
-            <Folder className="h-8 w-8 stroke-[1.4] text-muted2" />
-            <div className="text-[13px] text-text">{t("folders.noFolders")}</div>
-            <div className="max-w-[360px] text-[12px] text-muted2">{t("folders.noFoldersHint")}</div>
-            <Button variant="secondary" size="sm" onClick={() => setCreating({ parentId: null })}>{t("folders.newFolder")}</Button>
-          </div>
+          <ManagerEmptyState
+            icon={Album}
+            title={t("folders.noFolders")}
+            hint={t("folders.noFoldersHint")}
+            action={{ label: t("folders.newFolder"), onClick: () => setCreating({ parentId: null }) }}
+          />
         ) : !cards.length ? (
           <div className="px-1 py-6 text-[12px] text-muted2">
             {query.trim() ? t("folders.noMatches", { query: query.trim() }) : t("folders.noFilterMatches")}

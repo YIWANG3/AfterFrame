@@ -423,7 +423,7 @@ test("Escape closes the overlay", async () => {
 // found in All Assets and dragged back by hand.
 test("a collage made inside a folder joins that folder while the box is ticked", async () => {
   test.setTimeout(90_000);
-  await ctx.window.getByTitle("New folder").click();
+  await ctx.window.getByTitle("New collection").click();
   const nameInput = ctx.window.getByRole("navigation").locator("input");
   await nameInput.fill("Collage home");
   await nameInput.press("Enter");

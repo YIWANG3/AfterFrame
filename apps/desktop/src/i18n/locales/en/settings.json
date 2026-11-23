@@ -23,7 +23,8 @@
     "themeLight": "Light",
     "themeSystem": "Follow system",
     "uiScale": "Interface scale",
-    "uiScaleHint": "Scales the whole interface. Takes effect immediately."
+    "uiScaleHint": "Scales the whole interface. Takes effect immediately.",
+    "sidebar": "Sidebar"
   },
   "annotation": {
     "loading": "Loading settings…",
@@ -101,8 +102,8 @@
     "switchCatalogHint": "Open an existing .afcatalog, or create a new one. The current view reloads.",
     "openCatalog": "Open…",
     "newCatalog": "New…",
-    "watchedTitle": "Watched directories",
-    "watchedSubtitle": "Belongs only to the current Catalog. Watching switches with the Catalog, and new files in these folders are imported automatically.",
+    "watchedTitle": "Synced folders",
+    "watchedSubtitle": "Belongs only to the current Catalog. Files added to these folders are imported and files moved within them keep their records; the list switches with the Catalog.",
     "noWatched": "No watched directories in this Catalog.",
     "addFolder": "Add Folder…",
     "remove": "Remove",
@@ -390,7 +391,7 @@
         "deleteRejected": "Delete Rejected Photos…"
       },
       "folder": {
-        "addToTarget": "Add to Target Folder"
+        "addToTarget": "Add to Target Collection"
       },
       "select": {
         "all": "Select All",

@@ -92,8 +92,8 @@ function facetFiltersFrom(source, { groups = true } = {}) {
     if (source[key] !== undefined && source[key] !== null && source[key] !== "") filters[key] = source[key];
   }
   if (source.person_id) filters.person_group = String(source.person_id);
-  // "The five-star photos of this folder": membership of a folder as a condition.
-  // Folders nest; include_descendants counts the folders under it too.
+  // "The five-star photos of this collection": membership as a condition.
+  // Collections nest; include_descendants counts the ones under it too.
   if (source.collection_id) {
     filters.in_collection = String(source.collection_id);
     if (source.include_descendants === true) filters.in_collection_descendants = true;
@@ -123,7 +123,7 @@ const EXCLUDE_ARG = {
   type: "array",
   items: { type: "string", enum: Object.keys(EXCLUDABLE_ARGS) },
   description: "Conditions to turn into their opposite: exclude ['camera'] with camera 'X' means NOT shot on X; " +
-    "['tag'] means none of the tags; ['tag_group'] means no tag of the group; ['collection_id'] means not in that folder. A photo without the value counts as not matching it.",
+    "['tag'] means none of the tags; ['tag_group'] means no tag of the group; ['collection_id'] means not in that collection. A photo without the value counts as not matching it.",
 };
 const ANY_OF_ARG = {
   type: "array",

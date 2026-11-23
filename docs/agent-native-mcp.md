@@ -2,6 +2,8 @@
 
 > 状态：2026-11-17 同拍 RAW+JPG（schema 15，docs/raw-jpg-pairing-plan.md）：合并时搜索只返回 JPG，记录带 `raw_pair_path`、`has_raw: true`；update_assets / delete_assets 等写操作在 sidecar 分发处自动带上合并的 RAW，工具不变。
 
+> 状态：2026-11-18 合集与文件夹拆开（docs/collections-and-folders-design.md）：工具描述和 initialize 的领域模型里，手动「文件夹」改叫 manual collection（参数名 `collection_id` 等不变），新增 FOLDER 一段（磁盘目录的只读镜像）。`maintain_library` 加 `list_folders`（扁平的树行 {path, name, parent, volume, direct, total, exists}）和 `locate_folder`（old_dir, dir：整个文件夹挪走后按前缀接回，逐张校验指纹）；`search_assets` 加 `folder` / `folder_descendants`（sidecar facet `in_folder`，不能存进智能合集）。导入时会认领挪过位置的原文件（同类型、同指纹、旧路径已不在），不再另建记录。tool 数不变。
+
 > 状态：2026-11-09 「含 RAW」从侧栏降级为筛选项：search_assets 与 manage_collections 的 rules 加 `has_raw`（true / false；sidecar facet `has_raw`，db/facets.py），status "matched" 仍可用。
 
 > 状态：2026-11-09 标签分组（schema 14，docs/tags-redesign.md）：新增 manage_tags（建组 / 改名 / 开关 AI 填充 / 删组 / 移组 / 重命名 / 合并 / 删除 / 置顶 / 按词表归组），list_tags 按组返回（groups / ungrouped / 扁平 tags，带 count、pinned、aliases），search_assets 加 tag_group 与 tag_match: by_group，update_assets 加 tag_group；initialize 的领域模型多了 TAG / TAG GROUP 一段 —— 38 tools。

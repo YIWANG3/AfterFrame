@@ -78,3 +78,6 @@ class MatchDecision:
     # Preview generation uses this to bypass a stale ready cache after an editor
     # (notably Lightroom) exports with overwrite enabled.
     content_changed: bool = False
+    # Not known by its path, but a record's moved original: that record was
+    # relinked here (db.maintenance.claim_moved_original), not a new one made.
+    claimed: bool = False

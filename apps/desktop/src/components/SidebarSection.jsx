@@ -1,6 +1,6 @@
-// A sidebar section that folds to its heading. Smart collections and folders
-// share the sidebar's height; folding one gives the other the room. Open
-// unless folded; the fold is remembered per section.
+// A sidebar section that folds to its heading: smart collections,
+// collections and the folders on disk. Open unless folded; the fold is
+// remembered per section.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
@@ -28,7 +28,7 @@ export function useSectionOpen(id) {
 // marked with a dot beside the heading. `children` are the section's own
 // tools (search, sort, new folder), which sit beside the heading and never
 // toggle it. Anything else (`className`, drag handlers, data attributes) goes
-// on the heading row, which the folders section uses as a drop target.
+// on the heading row, which the collections section uses as a drop target.
 export function SectionHeading({ id, label, open, onToggle, holdsActive = false, className = "", children, ...rest }) {
   const { t } = useTranslation("nav");
   return (
@@ -42,10 +42,10 @@ export function SectionHeading({ id, label, open, onToggle, holdsActive = false,
         className="-ml-1 flex min-w-0 items-center gap-1 rounded px-1 text-muted2 transition-colors hover:text-text"
       >
         <ChevronRight className={`h-3 w-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">{label}</span>
+        <span className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.12em]">{label}</span>
         {!open && holdsActive && <span data-section-active="true" className="ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />}
       </button>
-      {children && <span className="flex items-center gap-0.5">{children}</span>}
+      {children && <span className="ml-1 flex shrink-0 items-center gap-0.5">{children}</span>}
     </div>
   );
 }

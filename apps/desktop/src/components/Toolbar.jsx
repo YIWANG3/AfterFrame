@@ -184,7 +184,9 @@ export default function Toolbar({
   sort,
   setSort,
   inFolder = false,
-  // Inside a folder with folders under it: whether their photos show too.
+  // In a folder on disk (not a collection: no custom order to sort by).
+  inDiskFolder = false,
+  // Inside a collection or a folder with others under it: whether their photos show too.
   hasSubfolders = false,
   includeDescendants = true,
   onToggleDescendants,
@@ -372,7 +374,7 @@ export default function Toolbar({
         )}
       </label>
 
-      {inFolder && hasSubfolders && onToggleDescendants && (
+      {(inFolder || inDiskFolder) && hasSubfolders && onToggleDescendants && (
         <IconButton
           data-testid="toolbar-subfolders"
           aria-pressed={includeDescendants}

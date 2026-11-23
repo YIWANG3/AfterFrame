@@ -143,7 +143,7 @@ test.describe("Sidebar navigation", () => {
     test.beforeAll(async () => {
       await window.getByRole("button", { name: /All Assets/i }).first().click();
       await expect(cards().first()).toBeVisible({ timeout: 10_000 });
-      await window.getByTitle("New folder").click();
+      await window.getByTitle("New collection").click();
       const nameInput = window.getByRole("navigation").locator("input");
       await nameInput.fill("Leave me");
       await nameInput.press("Enter");

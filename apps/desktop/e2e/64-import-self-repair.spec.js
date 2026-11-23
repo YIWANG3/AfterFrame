@@ -37,12 +37,17 @@ test.afterAll(async () => {
 });
 
 // TIFFs and RAWs: originals an <img> can't show, so a card has nothing to
-// show until its thumbnail is made. Each file's bytes differ.
+// show until its thumbnail is made. Each file's bytes differ, from every other
+// test's too: a file whose bytes match a record whose original is gone (an
+// earlier test's, deleted in its finally) is that record moved, and the
+// import would claim it, thumbnail and all (db.maintenance.claim_moved_original).
 async function makeImportDir(prefix, { tiffs, raws = 0 }) {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${prefix}-`)));
   for (let i = 0; i < tiffs; i += 1) {
+    const file = path.join(dir, `${prefix}_${String(i).padStart(3, "0")}.tif`);
     await sharp({ create: { width: 320, height: 240, channels: 3, background: { r: i % 256, g: (i * 37) % 256, b: (i * 91) % 256 } } })
-      .tiff().toFile(path.join(dir, `${prefix}_${String(i).padStart(3, "0")}.tif`));
+      .tiff().toFile(file);
+    fs.appendFileSync(file, prefix);
   }
   for (let i = 0; i < raws; i += 1) {
     fs.writeFileSync(path.join(dir, `${prefix}_raw_${i}.dng`), Buffer.concat([fs.readFileSync(RAW_FIXTURE), Buffer.alloc(96 + i)]));

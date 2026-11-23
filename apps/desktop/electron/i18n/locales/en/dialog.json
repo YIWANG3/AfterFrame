@@ -3,6 +3,8 @@
   "relinkMessage": "Choose the moved or renamed original file",
   "relinkFolderTitle": "Relink from folder",
   "relinkFolderMessage": "Choose the folder the missing originals were moved to",
+  "locateFolderTitle": "Locate Folder",
+  "locateFolderMessage": "Choose where “{{name}}” is now",
   "importTitle": "Import files or folders",
   "importFilesTitle": "Import files",
   "importFoldersTitle": "Import folders",

@@ -7,7 +7,7 @@
   "showInAllAssets": {
     "failed": "Could not show this photo in All Assets"
   },
-  "folderOrderFailed": "Could not save folder order",
+  "folderOrderFailed": "Could not save collection order",
   "ratingFailed": "Could not save rating",
   "drop": {
     "title": "Drop to import",
@@ -98,18 +98,21 @@
   "importMixedMsg_one": "{{count}} of the selected files was already imported and skipped.",
   "importMixedMsg_other": "{{count}} of the selected files were already imported and skipped.",
   "importAllExistingMsg": "Every selected file was already imported — nothing new added.",
+  "importClaimed_one": "Found 1 moved file",
+  "importClaimed_other": "Found {{count}} moved files",
+  "importClaimedMsg": "Their records came along: ratings, tags and collections are kept.",
   "importSkippedUnsupported_one": "Skipped 1 unsupported file",
   "importSkippedUnsupported_other": "Skipped {{count}} unsupported files",
   "importSkippedUnsupportedMsg": "Not a photo, RAW or video format the catalog imports: {{kinds}}.",
   "importSkippedNoExtension": "no extension",
   "importSupportedFormats": "Supported formats",
   "openWithFailed": "Couldn't open in editor",
-  "watchPromptTitle": "Watch this folder?",
-  "watchPromptMsg": "Auto-import new files added to “{{dir}}”.",
-  "watchPromptMsgN": "Auto-import new files added to these {{count}} folders.",
-  "watchAdd": "Add to Watched",
-  "watchedCatchUpTitle_one": "1 new file in watched folders",
-  "watchedCatchUpTitle_other": "{{count}} new files in watched folders",
+  "watchPromptTitle": "Keep this folder in sync?",
+  "watchPromptMsg": "Files added to or moved within “{{dir}}” come in by themselves.",
+  "watchPromptMsgN": "Files added to or moved within these {{count}} folders come in by themselves.",
+  "watchAdd": "Keep in Sync",
+  "watchedCatchUpTitle_one": "1 new file in synced folders",
+  "watchedCatchUpTitle_other": "{{count}} new files in synced folders",
   "watchedCatchUpMsg": "Importing them now…",
   "webUnsupportedFiles": "{{count}} file(s) skipped: videos and RAW need the desktop app",
   "smartCollection": {
@@ -123,8 +126,8 @@
   "targetFolder": {
     "added_one": "Added {{count}} photo to “{{name}}”",
     "added_other": "Added {{count}} photos to “{{name}}”",
-    "none": "No target folder yet",
-    "noneHint": "Make a folder, or add to one from the menu once; {{key}} then adds there.",
+    "none": "No target collection yet",
+    "noneHint": "Make a collection, or add to one from the menu once; {{key}} then adds there.",
     "failed": "Adding to “{{name}}” failed"
   },
   "smartCollectionRulesLost": "Its conditions were not stored. Quit and reopen AfterFrame, then save it again.",
@@ -156,7 +159,7 @@
   },
   "compareNeedsTwo": "Select two photos to compare",
   "descriptionFailed": "Could not save the description",
-  "folderMoveFailed": "Could not move the folder",
+  "folderMoveFailed": "Could not move the collection",
   "rawPairs": {
     "merged_one": "{{count}} RAW+JPG pair is shown as one photo",
     "merged_other": "{{count}} RAW+JPG pairs are shown as one photo each",

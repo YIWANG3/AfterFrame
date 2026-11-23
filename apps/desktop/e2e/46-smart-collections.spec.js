@@ -37,7 +37,9 @@ test.afterAll(async () => {
 test("nothing to save until there is a condition", async () => {
   await window.getByRole("button", { name: "Filters" }).click();
   await expect(window.getByRole("button", { name: "Save as smart collection" })).toHaveCount(0);
-  await expect(window.locator("[data-smart-collections]")).toHaveCount(0);
+  // The section is there from the start, empty, with its + for a new one.
+  await expect(window.locator("[data-smart-collections]")).toContainText("No smart collections yet");
+  await expect(window.locator("[data-smart-collection]")).toHaveCount(0);
 });
 
 test("Clear and the smart collection actions stay put while the facets scroll", async () => {
@@ -245,7 +247,8 @@ test("narrowing rewrites the open collection to what is showing, on top of its o
 });
 
 test("the sidebar's covers switch gives smart collections a cover too", async () => {
-  await window.getByTitle("Show covers").click();
+  await window.getByTestId("sidebar-more-collections").click();
+  await window.locator("[data-section-more-menu] [data-menu-item='view']").click();
   const row = smartRow("Five stars");
   const cover = row.locator("[data-smart-cover]");
   await expect(cover).toBeVisible();
@@ -260,7 +263,8 @@ test("the sidebar's covers switch gives smart collections a cover too", async ()
   if ((await browseCount({ date_within_days: 30 })) === 0) {
     await expect(smartRow("This month").locator("[data-smart-cover]")).toHaveCount(0);
   }
-  await window.getByTitle("Show as list").click();
+  await window.getByTestId("sidebar-more-collections").click();
+  await window.locator("[data-section-more-menu] [data-menu-item='view']").click();
   await expect(cover).toHaveCount(0);
 });
 
@@ -369,7 +373,7 @@ test("demoting a photo below a view's rating condition takes it out of the grid 
 
 // The sidebar's two sections share its height. Open, the smart collections
 // take at most two fifths of it and scroll inside; the folders keep the rest.
-test("with many smart collections the folders keep their room", async () => {
+test("with many smart collections their section keeps to its share and the collections follow right under it", async () => {
   const tool = (name, args) => mcpCall(mcpPort, "tools/call", { name, arguments: args })
     .then((result) => JSON.parse(result.content[0].text));
   const made = [];
@@ -384,16 +388,23 @@ test("with many smart collections the folders keep their room", async () => {
   // The rows overflow the section and scroll inside it.
   const list = section.locator("[data-smart-collections-list]");
   expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
-  // The folders still have a usable list: the snapshot folder is on screen.
-  const folderScroll = async () => (await window.getByTestId("sidebar-folder-scroll").boundingBox()).height;
-  expect(await folderScroll()).toBeGreaterThan(120);
-  await expect(window.locator("[data-collection-id]").filter({ hasText: "Five stars (snapshot)" })).toBeVisible();
-  // A short window (the CI runner's screen) squeezes the smart collections
-  // first: the folders keep their rows, the collections still show some.
+  // The collections below still show their rows, right under it: each
+  // section is as tall as its rows, no taller (the collections used to
+  // stretch to the foot of the sidebar).
+  const snapshot = window.locator("[data-collection-id]").filter({ hasText: "Five stars (snapshot)" });
+  await expect(snapshot).toBeVisible();
+  const collections = window.locator("[data-sidebar-folders]");
+  expect((await collections.boundingBox()).y - (sectionBox.y + sectionBox.height)).toBeLessThanOrEqual(24);
+  // A short window (the CI runner's screen): the smart collections keep to
+  // their share and scroll inside it; the sidebar scrolls to the rest.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 560));
-  await expect.poll(folderScroll).toBeGreaterThan(120);
-  expect((await section.boundingBox()).height).toBeGreaterThan(80);
+  // (The CI runner's screen may already be this short: the sidebar's height
+  // then doesn't change, and the share is measured against what it is.)
+  const shortNav = window.locator("aside nav");
+  await expect.poll(async () => (await section.boundingBox()).height <= (await shortNav.boundingBox()).height * 0.4 + 1).toBe(true);
   expect(await list.evaluate((el) => el.clientHeight > 0 && el.scrollHeight > el.clientHeight)).toBe(true);
+  await snapshot.scrollIntoViewIfNeeded();
+  await expect(snapshot).toBeInViewport();
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760));
   await expect.poll(async () => (await section.boundingBox()).height).toBeLessThanOrEqual(nav.height * 0.4 + 1);
   for (const id of made) await tool("manage_collections", { action: "delete", collection_id: id });
@@ -436,7 +447,7 @@ test("each section folds to its heading, and a folded section marks what is show
   // (28px apart: the section's own bottom margin plus the sidebar's gap.)
   expect(foldersBox.y - (smartBox.y + smartBox.height)).toBeLessThanOrEqual(32);
   // The folder tools stay on the folded heading; "new folder" unfolds it to show the field.
-  await window.getByTitle("New folder").click();
+  await window.getByTitle("New collection").click();
   await expect(folders).toHaveAttribute("data-open", "true");
   await expect(window.getByTestId("sidebar-folder-scroll").locator("input")).toBeVisible();
   await window.keyboard.press("Escape");

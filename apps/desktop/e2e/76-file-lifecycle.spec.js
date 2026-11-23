@@ -190,9 +190,11 @@ test.describe("a selected photo whose original moves, is trashed and comes back"
   test("relinking onto a file the catalog already holds is refused and changes nothing", async () => {
     const current = path.join(dirs.B, path.basename(original));
     const renamed = path.join(dirs.B, "Lifecycle_external_renamed.jpg");
-    fs.renameSync(current, renamed);
-    // Importing the renamed file makes a second record; the rating and the
-    // folder stay with the first one (the app does not follow renames).
+    // A copy imported while the original is still there is a second record
+    // of its own; the rating and the collection stay with the first one. (A
+    // file moved, then imported, would be claimed by its old record instead:
+    // 94-moved-originals.) Then the original goes.
+    fs.copyFileSync(current, renamed);
     await h.importThroughPicker([renamed]);
     await expect(h.card(renamed)).toBeVisible({ timeout: 30_000 });
     await h.waitForImportIdle();
@@ -201,6 +203,7 @@ test.describe("a selected photo whose original moves, is trashed and comes back"
     expect(other.asset_id).not.toBe(assetId);
     expect(other.app_rating ?? null).toBeNull();
     expect((await h.folderMembers(folderId)).includes(other.asset_id)).toBe(false);
+    fs.rmSync(current);
 
     await h.cardById(assetId).click();
     await h.refresh();
@@ -313,19 +316,17 @@ test.describe("removed from the library, deleted from disk, changed while the ap
     await expect(h.card(files.trash)).toBeVisible({ timeout: 30_000 });
     await h.waitForImportIdle();
 
-    // The renamed file is a new record; the rating and the folder stayed on
-    // the old one, which is now missing.
+    // The renamed file is the same record, claimed by the scan's import
+    // (db.maintenance.claim_moved_original): its rating and its collection
+    // came along, and nothing is left missing at the old path.
     const fresh = await h.rowAt(moved);
-    expect(fresh.asset_id).not.toBe(ids.watch);
-    expect(fresh.app_rating ?? null).toBeNull();
-    expect(await h.folderMembers(folderId)).not.toContain(fresh.asset_id);
-    await h.previewDecodes(h.card(moved));
-    const old = await h.rowById(ids.watch);
-    expect(old.image_path).toBe(files.watch);
-    expect(old.exists_on_disk).toBe(false);
-    expect(old.app_rating).toBe(1);
+    expect(fresh.asset_id).toBe(ids.watch);
+    expect(fresh.app_rating).toBe(1);
+    expect(fresh.exists_on_disk).toBe(true);
     expect(await h.folderMembers(folderId)).toContain(ids.watch);
-    await expect(h.missingBadge(h.cardById(ids.watch))).toHaveCount(1);
+    await h.previewDecodes(h.card(moved));
+    expect(await h.rowAt(files.watch)).toBeNull();
+    await expect(h.missingBadge(h.cardById(ids.watch))).toHaveCount(0);
 
     // Put back after Delete from Disk: in again, as a photo the catalog has
     // never seen. The id may well repeat; the rating and the folder do not.
@@ -393,29 +394,30 @@ test.describe("a watched folder while the app runs", () => {
     fs.rmSync(dirs.root, { recursive: true, force: true });
   });
 
-  test("a rename and a move across folders import new records; the old one keeps its rating, missing", async () => {
+  test("a rename and a move across folders keep the record: its rating and collection follow the file", async () => {
     test.setTimeout(150_000);
     const renamed = path.join(dirs["W/A"], "Lifecycle_live_renamed.jpg");
     fs.renameSync(first, renamed);
     await expect(h.card(renamed)).toBeVisible({ timeout: 30_000 });
     await h.waitForImportIdle();
     const afterRename = await h.rowAt(renamed);
-    expect(afterRename.asset_id).not.toBe(assetId);
-    expect(afterRename.app_rating ?? null).toBeNull();
+    expect(afterRename.asset_id).toBe(assetId);
+    expect(afterRename.app_rating).toBe(5);
 
     const moved = path.join(dirs["W/B"], "Lifecycle_live_renamed.jpg");
     fs.renameSync(renamed, moved);
     await expect(h.card(moved)).toBeVisible({ timeout: 30_000 });
     await h.waitForImportIdle();
-    expect((await h.rowAt(moved)).app_rating ?? null).toBeNull();
 
     await h.refresh();
-    const old = await h.rowById(assetId);
-    expect(old.exists_on_disk).toBe(false);
-    expect(old.app_rating).toBe(5);
+    const now = await h.rowById(assetId);
+    expect(now.image_path).toBe(moved);
+    expect(now.exists_on_disk).toBe(true);
+    expect(now.app_rating).toBe(5);
     expect(await h.folderMembers(folderId)).toEqual([assetId]);
-    expect((await h.rowAt(renamed)).exists_on_disk).toBe(false);
-    await expect(h.missingBadge(h.cardById(assetId))).toHaveCount(1);
+    expect(await h.rowAt(first)).toBeNull();
+    expect(await h.rowAt(renamed)).toBeNull();
+    await expect(h.missingBadge(h.cardById(assetId))).toHaveCount(0);
   });
 
   test("deleted and put back while selected: the watcher brings the same record back and the Inspector follows", async () => {

@@ -65,6 +65,10 @@ import { invalidateTags } from "./components/annotation/tagStore";
 import WindowTitleBar from "./components/WindowTitleBar";
 import { shouldIgnoreKey } from "./components/editor/keys";
 import { Z } from "./ui";
+import useDiskFolders from "./hooks/useDiskFolders";
+import { folderName } from "./components/diskFolderTree";
+import ManagerTabs from "./components/ManagerTabs";
+import { DiskFoldersPage, SmartCollectionsPage } from "./components/ManagerPages";
 
 function hasSelfDragMarkers() {
   return window.__mediaWorkspaceDraggingAssetIds != null
@@ -92,6 +96,15 @@ export default function App() {
   // methods EditorOverlay merges into window.__afterframeTest.
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
+  // Folders on disk: the tree the sidebar mirrors, asked again whenever the
+  // library's counts change (an import, a relink, a removal).
+  const diskFolders = useDiskFolders({ workspaceRef, pushToast, refreshKey: workspace.summary });
+  const managerCounts = {
+    smart: (workspace.collections || []).filter((c) => c.kind === "smart").length,
+    collections: (workspace.collections || []).filter((c) => c.kind === "manual").length,
+    // The Folders tab lists the folders that hold photos themselves.
+    folders: diskFolders.folders.filter((folder) => folder.direct > 0 || !folder.exists).length,
+  };
   // How the gallery shows photos is remembered (utils/prefs.js); what it
   // shows (the view, the filters) starts fresh.
   const [displayMode, setDisplayMode] = usePref("gallery.displayMode", "grid", oneOf(DISPLAY_MODE_KEYS));
@@ -126,6 +139,8 @@ export default function App() {
   const [viewMode, setViewMode] = useState("assets"); // "assets" | "people" | "discover" | "folders" | "tags" | "stats" | a feature view's id ("stickers")
   const [peopleGroup, setPeopleGroup] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  // The manager page's tab (FoldersView): smart, collections or folders.
+  const [managerTab, setManagerTab] = useState("collections");
   const workspaceSplitRef = useRef(null);
   const mapDrawer = useMapDrawer({
     workspaceRef,
@@ -144,6 +159,26 @@ export default function App() {
   }
   // One of the other views: a folder is left behind (useWorkspace browses
   // the library behind the view, so the gallery is right on the way back).
+  // A smart collection is a saved filter: a new one starts in the library
+  // with the filter bar open, and is saved from there.
+  function newSmartCollection() {
+    goToGallery();
+    clearPeopleGroupFilter();
+    workspace.setStatusFilter("all");
+    setShowFilters(true);
+    pushToast({ title: tNav("sidebar.newSmartHint"), ttl: 6000 });
+  }
+
+  async function snapshotSmartCollection(collection) {
+    try {
+      const name = t("smartCollection.snapshotName", { name: collection.name });
+      const folder = await workspace.snapshotSmartCollection(collection, name);
+      if (folder) pushToast({ title: t("smartCollection.snapshotDone", { count: folder.count, name }), ttl: 5000 });
+    } catch (error) {
+      pushToast({ title: t("smartCollection.failed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
+    }
+  }
+
   function openView(mode) {
     setViewMode(mode);
     setPeopleGroup(null);
@@ -1392,6 +1427,12 @@ export default function App() {
   // The selected photo's details: the grid's right pane, and the lightbox's.
   const inspectorProps = {
     detail: workspace.detail,
+    // The folder on disk the photo is in, opened as a place.
+    onOpenFolder: api.has("listFolders") ? (path) => {
+      goToGallery();
+      clearPeopleGroupFilter();
+      workspace.openFolder(path);
+    } : undefined,
     onRatingChange: applyRating,
     onFlagChange: (flag) => applyFlag(flag),
     onDescriptionChange: (text) => workspace.setAssetDescription([workspace.detail?.asset_id], text),
@@ -1439,15 +1480,7 @@ export default function App() {
             goToGallery();
             workspace.editSmartCollection(collection);
           }}
-          onSnapshotSmartCollection={async (collection) => {
-            try {
-              const name = t("smartCollection.snapshotName", { name: collection.name });
-              const folder = await workspace.snapshotSmartCollection(collection, name);
-              if (folder) pushToast({ title: t("smartCollection.snapshotDone", { count: folder.count, name }), ttl: 5000 });
-            } catch (error) {
-              pushToast({ title: t("smartCollection.failed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
-            }
-          }}
+          onSnapshotSmartCollection={snapshotSmartCollection}
           onSelectCollection={(id) => {
             goToGallery();
             clearPeopleGroupFilter();
@@ -1462,6 +1495,16 @@ export default function App() {
           onAnnotateCollection={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
           onAddToCollection={workspace.addToCollection}
           onImportInto={api.can("fileSystem") ? importIntoFolders : undefined}
+          diskFolders={api.has("listFolders") ? diskFolders : null}
+          activeFolderPath={workspace.activeFolderPath}
+          onOpenDiskFolder={(path) => {
+            goToGallery();
+            clearPeopleGroupFilter();
+            workspace.openFolder(path);
+          }}
+          onImportToFolders={api.can("fileSystem") ? (paths) => workspace.addImagesFromPaths(paths) : undefined}
+          onImportFolder={api.can("fileSystem") ? () => workspace.addImages("folders") : undefined}
+          onNewSmartCollection={newSmartCollection}
           targetFolderId={workspace.targetFolder?.collection_id || null}
           activeView={viewMode}
           peopleMode={viewMode === "people"}
@@ -1477,7 +1520,7 @@ export default function App() {
             featureViewStates[id]?.refresh?.();
           }}
           onOpenPeople={() => openView("people")}
-          onOpenFolders={() => openView("folders")}
+          onOpenFolders={(tab) => { setManagerTab(tab || "collections"); openView("folders"); }}
         />
 
         <section
@@ -1520,7 +1563,7 @@ export default function App() {
                 catalogKey={workspace.info?.catalogPath || null}
                 onOpen={openDiscoverTarget}
                 onOpenPerson={openPersonGroup}
-                onOpenFolders={() => openView("folders")}
+                onOpenFolders={() => { setManagerTab("collections"); openView("folders"); }}
               />
             </>
           ) : viewMode === "stats" ? (
@@ -1536,8 +1579,31 @@ export default function App() {
               }}
               pushToast={pushToast}
             />
+          ) : viewMode === "folders" && managerTab === "smart" ? (
+            <SmartCollectionsPage
+              collections={workspace.collections}
+              tab={managerTab}
+              onTab={setManagerTab}
+              counts={managerCounts}
+              onOpen={(collection) => { goToGallery(); workspace.openSmartCollection(collection); }}
+              onEditRules={(collection) => { goToGallery(); workspace.editSmartCollection(collection); }}
+              onRename={workspace.renameCollection}
+              onDelete={(id) => deleteFolders([id], { quiet: true })}
+              onSnapshot={snapshotSmartCollection}
+              onNew={newSmartCollection}
+            />
+          ) : viewMode === "folders" && managerTab === "folders" ? (
+            <DiskFoldersPage
+              diskFolders={api.has("listFolders") ? diskFolders : null}
+              tab={managerTab}
+              onTab={setManagerTab}
+              counts={managerCounts}
+              onOpen={(path) => { goToGallery(); clearPeopleGroupFilter(); workspace.openFolder(path); }}
+              onImport={api.can("fileSystem") ? () => workspace.addImages("folders") : undefined}
+            />
           ) : viewMode === "folders" ? (
             <FoldersView
+              tabs={<ManagerTabs tab={managerTab} onTab={setManagerTab} counts={managerCounts} />}
               collections={workspace.collections}
               onOpenFolder={(id) => {
                 goToGallery();
@@ -1557,6 +1623,7 @@ export default function App() {
               <Toolbar
                 title={workspace.activeCollectionId
                   ? (pathOf(workspace.collections, workspace.activeCollectionId) || "Folder")
+                  : workspace.activeFolderPath ? folderName(workspace.activeFolderPath)
                   : (activeSmartCollection?.name
                     || (workspace.similarTo ? tNav("browse.similar")
                       : peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : tNav(`browse.${workspace.status}`, filterTitle(workspace.status))))}
@@ -1570,7 +1637,10 @@ export default function App() {
                 }}
                 sort={workspace.sort}
                 inFolder={!!workspace.activeCollectionId}
-                hasSubfolders={!!workspace.activeCollectionId && descendantIds(workspace.collections, workspace.activeCollectionId).length > 0}
+                inDiskFolder={!!workspace.activeFolderPath}
+                hasSubfolders={workspace.activeCollectionId
+                  ? descendantIds(workspace.collections, workspace.activeCollectionId).length > 0
+                  : !!workspace.activeFolderPath && diskFolders.hasChildren(workspace.activeFolderPath)}
                 includeDescendants={workspace.includeDescendants}
                 onToggleDescendants={workspace.setIncludeDescendants}
                 setSort={workspace.setSort}
@@ -1811,6 +1881,7 @@ export default function App() {
             variant="lightbox"
             onTagFilter={(tag) => { closeLightbox(); inspectorProps.onTagFilter(tag); }}
             onJumpToLocation={(assetId) => { closeLightbox(); mapDrawer.jumpToAssetLocation(assetId); }}
+            onOpenFolder={inspectorProps.onOpenFolder ? (path) => { closeLightbox(); inspectorProps.onOpenFolder(path); } : undefined}
           />
         )}
         infoOpen={lightboxInfo}
@@ -1846,6 +1917,7 @@ export default function App() {
           }}
           placeName={workspace.activeCollectionId
             ? (pathOf(workspace.collections, workspace.activeCollectionId) || "")
+            : workspace.activeFolderPath ? folderName(workspace.activeFolderPath)
             : (activeSmartCollection?.name || tNav(`browse.${workspace.status}`, filterTitle(workspace.status)))}
           initialKeywords={[workspace.filters?.name_contains ?? []].flat().map(String)}
           folders={manualFolders}

@@ -3,17 +3,23 @@
 // in them is decided by their conditions (hooks/workspaceLogic.rulesFromScope).
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderInput, ListFilter, Pencil, SlidersHorizontal, Trash2 } from "lucide-react";
+import { EyeOff, FolderCog, FolderInput, Image as ImageIcon, List, ListFilter, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
 import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
+import SectionMoreMenu from "./SectionMoreMenu";
+import { setSidebarHidden } from "./sidebarLayout";
 
-// `view` is the sidebar's list / covers switch, shared with the folders below.
-// `grow`: the folders below are folded, so this section may run past its cap,
-// as tall as its rows; the folders' heading follows right under the last one.
-export default function SmartCollections({ collections, activeId, view = "list", grow = false, onOpen, onEditRules, onRename, onDelete, onSnapshot }) {
+// The sidebar's first section, above the collections and the folders.
+// `view` is the sidebar's list / covers switch, shared with the collections.
+// `grow`: the collections below are folded, so this one may run past its cap,
+// as tall as its rows.
+// `onNew` starts a new one (the filter bar, whose conditions it saves);
+// `onToggleView` flips the list / covers switch; `onOpenManager` opens the
+// manager on its Smart Collections tab.
+export default function SmartCollections({ collections, activeId, view = "list", grow = false, onOpen, onEditRules, onRename, onDelete, onSnapshot, onNew, onToggleView, onOpenManager, headingProps = {} }) {
   const { t } = useTranslation("nav");
   const [editingId, setEditingId] = useState(null);
   // The row right-clicked: { col, x, y }. Its actions are in that menu.
@@ -55,26 +61,46 @@ export default function SmartCollections({ collections, activeId, view = "list",
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, open, coverKey]);
 
-  if (!smart.length) return null;
-
   return (
-    // Open, the section takes at most two fifths of the sidebar and scrolls
-    // inside that, so the folders below always keep their room; in a short
-    // window it shrinks further, down to its heading and a couple of rows.
+    // Open, the section is as tall as its rows up to two fifths of the
+    // sidebar, and scrolls inside past that.
     <div
-      className={!open ? "mb-3 shrink-0" : grow ? "mb-3 flex min-h-0 shrink flex-col" : "mb-3 flex min-h-[96px] max-h-[40%] shrink flex-col"}
+      className={!open ? "shrink-0" : grow ? "flex min-h-0 shrink flex-col" : "flex max-h-[40%] min-h-0 shrink flex-col"}
       data-smart-collections="true"
       data-open={open ? "true" : "false"}
     >
       <SectionHeading
+        {...headingProps}
         id="smart"
         label={t("sidebar.smartCollections")}
         open={open}
         onToggle={toggleOpen}
         holdsActive={smart.some((c) => c.collection_id === activeId)}
-      />
+      >
+        {onNew && (
+          <button
+            type="button"
+            className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+            title={t("sidebar.newSmart")}
+            aria-label={t("sidebar.newSmart")}
+            onClick={onNew}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <SectionMoreMenu
+          testId="sidebar-more-smart"
+          items={[
+            onToggleView && { key: "view", icon: view === "covers" ? List : ImageIcon, label: view === "covers" ? t("sidebar.viewList") : t("sidebar.viewCovers"), onClick: onToggleView },
+            onOpenManager && { key: "manage", icon: FolderCog, label: t("sidebar.openInManager"), onClick: onOpenManager },
+            null,
+            { key: "hide", icon: EyeOff, label: t("sidebar.hideSection"), onClick: () => setSidebarHidden("smartCollections", true) },
+          ].filter((item) => item !== false && item !== undefined)}
+        />
+      </SectionHeading>
       {open && (
       <div className="min-h-0 overflow-y-auto overscroll-contain" data-smart-collections-list="true">
+      {!smart.length && <div className="px-2.5 py-2 text-[11px] text-muted2">{t("sidebar.noSmart")}</div>}
       {smart.map((col) => {
         const active = activeId === col.collection_id;
         // Rules this version cannot read (written by a newer one): shown, but inert.

@@ -112,7 +112,7 @@ test("removing loaded photos from a folder doesn't skip the next page's first on
   await removeThreeThenLoadMore(
     async () => {
       await cards().nth(0).click({ button: "right" });
-      await ctx.window.getByText("Remove from Folder", { exact: true }).click();
+      await ctx.window.getByText("Remove from Collection", { exact: true }).click();
     },
     () => ctx.window.evaluate(async ({ id, sort }) => {
       const rows = await window.mediaWorkspace.browseCollection(id, { limit: 5000, sort });

@@ -20,8 +20,10 @@ from .facets import ANY_OF_KEY, EXCLUDE_KEY, FACET_KEYS, FACET_MODIFIER_KEYS, FA
 RULES_VERSION = 1
 
 # The map viewport is a transient view state, not something to save.
-_SAVABLE_FILTER_KEYS = FACET_KEYS - {"geo"}
-_EXCLUDABLE_FACETS = FACET_NAMES - {"geo"}
+# A folder on disk is a place, not a condition a collection keeps: smart
+# collections never follow the disk (docs/collections-and-folders-design.md §6).
+_SAVABLE_FILTER_KEYS = FACET_KEYS - {"geo", "in_folder", "in_folder_descendants"}
+_EXCLUDABLE_FACETS = FACET_NAMES - {"geo", "in_folder"}
 
 
 def _clean_filters(filters: dict[str, Any]) -> dict[str, Any]:
