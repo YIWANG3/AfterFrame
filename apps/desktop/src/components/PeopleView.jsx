@@ -30,15 +30,18 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName, onContextMen
   const pet = isPet(group);
   const SpeciesIcon = group.subject === "dog" ? Dog : Cat;
   const source = group.cover_preview_path || group.cover_image_path;
+  const openLabel = t("people.openGroup", { name: group.name || t(pet ? "people.unnamedPet" : "people.unnamed") });
 
   return (
     <div className="group/tile relative flex flex-col items-center" data-person-group={group.group_id}>
+      {/* aria-label: without it a pet tile is named by its paw badge ("Cat"). */}
       <button
         type="button"
         onClick={(event) => onSelect(group, event)}
         onDoubleClick={() => onOpen(group)}
         onContextMenu={(event) => onContextMenu(group, event)}
-        title={t("people.openGroup", { name: group.name || t(pet ? "people.unnamedPet" : "people.unnamed") })}
+        title={openLabel}
+        aria-label={openLabel}
         className={cx(
           "relative block overflow-hidden rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
           selected ? "ring-2 ring-accent/80" : "",
