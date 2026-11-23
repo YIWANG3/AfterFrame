@@ -28,7 +28,9 @@ const BUNDLED_DINOV2_SMALL = Object.freeze({
   output_name: "embedding",
   // Cosine similarity two animals need before they may group: the best
   // average-link cut on the Commons test set (distance 0.92 between unit
-  // vectors). To be re-tuned on household photos.
+  // vectors). Checked on a household cat (docs/pet-recognition-design.md,
+  // stage 3): at 0.58 its photos form one group with no other cat in it;
+  // 0.56 starts mixing cats on the Commons set.
   cluster_threshold: 0.58,
   min_macos: 14,
 });
