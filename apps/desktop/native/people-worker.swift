@@ -1,16 +1,23 @@
 // AfterFrame People Worker
 //
 // A precompiled, line-oriented local worker for face detection and ArcFace
-// embedding inference. It deliberately owns no catalog/database state: the
-// sidecar launches it for a people_index job and persists its JSON responses.
+// embedding inference, and (with --pet-model) for finding cats and dogs and
+// embedding them with a pet identity model. It deliberately owns no
+// catalog/database state: the sidecar launches it for a people_index job and
+// persists its JSON responses. Each photo is decoded once for both.
 //
 // Usage:
 //   people-worker --model /path/to/ArcFaceR100.mlpackage --self-test
-//   people-worker --model /path/to/ArcFaceR100.mlpackage --serve
+//   people-worker --pet-model /path/to/PetEmbedding.mlpackage --self-test
+//   people-worker --model /path/to/ArcFaceR100.mlpackage [--pet-model /path/to/PetEmbedding.mlpackage] --serve
 //
 // In --serve mode stdin/stdout use one JSON object per line:
-//   request:  {"id":"asset-42","asset_path":"/path/to/photo.jpg"}
-//   response: {"id":"asset-42","ok":true,"input_hash":"…","faces":[…]}
+//   request:  {"id":"asset-42","asset_path":"/path/to/photo.jpg",
+//              "known_input_hash":"…","known_pet_input_hash":"…"}
+//   response: {"id":"asset-42","ok":true,"input_hash":"…","faces":[…],
+//              "animals":[…],"animals_skipped":false}
+// A known hash equal to the photo's skips that half. `animals` is null when
+// no pet model is loaded.
 // stdout carries nothing else: anything a framework prints there goes to stderr.
 
 import Accelerate
@@ -50,11 +57,13 @@ private struct Request: Decodable {
     let id: String
     let assetPath: String
     let knownInputHash: String?
+    let knownPetInputHash: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case assetPath = "asset_path"
         case knownInputHash = "known_input_hash"
+        case knownPetInputHash = "known_pet_input_hash"
     }
 }
 
@@ -65,12 +74,25 @@ private struct Response: Encodable {
     let inputHash: String?
     let imageSize: ImageSize?
     let faces: [Face]
+    /// nil when the worker has no pet model; empty when none were found or
+    /// `animalsSkipped` says the pet half matched its known hash.
+    let animals: [Animal]?
+    let animalsSkipped: Bool
+    /// Why the pet half failed while the faces succeeded (animals is nil).
+    let animalsError: String?
     let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, ok, skipped, faces, error
+        case id, ok, skipped, faces, animals, error
         case inputHash = "input_hash"
         case imageSize = "image_size"
+        case animalsSkipped = "animals_skipped"
+        case animalsError = "animals_error"
+    }
+
+    static func failure(id: String, _ message: String) -> Response {
+        Response(id: id, ok: false, skipped: false, inputHash: nil, imageSize: nil, faces: [],
+                 animals: nil, animalsSkipped: false, animalsError: nil, error: message)
     }
 }
 
@@ -79,12 +101,34 @@ private struct SelfTestResponse: Encodable {
     let inputName: String
     let outputName: String
     let embeddingDimensions: Int
+    /// "face" or "pet": which kind of model was tested.
+    let kind: String
 
     enum CodingKeys: String, CodingKey {
-        case ok
+        case ok, kind
         case inputName = "input_name"
         case outputName = "output_name"
         case embeddingDimensions = "embedding_dimensions"
+    }
+}
+
+private struct Animal: Encodable {
+    /// "cat" or "dog".
+    let subject: String
+    /// The animal's body, [x, y, width, height] normalized, top-left origin.
+    let boundingBox: [Double]
+    /// The head as the same kind of box (ears, eyes and nose from the body
+    /// pose), or empty when the pose had too few of them. Covers only.
+    let landmarks: [Double]
+    let confidence: Float
+    let quality: String
+    /// "recognizer" (VNRecognizeAnimalsRequest) or "pose" (body pose only).
+    let source: String
+    let embedding: [Float]
+
+    enum CodingKeys: String, CodingKey {
+        case subject, landmarks, confidence, quality, source, embedding
+        case boundingBox = "bounding_box"
     }
 }
 
@@ -229,7 +273,8 @@ private final class ArcFaceModel {
             ok: true,
             inputName: inputName,
             outputName: outputName,
-            embeddingDimensions: array.count
+            embeddingDimensions: array.count,
+            kind: "face"
         )
     }
 
@@ -259,11 +304,7 @@ private final class ArcFaceModel {
         guard let output = prediction.featureValue(for: outputName)?.multiArrayValue else {
             throw WorkerError.missingModelFeature(outputName)
         }
-        let embedding = try floats(from: output)
-        let squaredLength = embedding.reduce(Float(0)) { $0 + $1 * $1 }
-        guard squaredLength > 0 else { throw WorkerError.invalidEmbedding }
-        let length = sqrt(squaredLength)
-        return embedding.map { $0 / length }
+        return try unitLength(try floats(from: output))
     }
 
     private func normalizeInput(_ byte: UInt8) -> Float32 {
@@ -309,28 +350,108 @@ private final class ArcFaceModel {
         }
         return pixelBuffer
     }
+}
 
-    private func floats(from array: MLMultiArray) throws -> [Float] {
-        switch array.dataType {
-        case .float32:
-            let pointer = array.dataPointer.assumingMemoryBound(to: Float32.self)
-            return (0..<array.count).map { pointer[$0] }
-        case .double:
-            let pointer = array.dataPointer.assumingMemoryBound(to: Double.self)
-            return (0..<array.count).map { Float(pointer[$0]) }
-        case .float16:
-            // vImage widens the halves: Swift has no Float16 on Intel Macs.
-            var values = [Float](repeating: 0, count: array.count)
-            values.withUnsafeMutableBytes { out in
-                let width = vImagePixelCount(array.count)
-                var source = vImage_Buffer(data: array.dataPointer, height: 1, width: width, rowBytes: array.count * 2)
-                var destination = vImage_Buffer(data: out.baseAddress, height: 1, width: width, rowBytes: array.count * 4)
-                _ = vImageConvert_Planar16FtoPlanarF(&source, &destination, vImage_Flags(kvImageNoFlags))
-            }
-            return values
-        default:
-            throw WorkerError.unsupportedModelOutput
+private func floats(from array: MLMultiArray) throws -> [Float] {
+    switch array.dataType {
+    case .float32:
+        let pointer = array.dataPointer.assumingMemoryBound(to: Float32.self)
+        return (0..<array.count).map { pointer[$0] }
+    case .double:
+        let pointer = array.dataPointer.assumingMemoryBound(to: Double.self)
+        return (0..<array.count).map { Float(pointer[$0]) }
+    case .float16:
+        // vImage widens the halves: Swift has no Float16 on Intel Macs.
+        var values = [Float](repeating: 0, count: array.count)
+        values.withUnsafeMutableBytes { out in
+            let width = vImagePixelCount(array.count)
+            var source = vImage_Buffer(data: array.dataPointer, height: 1, width: width, rowBytes: array.count * 2)
+            var destination = vImage_Buffer(data: out.baseAddress, height: 1, width: width, rowBytes: array.count * 4)
+            _ = vImageConvert_Planar16FtoPlanarF(&source, &destination, vImage_Flags(kvImageNoFlags))
         }
+        return values
+    default:
+        throw WorkerError.unsupportedModelOutput
+    }
+}
+
+private func unitLength(_ embedding: [Float]) throws -> [Float] {
+    let squaredLength = embedding.reduce(Float(0)) { $0 + $1 * $1 }
+    guard squaredLength > 0, squaredLength.isFinite else { throw WorkerError.invalidEmbedding }
+    let length = sqrt(squaredLength)
+    return embedding.map { $0 / length }
+}
+
+private func compiledModel(at modelURL: URL) throws -> MLModel {
+    let resolvedURL = modelURL.pathExtension == "mlmodelc" ? modelURL : try MLModel.compileModel(at: modelURL)
+    let configuration = MLModelConfiguration()
+    configuration.computeUnits = .all
+    return try MLModel(contentsOf: resolvedURL, configuration: configuration)
+}
+
+/// A pet identity model: one RGB image in (any size, read from the model),
+/// one vector out. The animal's box is padded to a square with mid grey and
+/// scaled to the model's input, so its whole body fits without distortion.
+private final class PetModel {
+    private let model: MLModel
+    private let inputName: String
+    private let outputName: String
+    private let side: Int
+
+    init(modelURL: URL) throws {
+        model = try compiledModel(at: modelURL)
+        guard let input = model.modelDescription.inputDescriptionsByName.sorted(by: { $0.key < $1.key }).first,
+              input.value.type == .image,
+              let constraint = input.value.imageConstraint else {
+            throw WorkerError.missingModelFeature("an image input")
+        }
+        guard let output = model.modelDescription.outputDescriptionsByName.keys.sorted().first else {
+            throw WorkerError.missingModelFeature("output")
+        }
+        inputName = input.key
+        outputName = output
+        side = max(constraint.pixelsWide, constraint.pixelsHigh)
+        guard side >= 32 else { throw WorkerError.missingModelFeature("an image input of at least 32×32") }
+    }
+
+    func selfTest() throws -> SelfTestResponse {
+        let blank = CGContext(data: nil, width: 64, height: 64, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)?.makeImage()
+        guard let blank else { throw WorkerError.invalidImageBuffer }
+        let vector = try embedding(of: blank)
+        return SelfTestResponse(ok: true, inputName: inputName, outputName: outputName,
+                                embeddingDimensions: vector.count, kind: "pet")
+    }
+
+    func embedding(of crop: CGImage) throws -> [Float] {
+        var pixelBuffer: CVPixelBuffer?
+        let attributes: CFDictionary = [
+            kCVPixelBufferCGImageCompatibilityKey: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+        ] as CFDictionary
+        guard CVPixelBufferCreate(kCFAllocatorDefault, side, side, kCVPixelFormatType_32BGRA, attributes, &pixelBuffer) == kCVReturnSuccess,
+              let pixelBuffer else { throw WorkerError.invalidImageBuffer }
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+        guard let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(pixelBuffer), width: side, height: side, bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer), space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { throw WorkerError.invalidImageBuffer }
+        context.setFillColor(CGColor(red: 128.0 / 255, green: 128.0 / 255, blue: 128.0 / 255, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+        let scale = CGFloat(side) / CGFloat(max(crop.width, crop.height))
+        let width = CGFloat(crop.width) * scale
+        let height = CGFloat(crop.height) * scale
+        context.interpolationQuality = .high
+        context.draw(crop, in: CGRect(x: (CGFloat(side) - width) / 2, y: (CGFloat(side) - height) / 2, width: width, height: height))
+        let provider = try MLDictionaryFeatureProvider(dictionary: [inputName: MLFeatureValue(pixelBuffer: pixelBuffer)])
+        let prediction = try model.prediction(from: provider)
+        guard let output = prediction.featureValue(for: outputName)?.multiArrayValue else {
+            throw WorkerError.missingModelFeature(outputName)
+        }
+        return try unitLength(try floats(from: output))
     }
 }
 
@@ -581,23 +702,157 @@ private func plausibleFace(
     return true
 }
 
-private func analyze(request: Request, model: ArcFaceModel) -> Response {
+// MARK: - Cats and dogs
+
+// An animal smaller than this on its short side carries too little detail to
+// tell one cat from another; anything below 128 is kept but marked low.
+private let minimumAnimalPixelSize: CGFloat = 64
+private let lowQualityAnimalPixelSize: CGFloat = 128
+// Vision's image classifier labels for each species (its taxonomy has the
+// parents too). bobcat, prairie_dog and hotdog are deliberately absent.
+private let catLabels: Set<String> = ["cat", "adult_cat", "kitten", "feline"]
+private let dogLabels: Set<String> = ["dog", "canine", "bulldog", "sheepdog"]
+// Measured on 201 Commons photos of 12 animals: 0.1 keeps 36 body-pose-only
+// animals with one species wrong; 0.3 kept 27 (one wrong), 0 kept 42 (three).
+private let minimumSpeciesScore: Float = 0.1
+
+private struct FoundAnimal {
+    var subject: String?
+    let confidence: Float
+    /// Pixels, top-left origin.
+    let body: CGRect
+    var head: CGRect?
+    let source: String
+}
+
+/// Vision's normalized lower-left rect → pixels with a top-left origin.
+private func pixelRect(_ box: CGRect, width: Int, height: Int) -> CGRect {
+    CGRect(x: box.minX * CGFloat(width), y: (1 - box.maxY) * CGFloat(height),
+           width: box.width * CGFloat(width), height: box.height * CGFloat(height))
+}
+
+private func clamped(_ rect: CGRect, width: Int, height: Int) -> CGRect {
+    rect.intersection(CGRect(x: 0, y: 0, width: width, height: height)).integral
+}
+
+private func normalizedTopLeft(_ rect: CGRect, width: Int, height: Int) -> [Double] {
+    [Double(rect.minX) / Double(width), Double(rect.minY) / Double(height),
+     Double(rect.width) / Double(width), Double(rect.height) / Double(height)]
+}
+
+/// Ears, eyes and nose → a square around the head. The points stop at the
+/// nose, so the square sits a little lower than their middle.
+@available(macOS 14.0, *)
+private func headRect(_ pose: VNAnimalBodyPoseObservation, width: Int, height: Int) -> CGRect? {
+    guard let points = try? pose.recognizedPoints(.head) else { return nil }
+    let confident = points.filter { $0.value.confidence > 0.3 }
+    let hasFace = confident.keys.contains(.nose) || confident.keys.contains(.leftEye) || confident.keys.contains(.rightEye)
+    guard confident.count >= 3, hasFace else { return nil }
+    let xs = confident.values.map { $0.location.x * CGFloat(width) }
+    let ys = confident.values.map { (1 - $0.location.y) * CGFloat(height) }
+    guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else { return nil }
+    let side = max(maxX - minX, maxY - minY) * 1.6
+    guard side >= 40 else { return nil }
+    let center = CGPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2 + side * 0.08)
+    return clamped(CGRect(x: center.x - side / 2, y: center.y - side / 2, width: side, height: side), width: width, height: height)
+}
+
+/// Every confident joint → the animal's extent, grown so the fur fits.
+@available(macOS 14.0, *)
+private func poseBodyRect(_ pose: VNAnimalBodyPoseObservation, width: Int, height: Int) -> CGRect? {
+    guard let points = try? pose.recognizedPoints(.all) else { return nil }
+    let confident = points.values.filter { $0.confidence > 0.2 }
+    guard confident.count >= 5 else { return nil }
+    let xs = confident.map { $0.location.x * CGFloat(width) }
+    let ys = confident.map { (1 - $0.location.y) * CGFloat(height) }
+    guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else { return nil }
+    let rect = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    return clamped(rect.insetBy(dx: -rect.width * 0.15 - 8, dy: -rect.height * 0.15 - 8), width: width, height: height)
+}
+
+/// Cat or dog for a crop the recognizer missed (the pose request doesn't
+/// say which), or nil when Vision's classifier is sure of neither.
+private func classifySpecies(_ crop: CGImage) -> String? {
+    let request = VNClassifyImageRequest()
+    let handler = VNImageRequestHandler(cgImage: crop, orientation: .up, options: [:])
+    guard (try? handler.perform([request])) != nil, let results = request.results else { return nil }
+    var cat: Float = 0
+    var dog: Float = 0
+    for observation in results {
+        if catLabels.contains(observation.identifier) { cat = max(cat, observation.confidence) }
+        if dogLabels.contains(observation.identifier) { dog = max(dog, observation.confidence) }
+    }
+    guard max(cat, dog) >= minimumSpeciesScore else { return nil }
+    return cat >= dog ? "cat" : "dog"
+}
+
+private func detectAnimals(in image: CGImage, model: PetModel) throws -> [Animal] {
+    let width = image.width
+    let height = image.height
+    let recognizer = VNRecognizeAnimalsRequest()
+    var requests: [VNRequest] = [recognizer]
+    var poseRequest: VNRequest?
+    if #available(macOS 14.0, *) {
+        let request = VNDetectAnimalBodyPoseRequest()
+        requests.append(request)
+        poseRequest = request
+    }
+    let handler = VNImageRequestHandler(cgImage: image, orientation: .up, options: [:])
+    try handler.perform(requests)
+
+    var found: [FoundAnimal] = (recognizer.results ?? []).compactMap { observation in
+        guard let label = observation.labels.first else { return nil }
+        let subject = label.identifier.lowercased()
+        guard subject == "cat" || subject == "dog" else { return nil }
+        return FoundAnimal(subject: subject, confidence: label.confidence,
+                           body: pixelRect(observation.boundingBox, width: width, height: height),
+                           head: nil, source: "recognizer")
+    }
+    if #available(macOS 14.0, *), let poses = (poseRequest as? VNDetectAnimalBodyPoseRequest)?.results {
+        let recognized = found.map(\.body)
+        for pose in poses {
+            let head = headRect(pose, width: width, height: height)
+            let body = poseBodyRect(pose, width: width, height: height)
+            let anchor = head.map { CGPoint(x: $0.midX, y: $0.midY) } ?? body.map { CGPoint(x: $0.midX, y: $0.midY) }
+            guard let anchor else { continue }
+            if let owner = recognized.indices.filter({ recognized[$0].contains(anchor) })
+                .min(by: { recognized[$0].width * recognized[$0].height < recognized[$1].width * recognized[$1].height }) {
+                // The pose belongs to a recognized animal: give it the largest head.
+                if let head, (found[owner].head?.width ?? 0) < head.width { found[owner].head = head }
+            } else if let body {
+                found.append(FoundAnimal(subject: nil, confidence: pose.confidence, body: body, head: head, source: "pose"))
+            }
+        }
+    }
+
+    var animals: [Animal] = []
+    for animal in found {
+        let body = animal.source == "recognizer"
+            ? clamped(animal.body.insetBy(dx: -animal.body.width * 0.05, dy: -animal.body.height * 0.05), width: width, height: height)
+            : animal.body
+        guard min(body.width, body.height) >= minimumAnimalPixelSize, let crop = image.cropping(to: body) else { continue }
+        guard let subject = animal.subject ?? classifySpecies(crop) else { continue }
+        let quality = animal.source == "pose" || min(body.width, body.height) < lowQualityAnimalPixelSize ? "low" : "standard"
+        animals.append(Animal(
+            subject: subject,
+            boundingBox: normalizedTopLeft(body, width: width, height: height),
+            landmarks: animal.head.map { normalizedTopLeft($0, width: width, height: height) } ?? [],
+            confidence: min(1, max(0, animal.confidence)),
+            quality: quality,
+            source: animal.source,
+            embedding: try model.embedding(of: crop)
+        ))
+    }
+    return animals
+}
+
+private func analyze(request: Request, model: ArcFaceModel, petModel: PetModel?) -> Response {
     do {
         let image = try canonicalImage(at: request.assetPath)
         let buffer = try makeBuffer(image)
-        if request.knownInputHash == buffer.inputHash {
-            return Response(
-                id: request.id,
-                ok: true,
-                skipped: true,
-                inputHash: buffer.inputHash,
-                imageSize: ImageSize(width: buffer.width, height: buffer.height),
-                faces: [],
-                error: nil
-            )
-        }
-        let observations = try detectFaces(in: image)
-        let faces: [Face] = try observations.compactMap { observation in
+        let facesSkipped = request.knownInputHash == buffer.inputHash
+        let animalsSkipped = petModel != nil && request.knownPetInputHash == buffer.inputHash
+        let faces: [Face] = facesSkipped ? [] : try detectFaces(in: image).compactMap { observation in
             guard let points = sourceLandmarks(for: observation, width: buffer.width, height: buffer.height),
                   plausibleFace(observation, points: points, width: buffer.width, height: buffer.height),
                   let transform = SimilarityTransform(source: points, target: arcFaceReference) else {
@@ -611,25 +866,31 @@ private func analyze(request: Request, model: ArcFaceModel) -> Response {
                 embedding: try model.embedding(from: buffer, transform: transform)
             )
         }
+        // A pet failure must not cost the photo its faces: report it beside
+        // them (animals nil + error) and let the sidecar record it for pets.
+        var animals: [Animal]?
+        var animalsError: String?
+        if let petModel {
+            if animalsSkipped {
+                animals = []
+            } else {
+                do { animals = try detectAnimals(in: image, model: petModel) } catch { animalsError = error.localizedDescription }
+            }
+        }
         return Response(
             id: request.id,
             ok: true,
-            skipped: false,
+            skipped: facesSkipped,
             inputHash: buffer.inputHash,
             imageSize: ImageSize(width: buffer.width, height: buffer.height),
             faces: faces,
+            animals: animals,
+            animalsSkipped: animalsSkipped,
+            animalsError: animalsError,
             error: nil
         )
     } catch {
-        return Response(
-            id: request.id,
-            ok: false,
-            skipped: false,
-            inputHash: nil,
-            imageSize: nil,
-            faces: [],
-            error: error.localizedDescription
-        )
+        return Response.failure(id: request.id, error.localizedDescription)
     }
 }
 
@@ -659,41 +920,50 @@ private func writeError(_ message: String) {
 }
 
 private struct Arguments {
-    let modelURL: URL
+    let modelURL: URL?
+    let petModelURL: URL?
     let serve: Bool
     let selfTest: Bool
 
     init() throws {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        guard let modelIndex = arguments.firstIndex(of: "--model"), arguments.indices.contains(modelIndex + 1) else {
-            throw WorkerError.invalidArguments("Usage: people-worker --model <.mlpackage|.mlmodelc> [--serve|--self-test]")
+        func value(_ flag: String) -> URL? {
+            guard let index = arguments.firstIndex(of: flag), arguments.indices.contains(index + 1) else { return nil }
+            return URL(fileURLWithPath: arguments[index + 1])
         }
-        modelURL = URL(fileURLWithPath: arguments[modelIndex + 1])
+        modelURL = value("--model")
+        petModelURL = value("--pet-model")
         serve = arguments.contains("--serve")
         selfTest = arguments.contains("--self-test")
-        guard serve || selfTest else {
-            throw WorkerError.invalidArguments("Specify --serve or --self-test")
-        }
-        guard !(serve && selfTest) else {
-            throw WorkerError.invalidArguments("Specify only one of --serve or --self-test")
-        }
+        let usage = "Usage: people-worker --model <face .mlpackage|.mlmodelc> [--pet-model <pet model>] --serve\n"
+            + "       people-worker (--model <face model> | --pet-model <pet model>) --self-test"
+        guard serve != selfTest else { throw WorkerError.invalidArguments(usage) }
+        // Serving always reads faces; the pet model rides along. A self-test
+        // checks exactly one model, so the settings can vet a pet model alone.
+        if serve, modelURL == nil { throw WorkerError.invalidArguments(usage) }
+        if selfTest, (modelURL == nil) == (petModelURL == nil) { throw WorkerError.invalidArguments(usage) }
     }
 }
 
 do {
     let arguments = try Arguments()
     let output = reserveStdoutForProtocol()
-    let model = try ArcFaceModel(modelURL: arguments.modelURL)
     if arguments.selfTest {
-        writeJSON(try model.selfTest(), to: output)
-    } else {
+        if let petModelURL = arguments.petModelURL {
+            writeJSON(try PetModel(modelURL: petModelURL).selfTest(), to: output)
+        } else if let modelURL = arguments.modelURL {
+            writeJSON(try ArcFaceModel(modelURL: modelURL).selfTest(), to: output)
+        }
+    } else if let modelURL = arguments.modelURL {
+        let model = try ArcFaceModel(modelURL: modelURL)
+        let petModel = try arguments.petModelURL.map { try PetModel(modelURL: $0) }
         while let line = readLine(strippingNewline: true) {
             guard !line.isEmpty else { continue }
             do {
                 let request = try JSONDecoder().decode(Request.self, from: Data(line.utf8))
-                writeJSON(analyze(request: request, model: model), to: output)
+                writeJSON(analyze(request: request, model: model, petModel: petModel), to: output)
             } catch {
-                writeJSON(Response(id: "", ok: false, skipped: false, inputHash: nil, imageSize: nil, faces: [], error: error.localizedDescription), to: output)
+                writeJSON(Response.failure(id: "", error.localizedDescription), to: output)
             }
         }
     }
