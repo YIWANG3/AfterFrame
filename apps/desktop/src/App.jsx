@@ -1553,6 +1553,7 @@ export default function App() {
               people={peopleGroups}
               onOpenGroup={openPersonGroup}
               onOpenSettings={() => openSettings()}
+              catalogKey={workspace.info?.catalogPath || null}
             />
           ) : viewMode === "discover" ? (
             <>

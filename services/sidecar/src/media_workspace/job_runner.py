@@ -299,7 +299,7 @@ def run_people_index_job(
             "pet_threshold": pet_threshold,
         } if pets else {}),
         "resolved_asset_ids": resolved_asset_ids,
-        "phase": "people_index",
+        "phase": "people_pets_index" if pets else "people_index",
         "phase_label": "Analyze People and Pets" if pets else "Analyze People",
         "phase_index": 1,
         "phase_count": 2,
@@ -342,7 +342,7 @@ def run_people_index_job(
         """Phase 2: group the faces into candidates, then mark the job done."""
         clustering_payload = {
             **payload,
-            "phase": "people_cluster",
+            "phase": "people_pets_cluster" if pets else "people_cluster",
             "phase_label": "Build People and Pet Candidates" if pets else "Build People Candidates",
             "phase_index": 2,
             "phase_count": 2,

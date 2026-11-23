@@ -8,8 +8,10 @@ import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
 import api from "../api";
 
-// Named-people picker used by "move to another person…" corrections.
-export default function PersonPickerPopover({ anchorRect, excludeGroupId, onPick, onClose }) {
+// Named-people picker used by "move to another person…" corrections. Only
+// groups of the same subject are offered: a dog's photo can't join a person
+// or a cat (docs/pet-recognition-design.md).
+export default function PersonPickerPopover({ anchorRect, excludeGroupId, subject = "person", onPick, onClose }) {
   const { t } = useTranslation("inspector");
   const [groups, setGroups] = useState(null);
   const [query, setQuery] = useState("");
@@ -19,11 +21,14 @@ export default function PersonPickerPopover({ anchorRect, excludeGroupId, onPick
     (async () => {
       try {
         const rows = await api.listPeopleGroups() || [];
-        if (!cancelled) setGroups(rows.filter((group) => group.name?.trim() && group.group_id !== excludeGroupId));
+        if (!cancelled) {
+          setGroups(rows.filter((group) => group.name?.trim() && group.group_id !== excludeGroupId
+            && (group.subject || "person") === subject));
+        }
       } catch { if (!cancelled) setGroups([]); }
     })();
     return () => { cancelled = true; };
-  }, [excludeGroupId]);
+  }, [excludeGroupId, subject]);
   useDismiss(ref, onClose);
   const left = Math.min(anchorRect.left, window.innerWidth - 248);
   const top = Math.min(anchorRect.bottom + 6, window.innerHeight - 280);

@@ -192,5 +192,7 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     modelMissing: !!modelState && !modelState.activeModelKey,
     // The macOS the built-in model needs, when this Mac is older; else null.
     modelNeedsMacOS: modelState?.builtInNeedsMacOS || null,
+    // Pets will be found by the next scan: on, with a model to run.
+    petsReady: !!modelState?.pets?.enabled && !!modelState?.pets?.activeModelKey,
   };
 }

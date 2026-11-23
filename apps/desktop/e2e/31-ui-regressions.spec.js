@@ -24,7 +24,7 @@ test.describe("UI regression guards", () => {
     const allAssetsToolbar = page.locator(".app-toolbar").first();
     const expected = await geometry(allAssetsToolbar);
 
-    for (const view of ["Stickers", "People"]) {
+    for (const view of ["Stickers", "People & Pets"]) {
       await page.getByRole("button", { name: view, exact: true }).click();
       const toolbar = page.locator(".library-toolbar");
       await expect(toolbar).toBeVisible();

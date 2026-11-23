@@ -21,14 +21,14 @@ test.describe("without a face model", () => {
   });
 
   test("People sidebar opens the local people wall", async () => {
-    const people = ctx.window.getByRole("navigation").first().getByRole("button", { name: "People", exact: true });
+    const people = ctx.window.getByRole("navigation").first().getByRole("button", { name: "People & Pets", exact: true });
     await expect(people).toHaveCount(1);
     await people.click();
-    await expect(ctx.window.getByRole("heading", { name: "People", exact: true })).toBeVisible();
+    await expect(ctx.window.getByRole("heading", { name: "People & Pets", exact: true })).toBeVisible();
     // A build without the bundled model can't scan; the empty state points to
     // Settings instead of offering a download.
     await expect(ctx.window.getByText("No face model in this build")).toBeVisible();
-    await expect(ctx.window.getByRole("button", { name: "Scan faces" }).first()).toBeDisabled();
+    await expect(ctx.window.getByRole("button", { name: "Scan", exact: true }).first()).toBeDisabled();
     await expect(ctx.window.getByText(/download/i)).toHaveCount(0);
   });
 });
@@ -46,18 +46,18 @@ test.describe("with the built-in face model", () => {
   });
 
   test("People is ready to scan with nothing to download", async () => {
-    await ctx.window.getByRole("navigation").first().getByRole("button", { name: "People", exact: true }).click();
-    await expect(ctx.window.getByText("No people yet")).toBeVisible();
-    await expect(ctx.window.getByRole("button", { name: "Scan faces" }).first()).toBeEnabled();
+    await ctx.window.getByRole("navigation").first().getByRole("button", { name: "People & Pets", exact: true }).click();
+    await expect(ctx.window.getByText("No people or pets yet")).toBeVisible();
+    await expect(ctx.window.getByRole("button", { name: "Scan", exact: true }).first()).toBeEnabled();
   });
 
   test("Settings shows the built-in model as active and not removable", async () => {
     await ctx.window.keyboard.press("ControlOrMeta+,");
-    await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People" }).click();
+    await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People & Pets" }).click();
     await expect(ctx.window.getByText(/Built into AfterFrame · 125 MB/)).toBeVisible();
     await expect(ctx.window.getByRole("button", { name: /Download/ })).toHaveCount(0);
     await expect(ctx.window.getByTitle("Remove model")).toHaveCount(0);
-    const autoIndex = ctx.window.getByText("Analyze faces after import", { exact: true })
+    const autoIndex = ctx.window.getByText("Analyze people and pets after import", { exact: true })
       .locator("xpath=ancestor::div[contains(@class,'justify-between')][1]").getByRole("switch");
     await expect(autoIndex).toBeEnabled();
   });

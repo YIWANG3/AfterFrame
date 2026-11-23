@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Check, Cpu, FolderPlus, LoaderCircle, Play, Trash2, UsersRound } from "lucide-react";
+import { AlertCircle, Check, Cpu, FolderPlus, LoaderCircle, PawPrint, Play, Trash2, UsersRound } from "lucide-react";
 import api from "../../api";
 import { Callout, FieldRow, Group, PrimaryButton, SecondaryButton, Toggle } from "./SettingsPrimitives";
 
@@ -104,7 +104,7 @@ export default function PeopleSettings() {
       await action();
       await refresh();
     } catch (reason) {
-      setError({ scope: name === "index" ? "index" : "model", message: reason?.message || String(reason) });
+      setError({ scope: name === "index" ? "index" : name.startsWith("pet") ? "pets" : "model", message: reason?.message || String(reason) });
     } finally {
       setBusy(null);
     }
@@ -113,6 +113,8 @@ export default function PeopleSettings() {
   if (!settings) return <div className="text-[12px] text-muted">{t("people.loading")}</div>;
 
   const model = settings.activeModel;
+  const pets = settings.pets || null;
+  const petModel = pets?.activeModel || null;
   const indexing = !!job?.active;
   const progress = Math.round(Math.max(0, Math.min(1, Number(job?.progress || 0))) * 100);
 
@@ -163,6 +165,59 @@ export default function PeopleSettings() {
               busy={!!busy}
               onActivate={(key) => perform("activate", () => api.setActivePeopleModel(key))}
               onRemove={(key) => perform("remove", () => api.removePeopleModel(key))}
+              t={t}
+            />
+          ))}
+        </Group>
+      )}
+
+      {pets && (
+        <Group title={t("people.petsTitle")} subtitle={t("people.petsSubtitle")} badge="Local">
+          <FieldRow label={t("people.petsEnabled")} hint={t("people.petsEnabledHint")}>
+            <Toggle on={pets.enabled} disabled={!!busy} onChange={(value) => perform("petsEnabled", () => api.setPetsEnabled(value))} />
+          </FieldRow>
+          {petModel ? (
+            <div className="flex items-center gap-3 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--fill-3)] text-text">
+                <PawPrint className="h-[18px] w-[18px]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[12px] font-medium text-text">{petModel.name}</div>
+                <div className="mt-0.5 text-[11px] text-muted2">
+                  {t(petModel.source === "bundled" ? "people.builtInModelHint" : "people.activeModelHint", { size: formatSize(petModel.sizeBytes) })}
+                </div>
+              </div>
+              <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">{t("people.ready")}</span>
+            </div>
+          ) : (
+            <div className="px-1 py-5 text-center text-[11px] text-muted2">
+              {pets.builtInNeedsMacOS
+                ? t("people.petBuiltInNeedsMacOS", { version: pets.builtInNeedsMacOS })
+                : t("people.petNoModel")}
+            </div>
+          )}
+          <FieldRow label={t("people.installModel")} hint={t("people.petInstallModelHint")}>
+            <SecondaryButton disabled={!!busy} onClick={() => perform("petInstall", () => api.pickPetModel())}>
+              <span className="inline-flex items-center gap-1.5">
+                {busy === "petInstall" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
+                {busy === "petInstall" ? t("people.validating") : t("people.chooseModel")}
+              </span>
+            </SecondaryButton>
+          </FieldRow>
+          {error?.scope === "pets" && <ErrorNote message={error.message} />}
+        </Group>
+      )}
+
+      {pets?.models?.length > 1 && (
+        <Group title={t("people.installedPetModels")}>
+          {pets.models.map((entry) => (
+            <ModelRow
+              key={entry.key}
+              model={entry}
+              active={entry.key === pets.activeModelKey}
+              busy={!!busy}
+              onActivate={(key) => perform("petActivate", () => api.setActivePetModel(key))}
+              onRemove={(key) => perform("petRemove", () => api.removePetModel(key))}
               t={t}
             />
           ))}

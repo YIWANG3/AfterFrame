@@ -189,7 +189,8 @@ export default function Inspector({ variant = "panel", detail, onOpenFolder, onR
     let namedGroups = [];
     try {
       const groups = await api.listPeopleGroups() || [];
-      namedGroups = groups.filter((group) => group.name?.trim());
+      const subject = face.subject || "person";
+      namedGroups = groups.filter((group) => group.name?.trim() && (group.subject || "person") === subject);
     } catch { /* suggestions are optional; naming still works */ }
     setNamingFace({ face, anchorRect, namedGroups });
   }
@@ -285,12 +286,14 @@ export default function Inspector({ variant = "panel", detail, onOpenFolder, onR
   const videoFps = imageMeta.fps ? `${Math.round(Number(imageMeta.fps))} fps` : null;
   const videoCodec = imageMeta.codec ? String(imageMeta.codec).toUpperCase() : null;
 
-  const peopleSection = detail.people?.has_face ? (
+  // People and the cats and dogs the pet model found, in one list.
+  const peopleSection = detail.people?.has_face || detail.people?.pet_count > 0 ? (
     <Section title={t("sections.people")}>
       <div className="space-y-1 py-1" onMouseLeave={() => setHoveredFaceId(null)}>
         {detail.people.faces.map((face) => {
           const named = !!face.name?.trim();
           const grouped = !!face.group_id;
+          const pet = face.subject === "cat" || face.subject === "dog";
           return (
             <button
               key={face.face_id}
@@ -320,8 +323,11 @@ export default function Inspector({ variant = "panel", detail, onOpenFolder, onR
                 className="shrink-0 rounded-full border border-border/50"
               />
               <span className={`min-w-0 flex-1 truncate ${named ? "text-text" : "text-muted"}`}>
-                {named ? face.name : (grouped ? t("people.addName") : t("people.unrecognized"))}
+                {named ? face.name : (grouped ? t("people.addName") : t(pet ? "people.unrecognizedPet" : "people.unrecognized"))}
               </span>
+              {pet && (
+                <span data-testid="inspector-pet-species" className="shrink-0 text-[10px] text-muted2">{t(`people.${face.subject}`)}</span>
+              )}
               {face.quality === "low" && (
                 <span className="shrink-0 text-[10px] text-muted2">{t("people.lowQuality")}</span>
               )}
@@ -668,6 +674,7 @@ export default function Inspector({ variant = "panel", detail, onOpenFolder, onR
         <PersonPickerPopover
           anchorRect={pickingFace.anchorRect}
           excludeGroupId={pickingFace.face.group_id}
+          subject={pickingFace.face.subject || "person"}
           onClose={() => setPickingFace(null)}
           onPick={(target) => void applyPeopleChange(async () => {
             await api.assignFaceToPerson({ faceId: pickingFace.face.face_id, groupId: target.group_id });
@@ -679,7 +686,7 @@ export default function Inspector({ variant = "panel", detail, onOpenFolder, onR
       {namingFace && (
         <NamePersonPopover
           anchorRect={namingFace.anchorRect}
-          group={{ group_id: namingFace.face.group_id, name: namingFace.face.name }}
+          group={{ group_id: namingFace.face.group_id, name: namingFace.face.name, subject: namingFace.face.subject }}
           namedGroups={namingFace.namedGroups}
           onClose={() => setNamingFace(null)}
           onRename={(name) => applyPeopleChange(

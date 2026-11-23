@@ -18,7 +18,7 @@
     "sourceImages": "Source Images",
     "otherVersions": "Other Versions",
     "similar": "Similar",
-    "people": "People"
+    "people": "People & Pets"
   },
   "rows": {
     "folder": "Folder",
@@ -73,7 +73,10 @@
     "coverUpdated": "Person cover updated",
     "coverFailed": "Couldn’t set cover photo",
     "pickerPlaceholder": "Search people…",
-    "pickerEmpty": "No named people yet"
+    "pickerEmpty": "No named people yet",
+    "unrecognizedPet": "Not matched to a pet",
+    "cat": "Cat",
+    "dog": "Dog"
   },
   "toast": {
     "relinked": "Relinked",

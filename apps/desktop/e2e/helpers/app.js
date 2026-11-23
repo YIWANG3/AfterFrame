@@ -100,6 +100,9 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
  *   model the app sees, independent of whether this checkout fetched it:
  *   "none" = a build without it, "stub" = an empty package that satisfies the
  *   UI but can't run a scan, "real" = native/FaceEmbedding.mlpackage as fetched.
+ * @param {"none"|"stub"|"real"} [opts.petModel="none"] - the bundled pet model
+ *   (docs/pet-recognition-design.md), the same three ways; "real" =
+ *   native/PetEmbedding.mlpackage.
  * @param {object} [opts.env] - extra environment for the app, e.g. { TZ }.
  * @returns {Promise<{ app: import('playwright').ElectronApplication, window: import('playwright').Page, userDataDir: string }>}
  */
@@ -139,7 +142,7 @@ async function collectCoverage(app) {
   }
 }
 
-async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir, keepCatalog = false, peopleModel = "none", env: extraEnv = {} } = {}) {
+async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir, keepCatalog = false, peopleModel = "none", petModel = "none", env: extraEnv = {} } = {}) {
   // Fresh userData so each run starts from a clean slate
   if (reuseUserDataDir && (!path.basename(reuseUserDataDir).startsWith("afterframe-e2e-")
     || fs.realpathSync(path.dirname(reuseUserDataDir)) !== fs.realpathSync(os.tmpdir()))) {
@@ -178,6 +181,14 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
       fs.writeFileSync(path.join(modelPath, "Manifest.json"), "{}");
     }
     env.AFTERFRAME_BUNDLED_PEOPLE_MODEL = modelPath;
+  }
+  if (petModel !== "real") {
+    const modelPath = path.join(userDataDir, "bundled-pet-model", "PetEmbedding.mlpackage");
+    if (petModel === "stub") {
+      fs.mkdirSync(modelPath, { recursive: true });
+      fs.writeFileSync(path.join(modelPath, "Manifest.json"), "{}");
+    }
+    env.AFTERFRAME_BUNDLED_PET_MODEL = modelPath;
   }
 
   // Copy the seeded catalog into a tmp dir so save/import tests can't

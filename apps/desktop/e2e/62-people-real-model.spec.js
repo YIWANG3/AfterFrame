@@ -28,8 +28,8 @@ test.describe("people recognition with the bundled face model", () => {
   const cards = () => galleryCards(ctx.window);
   const nameOf = (file) => path.basename(file);
   const openPeople = async () => {
-    await ctx.window.getByRole("navigation").getByRole("button", { name: "People", exact: true }).click();
-    await expect(ctx.window.getByRole("heading", { name: "People", exact: true })).toBeVisible();
+    await ctx.window.getByRole("navigation").getByRole("button", { name: "People & Pets", exact: true }).click();
+    await expect(ctx.window.getByRole("heading", { name: "People & Pets", exact: true })).toBeVisible();
   };
   const photosOf = (groupId) => ctx.window.evaluate(
     (id) => window.mediaWorkspace.browseImages({ status: "all", limit: 500, filters: { person_group: id } })
@@ -57,10 +57,10 @@ test.describe("people recognition with the bundled face model", () => {
     if (dir) fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  test("Scan faces runs the model and groups each person's photos, and only theirs", async () => {
+  test("Scan runs the model and groups each person's photos, and only theirs", async () => {
     test.setTimeout(240_000);
     await openPeople();
-    await ctx.window.getByRole("button", { name: "Scan faces" }).first().click();
+    await ctx.window.getByRole("button", { name: "Scan", exact: true }).first().click();
     await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.getPeopleIndexStatus().then((s) => s?.status)), {
       timeout: 180_000, intervals: [1_000],
     }).toBe("succeeded");

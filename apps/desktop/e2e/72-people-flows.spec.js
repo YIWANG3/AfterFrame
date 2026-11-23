@@ -23,8 +23,8 @@ test.afterAll(async () => {
 });
 
 async function openPeoplePage() {
-  await ctx.window.getByRole("navigation").getByRole("button", { name: "People", exact: true }).click();
-  await expect(ctx.window.getByRole("heading", { name: "People", exact: true })).toBeVisible();
+  await ctx.window.getByRole("navigation").getByRole("button", { name: "People & Pets", exact: true }).click();
+  await expect(ctx.window.getByRole("heading", { name: "People & Pets", exact: true })).toBeVisible();
 }
 
 test("people wall shows the named person and the candidate with face covers", async () => {
@@ -102,7 +102,7 @@ test("the resident person filter in the gallery filter bar works", async () => {
   };
   ctx.window.on("console", recordBrowse);
   // Still in the assets view from the previous test, filter bar visible.
-  await ctx.window.locator("div.flex-wrap").getByRole("button", { name: /^Person$/ }).click();
+  await ctx.window.locator("div.flex-wrap").getByRole("button", { name: /^Person or pet$/ }).click();
   await ctx.window.locator("div.fixed").getByRole("button", { name: /Chen Mo/ }).click();
   await expect(galleryCards(ctx.window)).toHaveCount(4, { timeout: 10_000 });
   ctx.window.off("console", recordBrowse);

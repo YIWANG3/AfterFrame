@@ -35,7 +35,7 @@ test("Discover groups the catalog by capture month and pins Rated; sparse sectio
   await expect(sectionNav().getByRole("button", { name: "Pinned" })).toBeVisible();
   // One photo per place is below PLACE_MIN_PHOTOS; no people, no albums yet.
   await expect(sectionNav().getByRole("button", { name: "Places" })).toHaveCount(0);
-  await expect(sectionNav().getByRole("button", { name: "People" })).toHaveCount(0);
+  await expect(sectionNav().getByRole("button", { name: "People & Pets" })).toHaveCount(0);
   await expect(sectionNav().getByRole("button", { name: "Albums" })).toHaveCount(0);
 
   // The three real photographs carry capture dates; the gradients do not.

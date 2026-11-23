@@ -72,17 +72,20 @@ test("People tab without the bundled model offers choosing one", async () => {
   if (!await ctx.window.getByRole("button", { name: "General" }).isVisible()) {
     await ctx.window.keyboard.press("ControlOrMeta+,");
   }
-  // Scope to the settings tab list — the app sidebar also has a "People" button.
-  await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People" }).click();
+  // Scope to the settings tab list — the app sidebar also has a "People & Pets" button.
+  await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People & Pets" }).click();
   await expect(ctx.window.getByText("Face model", { exact: true })).toBeVisible();
   // The default E2E launch is a build without the bundled model: there is
   // nothing to download, only a model to choose.
   await expect(ctx.window.getByText("This build doesn't include the face model. Choose a compatible model below.")).toBeVisible();
+  // So does the pet model beside it (docs/pet-recognition-design.md): each
+  // offers choosing one.
+  await expect(ctx.window.getByText("This build doesn't include the pet model. Choose a compatible model below.")).toBeVisible();
   await expect(ctx.window.getByRole("button", { name: /Download/ })).toHaveCount(0);
-  await expect(ctx.window.getByRole("button", { name: "Choose model…" })).toBeVisible();
+  await expect(ctx.window.getByRole("button", { name: "Choose model…" })).toHaveCount(2);
   await expect(ctx.window.getByText("Index your library")).toBeVisible();
   // Auto-analyze on import is opt-in, and cannot be switched on without a model.
-  const autoIndex = ctx.window.getByText("Analyze faces after import", { exact: true })
+  const autoIndex = ctx.window.getByText("Analyze people and pets after import", { exact: true })
     .locator("xpath=ancestor::div[contains(@class,'justify-between')][1]").getByRole("switch");
   await expect(autoIndex).toHaveAttribute("aria-checked", "false");
   await expect(autoIndex).toBeDisabled();

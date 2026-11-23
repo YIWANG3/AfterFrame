@@ -178,8 +178,8 @@ test.describe("Sidebar navigation", () => {
       await expectLibrary();
     });
 
-    test("All Assets after a detour through Discover or People shows the library, not the folder", async () => {
-      for (const view of ["Discover", "People"]) {
+    test("All Assets after a detour through Discover or People & Pets shows the library, not the folder", async () => {
+      for (const view of ["Discover", "People & Pets"]) {
         await openFolder();
         await window.getByRole("button", { name: view, exact: true }).click();
         await window.getByRole("button", { name: /All Assets/i }).first().click();
