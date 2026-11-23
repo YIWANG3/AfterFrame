@@ -11,8 +11,12 @@ import { createDefaultLayer, createStickerLayer, measureTextWidthDOM } from "../
 import { FRAME_FONTS } from "../frameTemplates";
 import { isFrameLayer } from "../layerStack";
 import { outputGeometry } from "../frameUserTemplates";
-import { backgroundLightness, layerBoxes, placeLogo, placeText, swapLogo } from "../logoPlacement";
+import {
+  backgroundLightness, layerBoxes, placeLogo, placeText, readableLogoColor, readableTextColor, swapLogo,
+} from "../logoPlacement";
 import { invalidatePersonalLogos, isPersonalLogoRef, preparePersonalLogo } from "../render/personalLogos";
+import { photoPalette } from "../render/frameBackdrop";
+import { effectiveCanvasPad } from "../imageMath";
 
 // How light the photo is under a spot (output px): the corner a logo is put in
 // when there is no bar. 0 is black, 1 white.
@@ -32,6 +36,30 @@ function photoLightness(source, geom, spot) {
   return sum / (data.length / 4);
 }
 
+// How light the margin is under a spot (output px of `geom`, the user's
+// margins). A flat or gradient background says so itself; one made from the
+// photo is read from the photo: its colours by height, or the photo scaled to
+// cover the canvas as laid out (`layout`, the margins a ratio widened).
+function marginLightness(source, geom, layout, spot, bg) {
+  if (bg?.mode === "palette") {
+    const p = photoPalette(source, { x: geom.cropX, y: geom.cropY, width: geom.contentW, height: geom.contentH });
+    const t = Math.min(1, Math.max(0, (spot.cy - geom.top + layout.top) / layout.outH));
+    return (1 - t) * backgroundLightness({ color: p.top }) + t * backgroundLightness({ color: p.bottom });
+  }
+  if (bg?.mode === "blur") {
+    const k = Math.max(layout.outW / geom.contentW, layout.outH / geom.contentH);
+    const ox = spot.cx - geom.left + layout.left, oy = spot.cy - geom.top + layout.top;
+    const at = {
+      cx: geom.left + geom.contentW / 2 + (ox - layout.outW / 2) / k,
+      cy: geom.top + geom.contentH / 2 + (oy - layout.outH / 2) / k,
+      // Blurred: what's around the spot counts too.
+      width: Math.max(8, (spot.width / k) * 3), height: Math.max(8, (spot.height / k) * 3),
+    };
+    return photoLightness(source, geom, at) * 0.94;
+  }
+  return backgroundLightness(bg);
+}
+
 const isLogoFileDrag = (event) => [...(event.dataTransfer?.items || [])]
   .some((entry) => entry.kind === "file" && (entry.type === "image/svg+xml" || entry.type === "image/png"));
 
@@ -40,15 +68,71 @@ export function useFramePlacement({
   commitLayers, setSelectedIds, setTool, pushToast, t,
 }) {
   // The turned preview's full size and the output geometry (crop + margins)
-  // as of now, or null without a picture.
-  function currentGeometry() {
+  // of `canvas` (the editor's as of now by default), or null without a picture.
+  function geometryFor(canvas) {
     const source = transformedPreview;
     if (!source) return null;
     const s = editorStateRef.current;
-    const pad = s.canvas?.pad || {};
+    const pad = canvas?.pad || {};
     const fullW = source.width || source.naturalWidth;
     const fullH = source.height || source.naturalHeight;
-    return { source, s, pad, fullW, fullH, geom: outputGeometry({ fullW, fullH, crop: normalizedCrop, pad }) };
+    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad });
+    const layout = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad: effectiveCanvasPad(canvas, source, normalizedCrop) });
+    // How light the margin is at a spot (see marginLightness).
+    const marginLight = (spot) => marginLightness(source, geom, layout, spot, canvas?.bg);
+    return { source, s, pad, fullW, fullH, geom, marginLight };
+  }
+  const currentGeometry = () => geometryFor(editorStateRef.current.canvas);
+
+  // The frame's text and plain camera logos in the margin, recoloured where
+  // they would not read on what will be behind them: a template's dark ink
+  // on a dark blurred photo, white on a light one. A change of canvas (the
+  // background, a template) passes the canvas it is about to have. Colours
+  // that already read are kept. Returns the layers, or null when none changed.
+  async function adaptFrameColors(layers, canvas) {
+    const g = geometryFor(canvas);
+    if (!g) return null;
+    const { geom } = g;
+    const lightBehind = (layer) => {
+      const box = layerBoxes([layer], geom, measureTextWidthDOM)[0];
+      if (!box) return null;
+      const spot = { cx: box.x + box.w / 2, cy: box.y + box.h / 2, width: Math.max(4, box.w), height: Math.max(4, box.h) };
+      const onPhoto = spot.cx >= geom.left && spot.cx <= geom.left + geom.contentW
+        && spot.cy >= geom.top && spot.cy <= geom.top + geom.contentH;
+      // On the photo the colour was picked for the photo (and its wash) already.
+      if (onPhoto) return null;
+      return g.marginLight(spot);
+    };
+    let changed = false;
+    const next = [];
+    for (const layer of layers) {
+      if (!isFrameLayer(layer)) { next.push(layer); continue; }
+      if (layer.type === "text") {
+        const light = lightBehind(layer);
+        const color = light == null ? null : readableTextColor(layer.fillColor, light);
+        if (color) {
+          const dark = light < 0.55;
+          next.push({ ...layer, fillColor: color, ...(layer.shadow ? { shadowColor: dark ? "#000000" : "#ffffff" } : {}) });
+          changed = true;
+          continue;
+        }
+      } else if (layer.type === "sticker" && layer.logoRef && !isPersonalLogoRef(layer.logoRef)) {
+        const light = lightBehind(layer);
+        const color = light == null ? null : readableLogoColor(layer.logoRef.color, light);
+        const img = color ? await frameToolRef.current?.brandLogoFor?.({ ...layer.logoRef, color }) : null;
+        if (img) {
+          stickerImageCache.set(img.src, img);
+          next.push({
+            ...layer, logoRef: { ...layer.logoRef, color },
+            stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+          });
+          changed = true;
+          continue;
+        }
+      }
+      next.push(layer);
+    }
+    return changed ? next : null;
   }
 
   // A spot (output px) as a layer position: full-photo fractions.
@@ -69,14 +153,14 @@ export function useFramePlacement({
   async function placePersonalLogo(logo) {
     const g = currentGeometry();
     if (!g || !logo) return;
-    const { source, s, pad, fullW, geom } = g;
+    const { source, pad, fullW, geom } = g;
     const spot = placeLogo({
       geom, pad, aspect: logo.width / Math.max(1, logo.height),
       occupied: layerBoxes(layersRef.current, geom, measureTextWidthDOM),
     });
     let color = null;
     if (logo.tintable) {
-      const light = spot.region === "photo" ? photoLightness(source, geom, spot) : backgroundLightness(s.canvas?.bg);
+      const light = spot.region === "photo" ? photoLightness(source, geom, spot) : g.marginLight(spot);
       color = light < 0.55 ? "#ffffff" : "#141414";
     }
     const img = await preparePersonalLogo(logo, color);
@@ -100,7 +184,7 @@ export function useFramePlacement({
     const g = currentGeometry();
     const tool = frameToolRef.current;
     if (!g || !tool?.cameraLogo) return;
-    const { source, s, pad, fullW, geom } = g;
+    const { source, pad, fullW, geom } = g;
     const ref = { variant: variant || "wordmark", kind: null, strict: false, color: "#141414", ...(level === "brand" ? { scope: "brand" } : {}) };
     const probe = await tool.brandLogoFor(ref);
     if (!probe) return;
@@ -108,7 +192,7 @@ export function useFramePlacement({
       geom, pad, aspect: probe.naturalWidth / Math.max(1, probe.naturalHeight),
       occupied: layerBoxes(layersRef.current, geom, measureTextWidthDOM),
     });
-    const light = spot.region === "photo" ? photoLightness(source, geom, spot) : backgroundLightness(s.canvas?.bg);
+    const light = spot.region === "photo" ? photoLightness(source, geom, spot) : g.marginLight(spot);
     if (light < 0.55) ref.color = "#ffffff";
     const img = (await tool.brandLogoFor(ref)) || probe;
     stickerImageCache.set(img.src, img);
@@ -166,7 +250,7 @@ export function useFramePlacement({
   function addFrameText({ text, tokenSource = null, secondary = false }) {
     const g = currentGeometry();
     if (!g || !text) return false;
-    const { source, s, pad, fullW, geom } = g;
+    const { source, pad, fullW, geom } = g;
     const family = FRAME_FONTS.grotesk;
     const widthAt = (fontPx) => measureTextWidthDOM(text, { fontPx, weight: 400, family });
     const spot = placeText({
@@ -176,7 +260,7 @@ export function useFramePlacement({
     const onPhoto = spot.region === "photo";
     const light = onPhoto
       ? photoLightness(source, geom, { cx: spot.cx, cy: spot.cy, width: widthAt(spot.fontPx), height: spot.fontPx * 1.2 })
-      : backgroundLightness(s.canvas?.bg);
+      : g.marginLight({ cx: spot.cx, cy: spot.cy, width: widthAt(spot.fontPx), height: spot.fontPx * 1.2 });
     addLayer(createDefaultLayer({
       text, ...(tokenSource ? { tokenSource } : {}),
       fontFamily: family, fontWeight: 400, fontSize: (spot.fontPx * 1920) / fullW,
@@ -232,6 +316,7 @@ export function useFramePlacement({
       // Only the frame: what is written on the photo stays with the photo.
       const res = await frameToolRef.current?.saveTemplate?.(name, {
         layers: layersRef.current.filter(isFrameLayer), pad: s.canvas?.pad || {}, bg: s.canvas?.bg || null,
+        aspect: s.canvas?.aspect ?? null, photo: s.canvas?.photo ?? null,
       });
       if (!res) return;
       pushToast?.({
@@ -245,7 +330,7 @@ export function useFramePlacement({
   }
 
   return {
-    placePersonalLogo, placeCameraLogo, chooseCameraLogo, addFrameText, saveFrameTemplate,
+    placePersonalLogo, placeCameraLogo, chooseCameraLogo, addFrameText, saveFrameTemplate, adaptFrameColors,
     logoDropActive, handleLogoDrop, handleLogoDragOver, handleLogoDragLeave,
   };
 }

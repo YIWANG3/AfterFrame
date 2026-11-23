@@ -3,6 +3,7 @@
 // Used by both the inline-apply path and the export-to-disk path.
 
 import { drawScrim, hexToRgba } from "./canvasHelpers";
+import { textBgRadius } from "./frameBackdrop";
 import { getBgPadding, applyTextCase } from "../textState";
 
 /**
@@ -169,7 +170,12 @@ function drawTextLayer(ctx, scale, px, py, layer) {
     } else {
       ctx.fillStyle = hexToRgba(layer.bgColor, bgOp);
     }
-    ctx.fillRect(-tw / 2 - padL, -th / 2 - padT, tw + padL + padR, th + padT + padB);
+    const bw = tw + padL + padR, bh = th + padT + padB;
+    const r = textBgRadius(layer, bw, bh);
+    ctx.beginPath();
+    if (r > 0 && typeof ctx.roundRect === "function") ctx.roundRect(-tw / 2 - padL, -th / 2 - padT, bw, bh, r);
+    else ctx.rect(-tw / 2 - padL, -th / 2 - padT, bw, bh);
+    ctx.fill();
   }
 
   // Stroke + fill on an offscreen canvas (no shadow), then blit to main with

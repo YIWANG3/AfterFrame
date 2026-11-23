@@ -7,22 +7,13 @@ import {
   getSourceDimensions,
   buildTransformedCanvas, cutRotatedCrop,
   buildDepthAlphaMask,
-  angledLinearGradient,
   drawScrim,
   canvasToBlob,
   inferMimeType,
   releaseCanvasImage,
 } from "./canvasHelpers";
-import { hasPad, getOutputDimensions } from "../imageMath";
-
-// Canvas fillStyle for the border background — solid color or a linear gradient
-// across the WxH output (same angle convention as the live preview / text).
-function bgFillStyle(ctx, bg, W, H) {
-  if (bg?.mode === "gradient" && bg.gradient) {
-    return angledLinearGradient(ctx, bg.gradient, W, H, { fromDefault: "#ffffff", toDefault: "#000000" });
-  }
-  return bg?.color || "#ffffff";
-}
+import { canvasActive, getOutputDimensions, resolveCanvasPad } from "../imageMath";
+import { clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./frameBackdrop";
 
 // Catalog registration is a nice-to-have — if it fails (no catalog loaded,
 // sidecar down) we still consider the save successful.
@@ -60,6 +51,8 @@ export async function saveEditedImage(ctx) {
     canvasPad,
     canvasBg,
     canvasScrim,
+    canvasAspect = null,
+    canvasPhoto = null,
     layers,
     depthFieldCanvas,
     depthFeather,
@@ -70,7 +63,7 @@ export async function saveEditedImage(ctx) {
     gradeContent = null,
   } = ctx;
 
-  const padActive = hasPad(canvasPad);
+  const padActive = canvasActive({ pad: canvasPad, aspect: canvasAspect });
 
   // Native sharp fast-path: full source resolution, no canvas overhead. Only
   // valid when there are zero overlay layers AND no canvas margin/scrim (sharp
@@ -140,12 +133,15 @@ export async function saveEditedImage(ctx) {
 
   if (padActive) {
     const short = Math.min(contentSrc.width, contentSrc.height);
-    const dims = getOutputDimensions({ width: fullW, height: fullH }, canvasPad, normalizedCrop);
+    // The user's margins, widened to the canvas ratio when one is set.
+    const userPad = { top: 0, right: 0, bottom: 0, left: 0, ...(canvasPad || {}) };
+    const pad = resolveCanvasPad({ pad: userPad, aspect: canvasAspect }, contentSrc.width, contentSrc.height);
+    const dims = getOutputDimensions({ width: fullW, height: fullH }, pad, normalizedCrop);
     compW = dims.width;
     compH = dims.height;
     contentRect = {
-      x: canvasPad.left * short,
-      y: canvasPad.top * short,
+      x: pad.left * short,
+      y: pad.top * short,
       width: contentSrc.width,
       height: contentSrc.height,
     };
@@ -154,13 +150,22 @@ export async function saveEditedImage(ctx) {
     outCtx = outputCanvas.getContext("2d");
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
-    outCtx.fillStyle = bgFillStyle(outCtx, canvasBg, compW, compH);
-    outCtx.fillRect(0, 0, compW, compH);
+    drawCanvasBackground(outCtx, canvasBg, {
+      W: compW, H: compH, source: content, contentRect, short, photoStyle: canvasPhoto,
+      userPadPx: {
+        top: userPad.top * short, right: userPad.right * short,
+        bottom: userPad.bottom * short, left: userPad.left * short,
+      },
+    });
+    drawPhotoShadow(outCtx, contentRect, canvasPhoto, short);
+    outCtx.save();
+    clipToPhoto(outCtx, contentRect, canvasPhoto, short);
     outCtx.drawImage(
       content,
       0, 0, content.width, content.height,
       contentRect.x, contentRect.y, contentRect.width, contentRect.height,
     );
+    outCtx.restore();
   } else {
     compW = contentSrc.width;
     compH = contentSrc.height;

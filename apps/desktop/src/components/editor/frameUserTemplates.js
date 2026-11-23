@@ -17,7 +17,8 @@
 
 import { formatExif, resolveTokens } from "./render/frameRender";
 import { drawLayersOnCanvas } from "./render/drawLayers";
-import { angledLinearGradient } from "./render/canvasHelpers";
+import { clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./render/frameBackdrop";
+import { resolveCanvasPad } from "./imageMath";
 
 export const USER_TEMPLATE_PREFIX = "user:";
 const USER_TEMPLATE_VERSION = 1;
@@ -132,7 +133,7 @@ function textBox(layer, fontPx, measure) {
  * @returns {{ template: object, skipped: number }} skipped: stickers that exist only as
  *   pixels in a data: URL (a handwriting sticker) and cannot travel in a template
  */
-export function templateFromLayers({ id, name, layers, geom, pad, bg, measure }) {
+export function templateFromLayers({ id, name, layers, geom, pad, bg, aspect = null, photo = null, measure }) {
   const g = geom;
   const saved = [];
   let skipped = 0;
@@ -180,7 +181,12 @@ export function templateFromLayers({ id, name, layers, geom, pad, bg, measure })
   return {
     template: {
       id, name, kind: "layers", version: USER_TEMPLATE_VERSION,
-      canvas: { pad: { top: 0, right: 0, bottom: 0, left: 0, ...(pad || {}) }, bg: bg ? JSON.parse(JSON.stringify(bg)) : null },
+      canvas: {
+        pad: { top: 0, right: 0, bottom: 0, left: 0, ...(pad || {}) },
+        bg: bg ? JSON.parse(JSON.stringify(bg)) : null,
+        aspect: aspect ?? null,
+        photo: photo ? { ...photo } : null,
+      },
       layers: saved,
     },
     skipped,
@@ -248,19 +254,29 @@ export function layersFromTemplate(tpl, { geom, exif, profile, measure, logoFor 
 export function renderUserTemplate({ photo, template, exif, profile, measure, logoFor, stickerImages = new Map() }) {
   const fullW = photo.naturalWidth || photo.width;
   const fullH = photo.naturalHeight || photo.height;
-  const g = outputGeometry({ fullW, fullH, pad: template.canvas?.pad });
+  // The template's margins, widened to its ratio when it has one.
+  const g = outputGeometry({ fullW, fullH, pad: resolveCanvasPad(template.canvas, fullW, fullH) });
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(g.outW);
   canvas.height = Math.round(g.outH);
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  const bg = template.canvas?.bg;
-  ctx.fillStyle = bg?.mode === "gradient" && bg.gradient
-    ? angledLinearGradient(ctx, bg.gradient, canvas.width, canvas.height, { fromDefault: "#ffffff", toDefault: "#000000" })
-    : bg?.color || "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const userPad = { top: 0, right: 0, bottom: 0, left: 0, ...(template.canvas?.pad || {}) };
+  const photoStyle = template.canvas?.photo || null;
+  const contentRect = { x: g.left, y: g.top, width: g.contentW, height: g.contentH };
+  drawCanvasBackground(ctx, template.canvas?.bg, {
+    W: canvas.width, H: canvas.height, source: photo, contentRect, short: g.short, photoStyle,
+    userPadPx: {
+      top: userPad.top * g.short, right: userPad.right * g.short,
+      bottom: userPad.bottom * g.short, left: userPad.left * g.short,
+    },
+  });
+  drawPhotoShadow(ctx, contentRect, photoStyle, g.short);
+  ctx.save();
+  clipToPhoto(ctx, contentRect, photoStyle, g.short);
   ctx.drawImage(photo, g.left, g.top, g.contentW, g.contentH);
+  ctx.restore();
   const images = new Map(stickerImages);
   const layers = layersFromTemplate(template, {
     geom: g, exif, profile, measure,

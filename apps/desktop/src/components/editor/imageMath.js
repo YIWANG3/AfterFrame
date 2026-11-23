@@ -23,6 +23,51 @@ export function hasPad(pad) {
   return !!(pad && (pad.top || pad.right || pad.bottom || pad.left));
 }
 
+// Canvas ratios the frame can be set to (null = the photo's own shape).
+export const CANVAS_ASPECTS = ["1:1", "4:5", "9:16"];
+
+export function aspectRatioOf(aspect) {
+  const m = typeof aspect === "string" && aspect.match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const w = Number(m[1]), h = Number(m[2]);
+  return w > 0 && h > 0 ? w / h : null;
+}
+
+// Is the photo inside a larger output canvas — margins, or a ratio to fill?
+export function canvasActive(canvas) {
+  return hasPad(canvas?.pad) || aspectRatioOf(canvas?.aspect) != null;
+}
+
+// The margins actually laid out around content of contentW×contentH: the
+// user's own, widened evenly on the narrow axis until the output has the
+// canvas's ratio. A ratio is extra margin, so every consumer of pad (preview,
+// layer basis, export) gets it by resolving here.
+export function resolveCanvasPad(canvas, contentW, contentH) {
+  const p = { top: 0, right: 0, bottom: 0, left: 0, ...(canvas?.pad || {}) };
+  const ratio = aspectRatioOf(canvas?.aspect);
+  if (!ratio || !(contentW > 0) || !(contentH > 0)) return p;
+  const s = Math.min(contentW, contentH);
+  const W = contentW + (p.left + p.right) * s;
+  const H = contentH + (p.top + p.bottom) * s;
+  if (W / H < ratio - 1e-6) {
+    const extra = (ratio * H - W) / 2 / s;
+    return { ...p, left: p.left + extra, right: p.right + extra };
+  }
+  if (W / H > ratio + 1e-6) {
+    const extra = (W / ratio - H) / 2 / s;
+    return { ...p, top: p.top + extra, bottom: p.bottom + extra };
+  }
+  return p;
+}
+
+// resolveCanvasPad for the editor's preview content (the crop of the
+// transformed preview).
+export function effectiveCanvasPad(canvas, transformedPreview, crop) {
+  if (!transformedPreview) return { top: 0, right: 0, bottom: 0, left: 0, ...(canvas?.pad || {}) };
+  const c = getContentDims(transformedPreview, crop);
+  return resolveCanvasPad(canvas, c.width, c.height);
+}
+
 // The crop rect as fractions of the photo. Derived from the PAD-FREE geometry
 // (cropRect / zoom / offsets all live in crop space), so it stays stable when a
 // canvas margin is added or removed.
@@ -84,8 +129,7 @@ export function getBasePlacement(viewportSize, transformedPreview, pad, crop) {
 // framed output.
 export function getOutputView(state, transformedPreview, crop, imageRect) {
   if (!state || !transformedPreview || !imageRect) return null;
-  const pad = state.canvas?.pad;
-  if (!hasPad(pad)) {
+  if (!canvasActive(state.canvas)) {
     // Output = photo (identity). The content window is still the crop region —
     // pad-less consumers (the scrim) hug the area that actually gets saved.
     const contentRect = crop && (crop.x || crop.y || crop.width !== 1 || crop.height !== 1)
@@ -108,6 +152,7 @@ export function getOutputView(state, transformedPreview, crop, imageRect) {
         }
       : imageRect
   );
+  const pad = effectiveCanvasPad(state.canvas, transformedPreview, crop);
   const short = Math.min(contentRect.width, contentRect.height);
   const rect = {
     x: contentRect.x - (pad.left || 0) * short,
