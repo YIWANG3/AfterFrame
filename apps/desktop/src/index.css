@@ -386,9 +386,12 @@ html.electron.fs .noise-overlay > .grid > aside.border-r { padding-top: 12px; }
    · 三块面板之间的 8px 缝(grid 底)也可拖
    拖拽区必须能接收指针事件,所以工具栏这里把 pointer-events 打开 */
 /* 透明窗 + 自绘 26px 圆角(Tahoe 大圆角只给带 NSToolbar 的窗口,Electron 造不出来):
-   #root 用 clip-path 裁成圆角矩形,fixed 定位的覆盖层也一并被裁;全屏时不裁 */
+   #root 用 clip-path 裁成圆角矩形,fixed 定位的覆盖层也一并被裁;全屏时不裁。
+   will-change: transform 让 #root 自成合成层:界面缩放不是 100% 时(页面缩放,设备像素比不再是 2),
+   祖先上的 clip-path 会让里面带 mask 的 backdrop-filter 丢掉羽化,灯箱上下栏、网格顶部的模糊变成一刀切的硬边。
+   它也让 #root 成为 fixed 覆盖层的包含块,#root 本来就铺满窗口,位置不变 */
 html.electron, html.electron body { background: transparent; }
-html.electron #root { clip-path: inset(0 round 26px); background: rgb(var(--app-bg)); }
+html.electron #root { clip-path: inset(0 round 26px); will-change: transform; background: rgb(var(--app-bg)); }
 html.electron.fs #root { clip-path: none; }
 /* 灯箱打开时根节点底色跟着变黑:灯箱是 90% 黑的浮层,clip-path 圆角边缘的抗锯齿像素会透出根节点的浅色底,浅色主题下顶边就漏出一条白线 */
 html.electron #root:has(.fixed.inset-0[data-layer="lightbox"]),
