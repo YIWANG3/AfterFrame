@@ -76,7 +76,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - **Look-alikes**: every photo gets a perceptual hash and, on the Mac, Apple Vision's feature print, so another export, a re-encode or a crop of one picture is found. A Look-alikes view in the sidebar, **Find Similar** on any photo, and a Similar strip in the inspector
 - **Copy** (⌘C) puts the selected photos on the clipboard as files, like Finder: paste them in Finder, WeChat, Notes or anything that takes a file drop
 - Full metadata inspector: EXIF, camera, lens, exposure, dates
-- **A lightbox that gets out of the way**: the photo fills the window and the bars come out when the pointer reaches the top, the bottom or an arrow; the pin keeps them out, with the photo fitted between them
+- **A lightbox that gets out of the way**: the photo fills the window and the bars come out when the pointer reaches the top, the bottom or an arrow; the pin keeps them out, over the photo, which stays where it is
 - **Details in the lightbox**: **I** brings the photo's details out beside it (camera, exposure, dates, location, rating, flag, description and tags, editable there). The photo makes room for the pane with the bars pinned or unpinned
 - Star rating system (imports Lightroom XMP ratings, from the file or its `.xmp` sidecar, and follows them until you rate here)
 - Pick and reject flags as in Lightroom (**P** / **X** / **U**, with **Shift** to move on to the next photo), and **Delete Rejected Photos…** to take the rejects out of the library or move them to the Trash
