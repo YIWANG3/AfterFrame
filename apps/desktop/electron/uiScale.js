@@ -18,6 +18,9 @@ function createUiScale({ ipcMain, readAppSettings, updateAppSettings, getWindows
   function applyTo(window) {
     if (!window || window.isDestroyed?.()) return;
     window.webContents?.setZoomFactor?.(current);
+    // The page sizes the traffic-light gutters in screen points from this
+    // (--ui-zoom, index.css): the zoom scales CSS pixels, not the lights.
+    window.webContents?.send?.("app:ui-scale", current);
   }
 
   async function setUiScale(value) {

@@ -717,7 +717,7 @@ export default function Lightbox({
         onClick={floatingControls ? (event) => event.stopPropagation() : undefined}
       >
         <div className="pointer-events-auto min-w-0">
-          <div className="truncate text-[15px] font-medium text-white">{title}</div>
+          <div className="truncate text-[15px] font-medium text-white" data-lightbox-title>{title}</div>
           <div className="mt-1 text-[12px] text-white/60">
             {items.length > 0 ? `${clampedIndex + 1} / ${items.length}` : ""}
             {(shownSize.width > 0 && shownSize.height > 0) ? ` · ${shownSize.width} × ${shownSize.height}` : ""}

@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getMediaServerPort: () => { try { return ipcRenderer.sendSync("app:get-media-port"); } catch { return 0; } },
   // i18n: synchronous so the first render is already in the right language.
   getInitialLocale: () => { try { return ipcRenderer.sendSync("app:get-locale"); } catch { return "en"; } },
+  onUiScale: (cb) => { const h = (_e, scale) => cb(Number(scale)); ipcRenderer.on("app:ui-scale", h); return () => ipcRenderer.removeListener("app:ui-scale", h); },
   onFullscreen: (cb) => { const h = (_e, flag) => cb(!!flag); ipcRenderer.on("window:fullscreen", h); return () => ipcRenderer.removeListener("window:fullscreen", h); },
   deleteImageAssetsFromDisk: (assetIds, paths) => ipcRenderer.invoke("workspace:delete-image-assets-from-disk", { assetIds, paths }),
   onMenuAction: (callback) => {

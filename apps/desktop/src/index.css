@@ -57,6 +57,10 @@
 :root {
   --sidebar-width: 220px;
   --inspector-width: 280px;
+  /* 界面缩放就是页面缩放(electron/uiScale.js):CSS 像素跟着缩放,macOS 画的红绿灯不跟。
+     --ui-zoom 由 main.jsx 写入;N * var(--pt) 在任何缩放下都是 N 个屏幕点,给红绿灯让位的尺寸用它 */
+  --ui-zoom: 1;
+  --pt: calc(1px / var(--ui-zoom));
 }
 
 :root[data-theme="light"] {
@@ -431,8 +435,12 @@ aside.border-r .bg-selected { background: var(--fill-2); }
 aside.border-r [class*="hover:bg-hover"]:hover { background: var(--fill); }
 aside.border-r .text-accent { color: rgb(var(--text-color)); }
 
-/* ───────── 4b · 红绿灯安全区:盖住侧栏区域的全屏层,左上角让出 88px(灯占 18 至 70)───────── */
-html.electron .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { padding-left: 88px; }            /* 灯箱头部 */
+/* ───────── 4b · 红绿灯安全区:盖住侧栏区域的全屏层,左上角让出 88 点(Tahoe 的灯占 x 16 至 76)───────── */
+/* 灯箱头部:文件名在红绿灯右边,离灯 12 点。让位按屏幕点算(--pt):界面缩放是页面缩放,灯不跟着缩,
+   写成 88px 的话 90% 时只剩 3 点、80% 时压到绿灯上。纵向不跟灯对齐(居中到灯那一行太贴窗口顶边),
+   文件名和右边按钮顶边齐平,用头部的 py-5。全屏没有红绿灯,左边回到 px-6 */
+html.electron .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { padding-left: calc(88 * var(--pt)); }
+html.electron.fs .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { padding-left: 24px; }
 /* 编辑器 / 拼图头部不再靠左让位:标题改居中(见 4c),左上角天然空出来给红绿灯 */
 
 /* ───────── 4c · 覆盖层头部(编辑器 / 拼图):统一 44 高(红绿灯中心 22)、标题居中、动作靠右、关闭钮圆形 ───────── */

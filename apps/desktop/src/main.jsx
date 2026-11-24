@@ -14,6 +14,12 @@ if (/Electron/i.test(navigator.userAgent)) {
   // Fullscreen: the window fills the screen, so the self-drawn 26px corner and
   // the traffic-light gutters go away (html.fs).
   api.onFullscreen((flag) => document.documentElement.classList.toggle("fs", flag));
+  // Interface scale is page zoom: CSS pixels shrink or grow with it, the
+  // traffic lights macOS draws don't. --ui-zoom lets index.css size the room
+  // it leaves them in screen points (--pt).
+  const setZoom = (scale) => { if (Number(scale) > 0) document.documentElement.style.setProperty("--ui-zoom", String(scale)); };
+  Promise.resolve(api.getUiScale()).then(setZoom).catch(() => {});
+  api.onUiScale(setZoom);
 }
 import "./ui/scrollFlag";
 import api from "./api";
