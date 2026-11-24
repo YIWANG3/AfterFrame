@@ -14,7 +14,10 @@ export default function LibraryToolbar({
 }) {
   return (
     <div className="app-toolbar library-toolbar relative z-50 flex h-11 items-center gap-1 bg-chrome px-2.5">
-      <div className="ml-2 mr-2 flex min-w-0 flex-1 items-center gap-2 text-muted2">
+      {/* Space goes to the title's own width first, then to the search up to
+          its widest, then to the title block; running short, the search
+          shrinks to its narrowest before the title truncates. */}
+      <div className="ml-2 mr-2 flex min-w-0 flex-auto items-center gap-2 text-muted2">
         {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
         <h1 className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">{title}</h1>
         <span className="shrink-0 text-[12px] text-muted3">· {count}</span>
@@ -25,7 +28,7 @@ export default function LibraryToolbar({
 
       {/* A page with nothing to search (Statistics) passes no onQueryChange. */}
       {onQueryChange ? (
-        <label className="relative block min-w-[96px] max-w-[176px] flex-1">
+        <label className="relative block min-w-[96px] max-w-[176px] grow-[1000] basis-0">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
           <input
             value={query}

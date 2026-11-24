@@ -296,8 +296,25 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings, catalo
         searchPlaceholder={t("people.searchPlaceholder")}
         meta={(
           <>
+            {selectedIds.size > 1 && (
+              <span className="ml-1 rounded-full bg-accent/12 px-2 py-0.5 text-[10px] text-accent">
+                {t("people.selectedGroups", { count: selectedIds.size })}
+              </span>
+            )}
+            {scanning && (
+              <span className="ml-2 flex items-center gap-1.5 truncate text-[11px] text-muted">
+                <LoaderCircle className="h-3 w-3 animate-spin" />
+                {t("people.scanning", { percent: scanPercent })}
+              </span>
+            )}
+          </>
+        )}
+        actions={(
+          <>
+            {/* Beside the actions, never in the title block: there it ran under
+                Scan and squeezed the title to nothing in a narrow pane. */}
             {hasPets && (
-              <div role="radiogroup" aria-label={t("people.title")} className="ml-2 flex items-center rounded-md border border-border/60 p-0.5">
+              <div role="radiogroup" aria-label={t("people.title")} className="mr-1 flex shrink-0 items-center rounded-md border border-border/60 p-0.5">
                 {["all", "people", "pets"].map((value) => (
                   <button
                     key={value}
@@ -316,31 +333,18 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings, catalo
                 ))}
               </div>
             )}
-            {selectedIds.size > 1 && (
-              <span className="ml-1 rounded-full bg-accent/12 px-2 py-0.5 text-[10px] text-accent">
-                {t("people.selectedGroups", { count: selectedIds.size })}
-              </span>
-            )}
-            {scanning && (
-              <span className="ml-2 flex items-center gap-1.5 truncate text-[11px] text-muted">
-                <LoaderCircle className="h-3 w-3 animate-spin" />
-                {t("people.scanning", { percent: scanPercent })}
-              </span>
-            )}
-          </>
-        )}
-        actions={(
-          <>
             <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => void requestScan()}
                 disabled={scanDisabled}
                 title={modelMissing ? modelMissingTitle : t("people.scanHint")}
+                aria-label={scanLabel}
+                data-testid="people-scan"
                 className="flex h-8 items-center gap-1.5 rounded-md border border-border/60 px-2.5 text-[11px] text-muted transition hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-50"
               >
-                <ScanFace className="h-3.5 w-3.5" />
-                {scanLabel}
+                <ScanFace className="h-3.5 w-3.5 shrink-0" />
+                <span className="people-scan-label">{scanLabel}</span>
               </button>
             </div>
             <Button

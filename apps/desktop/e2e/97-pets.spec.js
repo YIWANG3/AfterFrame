@@ -143,6 +143,37 @@ test("the Inspector lists a photo's pet with its species", async () => {
   await expect(row.getByTestId("inspector-pet-species")).toHaveText("Cat");
 });
 
+test("in the smallest window, with a group's details open, the toolbar keeps the title, the switch and Scan apart", async () => {
+  const win = ctx.window;
+  await openWall();
+  await tiles().filter({ hasText: "Mochi" }).getByRole("button", { name: "Open Mochi in the library" }).click();
+  await expect(win.getByRole("button", { name: "View photos" })).toBeVisible();
+  // The app's minimum window (electron/windowChrome.js), or the screen's
+  // width when that is narrower, as on the CI VM.
+  const before = await ctx.app.evaluate(({ BrowserWindow, screen }) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    const size = window.getSize();
+    window.setSize(Math.min(1080, screen.getPrimaryDisplay().workAreaSize.width), 720);
+    return size;
+  });
+  try {
+    await expect.poll(() => win.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(1080);
+    const heading = win.getByRole("heading", { name: "People & Pets", exact: true });
+    const scan = win.getByTestId("people-scan");
+    await expect(heading).toBeVisible();
+    await expect(scan).toHaveAccessibleName("Scan");
+    await expect(scan.locator(".people-scan-label")).toBeHidden();
+    // Left to right, each part ends before the next one starts.
+    const parts = [heading, win.getByRole("radiogroup", { name: "People & Pets" }), scan, win.getByRole("button", { name: "Refresh" }), win.getByPlaceholder("Search people and pets…")];
+    const boxes = await Promise.all(parts.map((part) => part.boundingBox()));
+    for (let index = 1; index < boxes.length; index += 1) {
+      expect(boxes[index].x, `part ${index} overlaps the one before it`).toBeGreaterThanOrEqual(boxes[index - 1].x + boxes[index - 1].width - 0.5);
+    }
+  } finally {
+    await ctx.app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setSize(...size), before);
+  }
+});
+
 test("while pets are off, the wall doesn't offer to analyze them", async () => {
   await openWall();
   await expect(tiles()).toHaveCount(3);

@@ -339,6 +339,12 @@ select {
 @container toolbar (max-width: 640px) {
   .toolbar-modes { display: none; }
 }
+/* People & Pets: Scan drops its label (icon only, named by aria-label) before
+   the page title gives way; at the smallest window with a group's details
+   open the toolbar is about 520px. */
+@container toolbar (max-width: 600px) {
+  .people-scan-label { display: none; }
+}
 
 /* ───────── 0 · 连续曲率圆角:已关(用户:「先关闭超椭圆,感觉乱了」)。
    曾试 `* { corner-shape: squircle }`(Chromium 139+,Electron 43 = Chromium 150 可用),记录两个坑以备再开:
