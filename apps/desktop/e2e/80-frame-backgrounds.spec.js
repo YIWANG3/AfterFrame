@@ -208,6 +208,34 @@ test.describe("Frame backgrounds made from the photo", () => {
     expect(lum(top) - lum(bottom)).toBeGreaterThan(25);
   });
 
+  test("a ratio picked before the blur still gets the blur its margin", async () => {
+    // A ratio only widens one axis: picked first, it used to keep the 8%
+    // margin away, leaving the photo flush against the sides.
+    await window.evaluate(() => window.__afterframeTest.closeEditor());
+    await window.evaluate((p) => window.__afterframeTest.openEditor(p), FIX);
+    await waitForEditor(window, { preview: true });
+    await window.evaluate(() => window.__afterframeTest.setTool("frame"));
+    const before = await state();
+    expect(before.canvasAspect ?? null).toBeNull();
+    expect(before.canvasBg?.mode ?? null).toBeNull();
+    const ratio = window.locator("[data-frame-aspect]");
+    await ratio.getByRole("button", { name: "4:5" }).click();
+    await expect.poll(async () => (await state()).canvasAspect).toBe("4:5");
+    await window.locator('[data-bg-mode="blur"]').click();
+    await expect.poll(async () => (await state()).canvasBg?.mode).toBe("blur");
+    const s = await state();
+    expect(s.canvasPad).toEqual({ top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 });
+    expect(s.canvasPhoto).toEqual({ radius: 15, shadow: 45 });
+    expect(s.canvasAspect).toBe("4:5");
+
+    // The same file as picking the blur first: 8% of the short edge either
+    // side, the ratio's extra above and below.
+    const out = await saveTo("ratio-then-blur.jpg");
+    const { info } = await readPixels(out);
+    expect(info.width).toBe(SRC_W + 2 * 0.08 * SRC_H);
+    expect(info.width / info.height).toBeCloseTo(4 / 5, 2);
+  });
+
   test("a template's dark text turns light on a blurred photo, in the same undo step", async () => {
     await window.evaluate(() => window.__afterframeTest.closeEditor());
     const row = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 })

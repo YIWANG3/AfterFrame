@@ -74,6 +74,7 @@ import {
   clampImagePlacement,
   canvasActive,
   effectiveCanvasPad,
+  hasPad,
   layersToDisplay,
   layersFromDisplay,
   bakeLayersIntoCrop,
@@ -1344,10 +1345,12 @@ export default function EditorOverlay({
                   }
                   const patch = { bg: nextBg };
                   // A background made from the photo needs room to show: with
-                  // no margin yet, give it one, and the photo soft corners and
-                  // a shadow so it sits on it.
+                  // no margin of the user's own yet, give it one, and the photo
+                  // soft corners and a shadow so it sits on it. A canvas ratio
+                  // doesn't count: it only widens one axis, and picking it
+                  // before or after the background ends the same.
                   if (bgUsesPhoto(nextBg) && !bgUsesPhoto(s.canvas?.bg)) {
-                    if (!canvasActive(s.canvas)) patch.pad = { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 };
+                    if (!hasPad(s.canvas?.pad)) patch.pad = { top: 0.08, right: 0.08, bottom: 0.08, left: 0.08 };
                     if (!s.canvas?.photo) patch.photo = { radius: 15, shadow: 45 };
                   }
                   recordCanvasReadable(patch);

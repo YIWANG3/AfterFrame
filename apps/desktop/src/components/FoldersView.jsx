@@ -30,10 +30,12 @@ import {
   FOLDER_PAGE_SORTS,
   coverLayout,
   folderFilterCount,
+  folderPhotoCount,
   formatMonthRange,
   formatRelativeTime,
   parseStamp,
   selectRange,
+  selectedPhotoCount,
   statusCounts,
   visibleFolderCards,
 } from "./foldersPage";
@@ -210,7 +212,7 @@ export default function FoldersView({
   const filterCount = folderFilterCount(filters);
   const counts = useMemo(() => statusCounts(collections, { sort, query, filters, locale }), [collections, sort, query, filters, locale]);
   const byId = useMemo(() => new Map(manual.map((c) => [c.collection_id, c])), [manual]);
-  const maxCount = manual.reduce((max, c) => Math.max(max, c.item_count || 0), 0);
+  const maxCount = manual.reduce((max, c) => Math.max(max, folderPhotoCount(c)), 0);
   const captureRange = useMemo(() => {
     const stamps = manual.flatMap((c) => [c.captured_from, c.captured_to]).filter(Boolean).sort();
     return { min: stamps[0]?.slice(0, 10), max: stamps[stamps.length - 1]?.slice(0, 10) };
@@ -218,7 +220,7 @@ export default function FoldersView({
 
   // A folder that went away (deleted here or elsewhere) leaves the selection.
   const selected = [...selectedIds].filter((id) => byId.has(id));
-  const selectedPhotos = selected.reduce((n, id) => n + (byId.get(id)?.item_count || 0), 0);
+  const selectedPhotos = selectedPhotoCount(manual, selected);
 
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query, sort, filters, view]);
   const visible = cards.slice(0, visibleCount);
@@ -292,7 +294,7 @@ export default function FoldersView({
   });
 
   const metaLine = (folder) => {
-    const count = folder.item_count || 0;
+    const count = folderPhotoCount(folder);
     if (!count) return t("folders.empty");
     const span = formatMonthRange(folder.captured_from, folder.captured_to, locale);
     return span ? `${t("sidebar.folderMeta", { count })} · ${span}` : t("sidebar.folderMeta", { count });
@@ -569,7 +571,7 @@ export default function FoldersView({
                     {locationOf(folder) && (
                       <div data-folder-location="true" className="truncate text-[10px] text-muted2" title={locationOf(folder)}>{locationOf(folder)}</div>
                     )}
-                    <div className="mt-0.5 truncate text-[11px] text-muted2">{metaLine(folder)}</div>
+                    <div data-folder-meta="true" className="mt-0.5 truncate text-[11px] text-muted2">{metaLine(folder)}</div>
                   </div>
                 </div>
               );
@@ -627,7 +629,7 @@ export default function FoldersView({
                       {editingId === folder.collection_id ? nameEditor(folder) : <span data-folder-name="true" className="block truncate">{folder.name}</span>}
                     </td>
                     <td className="max-w-[240px] px-2 py-1.5"><span className="block truncate" title={locationOf(folder) || undefined}>{locationOf(folder) || "—"}</span></td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{folder.item_count || 0}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{folderPhotoCount(folder)}</td>
                     <td className="px-2 py-1.5 whitespace-nowrap">{formatMonthRange(folder.captured_from, folder.captured_to, locale) || t("folders.captureUnknown")}</td>
                     <td className="px-2 py-1.5 whitespace-nowrap" title={folder.last_added_at ? parseStamp(folder.last_added_at, { zoneless: "utc" })?.toLocaleString(locale) : undefined}>
                       {formatRelativeTime(folder.last_added_at, { locale }) || t("folders.captureUnknown")}

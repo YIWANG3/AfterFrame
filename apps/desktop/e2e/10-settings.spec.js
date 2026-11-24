@@ -99,7 +99,7 @@ test("Library tab renders catalog/cache groups + HD preview toggle", async () =>
   await expect(ctx.window.getByText("14 assets · 13 photos · 1 videos")).toBeVisible();
   await expect(ctx.window.getByText("Cache & storage")).toBeVisible();
   await expect(ctx.window.getByText("Synced folders", { exact: true })).toBeVisible();
-  await expect(ctx.window.getByText("No watched directories in this Catalog.")).toBeVisible();
+  await expect(ctx.window.getByText("No synced folders in this catalog yet.")).toBeVisible();
   // HD previews are opt-in: the toggle exists and defaults off.
   const hdToggle = ctx.window.getByText("Generate HD previews (2000px)", { exact: true })
     .locator("xpath=ancestor::div[contains(@class,'justify-between')][1]").getByRole("switch");

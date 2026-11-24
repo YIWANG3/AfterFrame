@@ -52,6 +52,16 @@ test("the Edit submenu labels follow the app language", async () => {
   expect(editItems).toContain("全选");
 });
 
+test("the synced folders group says 图库, not Catalog", async () => {
+  // Settings is still open from the first test.
+  const settings = ctx.window.locator("[data-layer='settings']");
+  await settings.getByRole("button", { name: "图库", exact: true }).click();
+  await expect(settings.getByText("自动同步的文件夹", { exact: true })).toBeVisible({ timeout: 5_000 });
+  await expect(settings.getByText("当前图库还没有自动同步的文件夹。", { exact: true })).toBeVisible();
+  await expect(settings.getByText(/^仅属于当前图库。/)).toBeVisible();
+  await expect(settings.getByText(/Catalog|监控/)).toHaveCount(0);
+});
+
 test("the collage cell panel's Center and Reset are in 中文 too", async () => {
   // They were hard-coded English while the rest of the cell panel followed the app language.
   await ctx.window.keyboard.press("Escape"); // the Settings window from the first test

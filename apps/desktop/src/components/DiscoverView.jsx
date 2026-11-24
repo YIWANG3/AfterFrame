@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import api from "../api";
 import { formatDayRange, localFileUrl, pad2 } from "../utils/format";
 import FaceCrop from "./FaceCrop";
+import { folderPhotoCount } from "./foldersPage";
 
 // Fallback when the catalog has no located photos at all (no GPS, no AI
 // locations, or the web build): memories become plain month groups.
@@ -194,7 +195,8 @@ export default function DiscoverView({
   // one loads, rather than flashing empty.
   const [page, setPage] = useState(() => pageCache.get(key)?.data || latestByCatalog.get(catalogKey || "") || null);
   const manual = (collections || []).filter((c) => c.kind === "manual");
-  // The newest photo added to the folder (db/collections.py collection_stats).
+  // The newest photo added to the folder or a folder under it
+  // (db/collections.py collection_stats); the count beside it covers the same.
   const coverOf = (c) => c.cover_preview_paths?.[0] || null;
 
   useEffect(() => {
@@ -314,7 +316,7 @@ export default function DiscoverView({
               <Tile
                 key={col.collection_id}
                 cover={localFileUrl(coverOf(col))}
-                title={<><span className="mr-1.5 tabular-nums">{col.item_count || 0}</span>{col.name}</>}
+                title={<><span className="mr-1.5 tabular-nums">{folderPhotoCount(col)}</span>{col.name}</>}
                 onClick={() => onOpen?.({ collectionId: col.collection_id })}
               />
             ))}

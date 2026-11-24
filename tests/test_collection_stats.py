@@ -102,6 +102,40 @@ class CollectionStatsTests(unittest.TestCase):
         # The raw stats only name folders with items.
         self.assertEqual(set(collection_stats(connection)), {one})
 
+    def test_a_folder_shows_what_its_subfolders_hold(self):
+        # "Trips" holds nothing itself, only "Highway 1": its card shows the
+        # subfolder's photos, count and span, as the sidebar's count does.
+        connection = self.connection
+        seed_asset(connection, "a", "2025-03-02T10:00:00")
+        seed_asset(connection, "b", "2025-06-30T18:00:00")
+        seed_asset(connection, "c", "2024-12-31T09:00:00")
+        trips = create_collection(connection, "Trips")["collection_id"]
+        highway = create_collection(connection, "Highway 1", parent_id=trips)["collection_id"]
+        add_collection_items(connection, highway, ["a", "b"])
+        set_added_at(connection, highway, "a", "2026-10-01 12:00:00")
+        set_added_at(connection, highway, "b", "2026-10-02 12:00:00")
+        connection.commit()
+
+        rows = self.by_id()
+        self.assertEqual((rows[trips]["item_count"], rows[trips]["subtree_count"]), (0, 2))
+        self.assertEqual(rows[trips]["cover_relative_paths"], ["previews/b.jpg", "previews/a.jpg"])
+        self.assertEqual(rows[trips]["last_added_at"], "2026-10-02 12:00:00")
+        self.assertEqual((rows[trips]["captured_from"], rows[trips]["captured_to"]), ("2025-03-02T10:00:00", "2025-06-30T18:00:00"))
+        # The subfolder's own stats are its own.
+        self.assertEqual(rows[highway]["cover_relative_paths"], ["previews/b.jpg", "previews/a.jpg"])
+
+        # A photo of its own joins the mix by when it was added; one in both
+        # the folder and its subfolder is one photo, newest add counting.
+        add_collection_items(connection, trips, ["c", "a"])
+        set_added_at(connection, trips, "c", "2026-10-03 12:00:00")
+        set_added_at(connection, trips, "a", "2026-10-04 12:00:00")
+        connection.commit()
+        rows = self.by_id()
+        self.assertEqual((rows[trips]["item_count"], rows[trips]["subtree_count"]), (2, 3))
+        self.assertEqual(rows[trips]["cover_relative_paths"], ["previews/a.jpg", "previews/c.jpg", "previews/b.jpg"])
+        self.assertEqual(rows[trips]["captured_from"], "2024-12-31T09:00:00")
+        self.assertEqual(rows[highway]["cover_relative_paths"], ["previews/b.jpg", "previews/a.jpg"])
+
 
 if __name__ == "__main__":
     unittest.main()
