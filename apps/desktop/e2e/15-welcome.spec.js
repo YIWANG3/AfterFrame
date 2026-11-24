@@ -21,7 +21,7 @@ async function expectSampleOriginals(window, userDataDir) {
     expect(row.image_path).toBe(fs.realpathSync(path.join(userDataDir, "afterframe", "sample.afcatalog", "photos", path.basename(row.image_path))));
     expect(row.image_metadata).toMatchObject(sampleManifest[path.basename(row.image_path)]);
   }
-  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getSummary())).toMatchObject({ image_assets: 14 });
+  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getSummary())).toMatchObject({ image_assets: sampleNames.length });
 }
 
 test.describe("First run (no catalog)", () => {
@@ -112,17 +112,17 @@ test.describe("First run (no catalog)", () => {
   test("legacy sample previews are removed on app restart without losing original ratings", async () => {
     const catalogPath = path.join(userDataDir, "afterframe", "sample.afcatalog");
     const photosDir = path.join(catalogPath, "photos");
-    // Recreate the old shipping layout, including all 14 web-demo thumbnails.
+    // Recreate the old shipping layout, including a web-demo thumbnail for every original.
     fs.cpSync(path.join(__dirname, "..", "sample-photos", "previews"), path.join(photosDir, "previews"), { recursive: true });
     await window.evaluate((dir) => window.mediaWorkspace.startImport({ mode: "processed_only", imageDirs: [dir] }), photosDir);
     // The status can still be the previous import's "succeeded" for a moment
     // after this one is started: wait for its photos, not for a status.
     await expect.poll(async () => (await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 }))).length, { timeout: 30_000 })
-      .toBe(28);
+      .toBe(sampleNames.length * 2);
     await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getImportStatus()), { timeout: 30_000 })
       .toMatchObject({ status: "succeeded" });
     const before = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 }));
-    expect(before).toHaveLength(28);
+    expect(before).toHaveLength(sampleNames.length * 2);
     const original = before.find((row) => row.image_path === fs.realpathSync(path.join(photosDir, "sample-01.jpg")));
     await window.evaluate((id) => window.mediaWorkspace.setAssetRating([id], 5), original.asset_id);
 
