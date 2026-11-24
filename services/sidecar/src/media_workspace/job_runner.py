@@ -434,15 +434,21 @@ def run_people_index_job(
             # hash). Any stat difference falls through to the worker's
             # pixel-level check, which still catches content edits that a
             # restored mtime would hide. With pets, both halves must pass.
+            # A half that passes on its own keeps what it has even though the
+            # photo goes to the worker for the other half: the pixel hash
+            # isn't stable across macOS versions, and a drifted hash must not
+            # re-detect faces (and drop them from their people) just because
+            # pets were turned on.
             file_stat = None
             try:
                 file_stat = os.stat(str(candidate["canonical_path"]))
             except OSError:
                 pass
-            if _index_unchanged(file_stat, known_hash, candidate.get("file_size"), candidate.get("file_mtime")) and (
-                not pets
-                or _index_unchanged(file_stat, known_pet_hash, candidate.get("pet_file_size"), candidate.get("pet_file_mtime"))
-            ):
+            faces_unchanged = _index_unchanged(file_stat, known_hash, candidate.get("file_size"), candidate.get("file_mtime"))
+            pets_unchanged = pets and _index_unchanged(
+                file_stat, known_pet_hash, candidate.get("pet_file_size"), candidate.get("pet_file_mtime")
+            )
+            if faces_unchanged and (not pets or pets_unchanged):
                 stats["skipped"] = int(stats["skipped"]) + 1
                 advance_cursor(position)
                 continue
@@ -467,7 +473,7 @@ def run_people_index_job(
                 if not isinstance(input_hash, str) or not input_hash:
                     raise RuntimeError("People Worker returned no input_hash")
                 analyzed = False
-                if response.get("skipped"):
+                if faces_unchanged or response.get("skipped"):
                     _refresh_index_stat(connection, file_stat, str(candidate["asset_id"]), model_id, model_version)
                 else:
                     faces = response.get("faces")
@@ -488,7 +494,7 @@ def run_people_index_job(
                     analyzed = True
                 if pets:
                     animals = response.get("animals")
-                    if response.get("animals_skipped"):
+                    if pets_unchanged or response.get("animals_skipped"):
                         _refresh_index_stat(connection, file_stat, str(candidate["asset_id"]), pet_id, pet_version)
                     elif isinstance(animals, list):
                         replace_asset_faces(

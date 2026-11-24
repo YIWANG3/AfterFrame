@@ -558,6 +558,74 @@ class CandidateClusteringTest(unittest.TestCase):
         ).fetchone()["cover_face_id"]
         self.assertIsNotNone(restored)
 
+    def _replace(self, asset_id: str, faces: list[tuple[list[float], list[float]]]) -> list[str]:
+        """Re-analyze one asset: (box, embedding) per face."""
+        inserted = replace_asset_faces(
+            self.connection,
+            asset_id=asset_id,
+            model_id="arcface-r100",
+            model_version="1.0.0",
+            input_hash=f"rehash-{asset_id}",
+            faces=[
+                {
+                    "bounding_box": box,
+                    "landmarks": [0.1, 0.1, 0.2, 0.1, 0.15, 0.2, 0.11, 0.3, 0.19, 0.3],
+                    "quality": "standard",
+                    "confidence": 0.99,
+                    "embedding": embedding,
+                }
+                for box, embedding in faces
+            ],
+        )
+        return [str(face["face_id"]) for face in inserted]
+
+    def _membership(self, face_id: str) -> tuple[str, str] | None:
+        row = self.connection.execute(
+            "SELECT group_id, membership_state FROM person_group_faces WHERE face_id = ?", (face_id,)
+        ).fetchone()
+        return (row["group_id"], row["membership_state"]) if row else None
+
+    def test_re_analysis_keeps_what_the_user_decided_about_each_face(self) -> None:
+        ann, ben, dee, stranger = (self._unit({axis: 1.0}) for axis in range(4))
+        left, middle, right = [0.05, 0.1, 0.2, 0.3], [0.4, 0.1, 0.2, 0.3], [0.75, 0.1, 0.2, 0.3]
+        for asset_id, vector in (("a1", ann), ("a2", ann), ("b1", ben), ("b2", ben), ("d1", dee)):
+            self._insert_asset(asset_id, [vector])
+        self._insert_asset("group", [])
+        old_ann, old_dee, old_ben = self._replace("group", [(left, ann), (middle, dee), (right, ben)])
+        rebuild_candidate_groups(self.connection, model_id="arcface-r100", model_version="1.0.0")
+        ann_group = self._membership(old_ann)[0]
+        ben_group = self._membership(old_ben)[0]
+        dee_group = self._membership(old_dee)[0]
+        set_person_group_name(self.connection, group_id=ann_group, name="Ann")
+        set_person_group_cover(self.connection, group_id=ann_group, face_id=old_ann)
+        set_person_group_state(self.connection, group_id=ben_group, state="ignored")
+        remove_face_from_group(self.connection, face_id=old_dee)  # "not Dee"
+
+        # The same photo analyzed again: boxes a little off, one new face.
+        new_ann, new_dee, new_ben, new_stranger = self._replace("group", [
+            ([0.07, 0.11, 0.2, 0.3], ann), (middle, dee), (right, ben), ([0.4, 0.6, 0.2, 0.3], stranger),
+        ])
+
+        self.assertEqual(self._membership(new_ann), (ann_group, "automatic"))
+        cover = self.connection.execute(
+            "SELECT cover_face_id FROM person_groups WHERE group_id = ?", (ann_group,)
+        ).fetchone()["cover_face_id"]
+        self.assertEqual(cover, new_ann)
+        self.assertEqual(self._membership(new_ben), (ben_group, "automatic"))
+        self.assertEqual(self._membership(new_dee), (dee_group, "rejected"))
+        self.assertIsNone(self._membership(new_stranger))
+        # A rebuild leaves all of that alone.
+        rebuild_candidate_groups(self.connection, model_id="arcface-r100", model_version="1.0.0")
+        self.assertEqual(self._membership(new_ann), (ann_group, "automatic"))
+        self.assertEqual(self._membership(new_dee), (dee_group, "rejected"))
+        self.assertEqual(get_person_group_detail(self.connection, group_id=ann_group)["face_count"], 3)
+
+        # A face that moved elsewhere in the photo is a different detection:
+        # it leaves Ann, as before.
+        (moved,) = self._replace("group", [([0.6, 0.6, 0.2, 0.3], ann)])
+        self.assertIsNone(self._membership(moved))
+        self.assertEqual(get_person_group_detail(self.connection, group_id=ann_group)["face_count"], 2)
+
     def test_grouping_is_deterministic_across_rebuilds(self) -> None:
         vectors = [
             self._unit({0: 1.0}),

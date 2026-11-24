@@ -11,12 +11,14 @@
 // is the PR CI VM.
 
 const { test, expect } = require("@playwright/test");
+const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { launchApp, closeApp, collectCoverage, galleryCards } = require("./helpers/app");
 
 const MODEL = path.resolve(__dirname, "..", "native", "FaceEmbedding.mlpackage", "Manifest.json");
+const PET_MODEL = path.resolve(__dirname, "..", "native", "PetEmbedding.mlpackage", "Manifest.json");
 const PEOPLE_IMAGES = path.resolve(__dirname, "fixtures", "people-images");
 
 test.describe("people recognition with the bundled face model", () => {
@@ -118,5 +120,36 @@ test.describe("people recognition with the bundled face model", () => {
     await expect(tile.getByRole("button", { name: "林夕", exact: true })).toBeVisible({ timeout: 10_000 });
     expect((await photosOf(groups.linxi.id)).map(nameOf).sort()).toEqual([...groups.linxi.photos].sort());
     expect((await photosOf(groups.chenmo.id)).map(nameOf).sort()).toEqual([...groups.chenmo.photos].sort());
+  });
+
+  test("turning on pets later doesn't redo the faces, even when the photos no longer decode to the hashes on record", async () => {
+    test.skip(!fs.existsSync(PET_MODEL), "needs the bundled pet model too");
+    test.setTimeout(240_000);
+    await collectCoverage(ctx.app);
+    await ctx.app.close();
+    // A macOS update can change how an untouched photo decodes: its pixel
+    // hash no longer matches the one on record. The first pets scan used to
+    // re-detect every such face, and a re-detected face left its person.
+    execFileSync("sqlite3", ["-cmd", ".timeout 10000", path.join(ctx.catalogDir, "catalog.sqlite3"),
+      "UPDATE people_asset_index SET input_hash = 'decoded-by-another-macos-' || asset_id;"]);
+    ctx = { ...ctx, ...(await launchApp({ testName: "people-real", peopleModel: "real", petModel: "real", reuseUserDataDir: ctx.userDataDir, keepCatalog: true })) };
+    await expect(cards().first()).toBeVisible({ timeout: 15_000 });
+    await ctx.window.evaluate(() => window.mediaWorkspace.setPetsEnabled(true));
+    const before = await ctx.window.evaluate(() => window.mediaWorkspace.getPeopleIndexStatus().then((s) => s?.jobId));
+    await openPeople();
+    await ctx.window.getByRole("button", { name: "Scan", exact: true }).first().click();
+    await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.getPeopleIndexStatus()), {
+      timeout: 180_000, intervals: [1_000],
+    }).toMatchObject({ status: "succeeded", jobId: expect.not.stringMatching(`^${before}$`) });
+    const status = await ctx.window.evaluate(() => window.mediaWorkspace.getPeopleIndexStatus());
+    expect(status.result.faces).toBe(0);
+
+    const tile = ctx.window.locator(`[data-person-group="${groups.linxi.id}"]`);
+    await expect(tile.getByRole("button", { name: "林夕", exact: true })).toBeVisible({ timeout: 10_000 });
+    expect((await photosOf(groups.linxi.id)).map(nameOf).sort()).toEqual([...groups.linxi.photos].sort());
+    // Chen Mo is still a candidate, rebuilt under a new id by every scan.
+    const candidates = await ctx.window.evaluate(() => window.mediaWorkspace.listPeopleGroups());
+    const grouped = await Promise.all(candidates.map(async (group) => (await photosOf(group.group_id)).map(nameOf).sort()));
+    expect(grouped).toContainEqual([...groups.chenmo.photos].sort());
   });
 });
