@@ -10,6 +10,7 @@
 //   refreshBrowse()                 re-browse the view, keeping the scroll
 //   loadCollections(), hasSmartCollections()  live smart-collection counts
 //   loadFacetValues()               the tag filter's options
+//   refreshSummarySoon()            the sidebar counts (Rated)
 //   bumpCatalogRevision()           the map's point cache
 //   selectedAssetIdRef, setSelectedAssetId, setBrowserOffset   the deletes
 
@@ -58,10 +59,10 @@ export default function useAssetMutations(bridgeRef) {
     return true;
   }
 
-  function setAssetRating(assetIds, rating) {
+  async function setAssetRating(assetIds, rating) {
     // 0 is a rating of its own (cleared), as the catalog stores it.
     const nextRating = Number(rating) || 0;
-    return optimisticAssetPatch({
+    const written = await optimisticAssetPatch({
       assetIds,
       read: ratingFields,
       patch: ratingPatch(nextRating),
@@ -72,6 +73,10 @@ export default function useAssetMutations(bridgeRef) {
       refreshWhen: scopeSelectsByRating,
       failedTitle: "ratingFailed",
     });
+    // The sidebar's Rated count, and its entry (shown once something is
+    // rated, gone when the last rating is cleared).
+    if (written) bridgeRef.current.refreshSummarySoon();
+    return written;
   }
 
   // Pick / reject / none, as Lightroom's P / X / U.
