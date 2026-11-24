@@ -16,8 +16,8 @@ AfterFrame is built for photographers who work with thousands of exported images
 
 Download the latest version from [Releases](../../releases):
 
-- **Mac:** `-arm64.dmg` for Apple Silicon on macOS 14 or later. On macOS 12 or 13, or on an Intel Mac, take `-macOS12-arm64.dmg` (Apple Silicon) or `-macOS12-Intel.dmg` (Intel): the same app without People, Scene Depth and Stickers, which need macOS 14. Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
-- **Windows:** the `-setup.exe`. Windows 10 or 11, 64-bit. The installer isn't signed yet: when Windows says "Windows protected your PC", click **More info**, then **Run anyway**. Stickers, People, Scene Depth and LUTs are in the macOS app only for now.
+- **Mac:** `-arm64.dmg` for Apple Silicon on macOS 14 or later. On macOS 12 or 13, or on an Intel Mac, take `-macOS12-arm64.dmg` (Apple Silicon) or `-macOS12-Intel.dmg` (Intel): the same app without People & Pets, Scene Depth and Stickers, which need macOS 14. Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
+- **Windows:** the `-setup.exe`. Windows 10 or 11, 64-bit. The installer isn't signed yet: when Windows says "Windows protected your PC", click **More info**, then **Run anyway**. Stickers, People & Pets, Scene Depth and LUTs are in the macOS app only for now.
 
 ![AfterFrame — Browse & Inspect](docs/assets/en/library.webp)
 
@@ -27,7 +27,7 @@ Download the latest version from [Releases](../../releases):
   - [Library Management](#library-management)
   - [Browse & Organize](#browse--organize)
   - [Search & Filter](#search--filter)
-  - [People](#people)
+  - [People & Pets](#people--pets)
   - [Edit](#edit)
   - [Video](#video)
   - [AI Repaint (BYOK)](#ai-repaint-byok)
@@ -51,6 +51,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Optional RAW source indexing and matching by filename
 - **A RAW+JPG shot is one photo**: a camera's RAW and JPG of one shot, side by side in a folder, show as one photo badged JPG+RAW, and a rating, flag or tag applies to both files. Settings → Library shows them as two again, per catalog
 - **Missing originals in one view**: photos whose files were moved or deleted gather in Missing Originals, to relink them all from a folder (by file name, and only where the content matches) or remove them from the library
+- **A moved photo keeps its record**: import a file you moved or renamed in Finder, or let a synced folder find it, and the photo you already had follows it there, with its rating, tags, collections and versions, instead of a second photo being added
 - Photos, RAW and video in the formats photographers actually shoot — JPEG, HEIF (`.heic` / `.hif`), TIFF, PSD, 38 RAW types, AVCHD and the usual containers; the full list is in Settings → Library → Supported formats, and an import tells you which files it skipped. Anything the viewer can't decode itself is rendered on demand, so it shows at full resolution everywhere
 - Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
 - Bilingual interface (English / 简体中文) — switch live in Settings → General
@@ -65,13 +66,14 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 ### Browse & Organize
 - Grid, tiles, justified, and waterfall layout modes
 - Sort by imported time, captured time, rating, or name
-- Smart collections (a saved filter with a live count: exclude any filter, ratings below a value or unrated, either-or condition groups) and manual folders
-- Folder list you can sort (custom order, name, newest, most photos) and search by name; new folders go on top
-- **Folders nest**, any depth: the sidebar is a tree, dragging a folder onto another nests it, and a parent shows its own photos plus everything under it (a toolbar switch turns that to this folder only)
-- The sidebar's Smart Collections and Folders sections each fold down to their heading. A row's actions (rename, delete, new subfolder and the rest) are in its right-click menu
-- **Target folder**: the folder you last made or last added to is marked with a `B` in the sidebar, and **B** adds the selected photos to it (Shift+B adds one and moves on), like Lightroom's target collection
-- **One shoot, one folder**: drag a folder from Finder onto the sidebar or the Folders page and it is imported and becomes a folder of that name (onto a folder's row or card, a subfolder of it). A folder with subfolders can keep them as nested folders. Deleting a folder can take the photos only it holds out of the library, or move their files to the Trash
-- **A page for your folders** shows every folder at once, with a mosaic of its newest photos, its count and the span of capture dates. Sort by last added or capture date too, filter by status, count or dates, switch to a sortable table, and select several to annotate or delete
+- Smart collections (a saved filter with a live count: exclude any filter, ratings below a value or unrated, either-or condition groups) and manual collections
+- Collection list you can sort (custom order, name, newest, most photos) and search by name; new collections go on top
+- **Collections nest**, any depth: the sidebar is a tree, dragging a collection onto another nests it, and a parent shows its own photos plus everything under it (a toolbar switch turns that to this collection only)
+- The sidebar's Smart collections, Collections and Folders sections each fold down to their heading and can be searched. A row's actions (rename, delete, new collection inside it and the rest) are in its right-click menu
+- **Target collection**: the collection you last made or last added to is marked with a `B` in the sidebar, and **B** adds the selected photos to it (Shift+B adds one and moves on), like Lightroom's target collection
+- **One shoot, one collection**: drag a folder from Finder onto the sidebar or the Collections page and it is imported and becomes a collection of that name (onto a collection's row or card, a collection inside it). A folder with subfolders can keep them as nested collections. Deleting a collection can take the photos only it holds out of the library, or move their files to the Trash
+- **A page for your collections** shows every collection at once, with a mosaic of its newest photos, its count and the span of capture dates. Sort by last added or capture date too, filter by status, count or dates, switch to a sortable table, and select several to annotate or delete
+- **Folders on disk**: a Folders section mirrors the folders your photos are in, drive by drive, and never changes them. Open one with or without the folders inside, Locate one you moved in Finder, Sync it or have it sync automatically, Save it as a collection, or Hide This Level to bring the folders under a top folder up to the top
 - **Statistics**: a page in the sidebar counts what you shot with and how, for all time, this year or the last 12 months: cameras and lenses with their keep rate, focal length, aperture, shutter and ISO, culling progress, top cities, a shooting calendar, and where the disk space goes. Most bars and numbers open their photos in the gallery when clicked
 - **Look-alikes**: every photo gets a perceptual hash and, on the Mac, Apple Vision's feature print, so another export, a re-encode or a crop of one picture is found. A Look-alikes view in the sidebar, **Find Similar** on any photo, and a Similar strip in the inspector
 - **Copy** (⌘C) puts the selected photos on the clipboard as files, like Finder: paste them in Finder, WeChat, Notes or anything that takes a file drop
@@ -89,17 +91,18 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 ### Search & Filter
 - Full-text search across filename, camera/lens, and AI annotations (caption, detected text/OCR, tags) — find photos by what's actually in them
 - Faceted filter bar: camera and lens, ISO / aperture / focal-length ranges, capture-date range, star rating, flag, orientation (landscape / portrait / square, as the photo shows), colour (any colour, matched against each photo's dominant colours), country and city, location source, and description / text in the picture / path — combined live. Tick several values of one facet, and choose which facets sit on the bar
-- Filters refine where you are: inside a folder, the filter bar and search cover that folder, with counts to match
+- Filters refine where you are: inside a collection or a folder, the filter bar and search cover it, with counts to match
 - Tag filtering: click any tag in the inspector, or pick from a list grouped the way your tags are, searchable across groups and aliases, matching any tag, one per group, all, or none
-- **Find by List**: paste a list of numbers or file names (`1723, 1746 1754`, in whatever shape it arrives) and each one is looked up by file name, a photo's own or its RAW's. The list then filters the grid or goes into a folder
+- **Find by List**: paste a list of numbers or file names (`1723, 1746 1754`, in whatever shape it arrives) and each one is looked up by file name, a photo's own or its RAW's. The list then filters the grid or goes into a collection
 - A **Paired RAW** filter for photos with, or without, a paired RAW file
 
-### People
+### People & Pets
 - On-device face detection and ArcFace grouping — photos and face embeddings stay inside the local catalog
 - Review and name suggested groups, choose a cover, merge matches, or move incorrectly grouped faces
 - Select and delete multiple incorrect groups at once; deleted groups stay excluded from later rescans
 - Filter the gallery by person or open every matching photo directly from the People view
-- Optionally analyze faces right after import (People settings)
+- **Pets**: cats and dogs are recognized too, each animal's photos grouped on the same wall, with an All / People / Pets switch and a Pets filter. Turn it on in Settings → People & Pets; it is off by default
+- Optionally analyze faces right after import (People & Pets settings)
 
 ![People recognition](docs/assets/en/people.webp)
 
@@ -137,7 +140,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 ![Single collage editor](docs/assets/en/collage.webp)
 
-- **Frame** — brand-aware camera watermark frames driven by EXIF, in a Frame tool of their own. Pick from 20+ presets (bottom bars, dual-logo, and vertical side-strip layouts) or save your own as templates, rendered with real brand logos and colors for Hasselblad, Sony, Canon, Nikon, Leica, Fujifilm, Lumix, Ricoh, Pentax, Sigma, Olympus / OM System, Phase One, DJI, Insta360, GoPro, Apple, Xiaomi, OPPO, vivo, OnePlus, Huawei, Honor and more, plus a clean generic set. Import your own logos (a signature, a studio mark), or give a camera brand or one model a logo of your own. Camera model codes show as product names (DJI FC9184 as DJI Air 3S), and any camera can be renamed. Adaptive light/dark contrast, a logo color picker (original / black / white / grey / gold), text and margin scaling, and export at the original resolution
+- **Frame** — brand-aware camera watermark frames driven by EXIF, in a Frame tool of their own. Pick from 20+ presets (bottom bars, dual-logo, and vertical side-strip layouts) or save your own as templates, rendered with real brand logos and colors for Hasselblad, Sony, Canon, Nikon, Leica, Fujifilm, Lumix, Ricoh, Pentax, Sigma, Olympus / OM System, Phase One, DJI, Insta360, GoPro, Apple, Xiaomi, OPPO, vivo, OnePlus, Huawei, Honor and more, plus a clean generic set. Import your own logos (a signature, a studio mark), or give a camera brand or one model a logo of your own. Camera model codes show as product names (DJI FC9184 as DJI Air 3S), and any camera can be renamed. Adaptive light/dark contrast, a logo color picker (original / black / white / grey / gold), text and margin scaling, and export at the original resolution. The canvas can be made from the photo (its own colours, or the photo blurred), held to a ratio (1:1, 4:5, 3:4, 9:16), and the photo given soft corners and a shadow. **Camera mockups** show the photo on the screen of one of 75 cameras, the photo's own by its EXIF
 
 ![Frame — Hasselblad wordmark](docs/assets/en/frame-hasselblad.webp)
 
@@ -223,7 +226,7 @@ npm start
 cd apps/desktop
 npm run dist:mac          # rebuild sidecar, then package + sign (Developer ID)
 npm run dist:mac:release  # also notarize — set APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
-npm run dist:mac:macos12-arm64  # Apple Silicon, macOS 12+, without People, Scene Depth and Stickers
+npm run dist:mac:macos12-arm64  # Apple Silicon, macOS 12+, without People & Pets, Scene Depth and Stickers
 npm run dist:mac:macos12-intel  # Intel, macOS 12+, the same
 npm run dist:mac:intel          # Intel, macOS 14+
 ```
