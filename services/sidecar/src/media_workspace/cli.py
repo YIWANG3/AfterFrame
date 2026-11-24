@@ -599,6 +599,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_people_index_parser.add_argument("--worker-path", type=Path)
     run_people_index_parser.add_argument("--asset-id", action="append")
     run_people_index_parser.add_argument("--limit", type=int)
+    # With a pet model the same pass finds cats and dogs (all four or none).
+    run_people_index_parser.add_argument("--pet-model-id")
+    run_people_index_parser.add_argument("--pet-model-version")
+    run_people_index_parser.add_argument("--pet-model-path", type=Path)
+    run_people_index_parser.add_argument("--pet-manifest-hash")
+    run_people_index_parser.add_argument("--pet-threshold", type=float)
 
     run_visual_job_parser = subparsers.add_parser("run-visual-job", parents=[common])
     run_visual_job_parser.add_argument("--job-id", required=True)
@@ -1591,6 +1597,11 @@ def _cmd_run_people_index_job(args, connection, catalog, parser):
         worker_path=args.worker_path,
         asset_ids=args.asset_id,
         limit=args.limit,
+        pet_model_id=args.pet_model_id,
+        pet_model_version=args.pet_model_version,
+        pet_model_path=args.pet_model_path,
+        pet_manifest_hash=args.pet_manifest_hash,
+        pet_threshold=args.pet_threshold,
     )
     print(json.dumps(payload, indent=2))
     return 0

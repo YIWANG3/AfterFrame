@@ -290,22 +290,130 @@ class PeopleIndexJobTest(unittest.TestCase):
         connection.commit()
         return connection, model
 
-    def _write_fake_worker(self, root: Path, *, stderr_per_request: int = 0) -> Path:
+    def _pet_job_setup(self, root: Path):
+        catalog = ensure_catalog(root / "demo.afcatalog")
+        source = root / "dog.jpg"
+        source.write_bytes(b"pixels-the-fake-worker-never-reads")
+        face_model = root / "ArcFaceR100.mlpackage"
+        face_model.write_bytes(b"face-model")
+        pet_model = root / "PetEmbedding.mlpackage"
+        pet_model.write_bytes(b"pet-model")
+        connection = connect(catalog.db_path)
+        init_db(connection)
+        set_catalog_path(connection, catalog.root)
+        connection.execute(
+            """
+            INSERT INTO assets (
+                asset_id, asset_type, canonical_path, stem, normalized_stem,
+                stem_key, extension, fingerprint, file_size, modified_time
+            ) VALUES ('asset-1', 'image', ?, 'dog', 'dog', 'dog', '.jpg', 'fingerprint', 1, '2026-07-10T00:00:00Z')
+            """,
+            (str(source),),
+        )
+        connection.commit()
+        return connection, face_model, pet_model
+
+    def _run(self, connection, worker: Path, face_model: Path, pet_model: Path | None) -> dict:
+        job = create_job(connection, "people_index")
+        pets = {
+            "pet_model_id": "dinov2-small",
+            "pet_model_version": "test",
+            "pet_model_path": pet_model,
+            "pet_manifest_hash": "pet-manifest",
+        } if pet_model else {}
+        return run_people_index_job(
+            connection, job["job_id"], model_id="arcface-r100", model_version="test-v1",
+            model_path=face_model, manifest_hash="manifest-hash", worker_path=worker, **pets,
+        )
+
+    def test_pets_ride_along_in_the_same_pass_and_skip_on_their_own(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, face_model, pet_model = self._pet_job_setup(root)
+            worker = self._write_fake_worker(root)
+
+            first = self._run(connection, worker, face_model, pet_model)
+            self.assertEqual((first["analyzed"], first["faces"], first["pets"]), (1, 1, 1))
+            subjects = sorted(row["subject"] for row in connection.execute("SELECT subject FROM asset_faces"))
+            self.assertEqual(subjects, ["dog", "person"])
+            indexed = {row["model_id"]: row["status"] for row in connection.execute("SELECT model_id, status FROM people_asset_index")}
+            self.assertEqual(indexed, {"arcface-r100": "indexed", "dinov2-small": "indexed"})
+            # The worker was started with both models.
+            self.assertIn("--pet-model", (root / "worker-argv.log").read_text())
+
+            second = self._run(connection, worker, face_model, pet_model)
+            self.assertEqual((second["analyzed"], second["skipped"]), (0, 1))
+            self.assertEqual(len((root / "worker-requests.log").read_text().splitlines()), 1)
+            connection.close()
+
+    def test_a_library_analyzed_for_faces_gets_its_pets_without_redoing_faces(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, face_model, pet_model = self._pet_job_setup(root)
+            worker = self._write_fake_worker(root)
+            self._run(connection, worker, face_model, None)
+            face_ids = [row["face_id"] for row in connection.execute("SELECT face_id FROM asset_faces")]
+
+            result = self._run(connection, worker, face_model, pet_model)
+
+            # The stat gate let the photo through for its pets only: the worker
+            # got the face hash, skipped the faces and found the dog.
+            self.assertEqual((result["analyzed"], result["faces"], result["pets"]), (1, 0, 1))
+            requests = (root / "worker-requests.log").read_text().splitlines()
+            self.assertEqual(len(requests), 2)
+            self.assertEqual(
+                [row["face_id"] for row in connection.execute("SELECT face_id FROM asset_faces WHERE subject = 'person'")],
+                face_ids,
+            )
+            connection.close()
+
+    def test_a_pet_failure_keeps_the_faces_and_is_retried(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, face_model, pet_model = self._pet_job_setup(root)
+            worker = self._write_fake_worker(root, pet_error="Core ML said no")
+
+            result = self._run(connection, worker, face_model, pet_model)
+
+            self.assertEqual((result["analyzed"], result["faces"], result.get("pets")), (1, 1, 0))
+            rows = {
+                row["model_id"]: (row["status"], row["error_text"])
+                for row in connection.execute("SELECT model_id, status, error_text FROM people_asset_index")
+            }
+            self.assertEqual(rows["arcface-r100"][0], "indexed")
+            self.assertEqual(rows["dinov2-small"], ("failed", "Core ML said no"))
+            # A failed pet index isn't skipped by the stat gate: the next scan asks again.
+            self._run(connection, worker, face_model, pet_model)
+            self.assertEqual(len((root / "worker-requests.log").read_text().splitlines()), 2)
+            connection.close()
+
+    def _write_fake_worker(self, root: Path, *, stderr_per_request: int = 0, pet_error: str | None = None) -> Path:
         embedding = [1.0 / math.sqrt(512)] * 512
+        pet_embedding = [1.0 / math.sqrt(384)] * 384
         code = f'''import json
 import pathlib
 import sys
 
 embedding = {json.dumps(embedding)}
+pet_embedding = {json.dumps(pet_embedding)}
+pet_error = {pet_error!r}
+pets = "--pet-model" in sys.argv
+pathlib.Path({json.dumps(str(root / "worker-argv.log"))}).write_text(" ".join(sys.argv[1:]))
 log = pathlib.Path({json.dumps(str(root / "worker-requests.log"))})
 for line in sys.stdin:
     request = json.loads(line)
     with log.open("a") as fh:
         fh.write(request["id"] + "\\n")
-    if request.get("known_input_hash") == "input-hash-a":
-        response = {{"id": request["id"], "ok": True, "skipped": True, "input_hash": "input-hash-a", "image_size": {{"width": 100, "height": 100}}, "faces": [], "error": None}}
-    else:
-        response = {{"id": request["id"], "ok": True, "skipped": False, "input_hash": "input-hash-a", "image_size": {{"width": 100, "height": 100}}, "faces": [{{"bounding_box": [0.1, 0.1, 0.5, 0.5], "landmarks": [0.1, 0.1, 0.2, 0.1, 0.15, 0.2, 0.1, 0.3, 0.2, 0.3], "confidence": 1.0, "quality": "standard", "embedding": embedding}}], "error": None}}
+    faces_skipped = request.get("known_input_hash") == "input-hash-a"
+    animals_skipped = pets and request.get("known_pet_input_hash") == "input-hash-a"
+    faces = [] if faces_skipped else [{{"bounding_box": [0.1, 0.1, 0.5, 0.5], "landmarks": [0.1, 0.1, 0.2, 0.1, 0.15, 0.2, 0.1, 0.3, 0.2, 0.3], "confidence": 1.0, "quality": "standard", "embedding": embedding}}]
+    response = {{"id": request["id"], "ok": True, "skipped": faces_skipped, "input_hash": "input-hash-a", "image_size": {{"width": 100, "height": 100}}, "faces": faces, "error": None}}
+    if pets:
+        if pet_error:
+            response.update(animals=None, animals_skipped=False, animals_error=pet_error)
+        else:
+            animals = [] if animals_skipped else [{{"subject": "dog", "bounding_box": [0.5, 0.4, 0.4, 0.5], "landmarks": [], "confidence": 0.9, "quality": "standard", "source": "recognizer", "embedding": pet_embedding}}]
+            response.update(animals=animals, animals_skipped=animals_skipped)
     if {stderr_per_request}:
         sys.stderr.write("x" * {stderr_per_request} + "\\n")
         sys.stderr.flush()

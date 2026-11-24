@@ -148,7 +148,9 @@ function orientationJob({ jobId }) {
   return ["run-orientation-job", "--job-id", String(jobId)];
 }
 
-function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash, assetIds }) {
+// pets: { modelId, modelVersion, modelPath, manifestHash, threshold? } runs the
+// pet model in the same pass (docs/pet-recognition-design.md), or null.
+function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash, assetIds, pets = null }) {
   const argv = [
     "run-people-index-job",
     "--job-id", String(jobId),
@@ -157,6 +159,15 @@ function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash,
     "--model-path", String(modelPath),
     "--manifest-hash", String(manifestHash),
   ];
+  if (pets) {
+    argv.push(
+      "--pet-model-id", String(pets.modelId),
+      "--pet-model-version", String(pets.modelVersion),
+      "--pet-model-path", String(pets.modelPath),
+      "--pet-manifest-hash", String(pets.manifestHash),
+    );
+    if (Number.isFinite(pets.threshold)) argv.push("--pet-threshold", String(pets.threshold));
+  }
   pushEach(argv, "--asset-id", assetIds);
   return argv;
 }

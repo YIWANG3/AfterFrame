@@ -539,6 +539,15 @@ def _migrate_to_15(connection: sqlite3.Connection) -> None:
         connection.execute("DELETE FROM app_settings WHERE setting_key = ?", (raw_pairs.SETTING_KEY,))
 
 
+
+def _migrate_to_16(connection: sqlite3.Connection) -> None:
+    """Pets (docs/pet-recognition-design.md): a face row and a person group
+    can now be a cat or a dog, found by a pet model beside the face model.
+    Every row already there is a person."""
+    for table_name in ("asset_faces", "person_groups"):
+        if _table_exists(connection, table_name):
+            ensure_column(connection, table_name, "subject", "TEXT NOT NULL DEFAULT 'person'")
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     3: _migrate_to_3,
     4: _migrate_to_4,
@@ -553,6 +562,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     13: _migrate_to_13,
     14: _migrate_to_14,
     15: _migrate_to_15,
+    16: _migrate_to_16,
 }
 
 

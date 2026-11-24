@@ -11,6 +11,7 @@ import { fileSha256 } from "./lib/download.mjs";
 
 const require = createRequire(import.meta.url);
 const { BUNDLED_ARCFACE_R100, pathDigest } = require("../electron/peopleModel.js");
+const { BUNDLED_DINOV2_SMALL } = require("../electron/petModel.js");
 
 function scratch(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "af-fetch-models-"));
@@ -33,10 +34,14 @@ test("every bundled model is pinned and comes from the models release first", ()
     assert.equal(new Set(MODELS.map((model) => model[key])).size, MODELS.length, `${key}s are unique`);
   }
   assert.equal(new Set(MODELS.map(archiveName)).size, MODELS.length, "archive names are unique");
-  // The app keys face indexes by these: the build has to fetch exactly them.
+  // The app keys face and pet indexes by these: the build has to fetch exactly them.
   const face = MODELS.find((model) => model.id === "face");
   assert.equal(face.dirHash, BUNDLED_ARCFACE_R100.manifest_hash);
   assert.equal(face.target, BUNDLED_ARCFACE_R100.model_path);
+  const pet = MODELS.find((model) => model.id === "pet");
+  assert.equal(pet.dirHash, BUNDLED_DINOV2_SMALL.manifest_hash);
+  assert.equal(pet.target, BUNDLED_DINOV2_SMALL.model_path);
+  assert.equal(archiveName(pet), "PetEmbedding-dinov2-small-846f00a0.mlpackage.tar.gz");
 });
 
 // A tiny model package and its archive, as the release would hold them.

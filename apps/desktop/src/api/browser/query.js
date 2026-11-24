@@ -134,6 +134,8 @@ function matchesFacetConditions(asset, filters) {
   const wantedGroups = facetValues(filters.tag_group).map(String);
   if (wantedGroups.length && !(asset.tags || []).some((t) => wantedGroups.includes(tagEntry(t)?.group_id))) return false;
   if (filters.people === "with_faces") return false;
+  // No pet recognition in the browser either: no photo has a cat or dog.
+  if (filters.pets && filters.pets !== "none") return false;
   if (filters.annotated === "with" && !asset.annotation) return false;
   if (filters.annotated === "without" && asset.annotation) return false;
   // No RAW files in the browser: "with RAW" matches nothing, "without" everything.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, LoaderCircle, RefreshCw, ScanFace, Settings2, Trash2, UsersRound } from "lucide-react";
+import { Cat, Check, Dog, LoaderCircle, PawPrint, RefreshCw, ScanFace, Settings2, Trash2, UsersRound, X } from "lucide-react";
 import { Button, cx } from "../ui";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
@@ -15,20 +15,33 @@ const MIN_PROMINENT_FACES = 3;
 // Tiles are appended in pages as the wall scrolls, like the gallery, instead
 // of mounting thousands of face crops at once.
 const PAGE_SIZE = 80;
+// People and pets share the wall (docs/pet-recognition-design.md).
+const isPet = (group) => group?.subject === "cat" || group?.subject === "dog";
+const SHOW_FILTERS = { all: () => true, people: (group) => !isPet(group), pets: isPet };
+// Per catalog, per viewer: the "analyze pets" prompt once dismissed stays away.
+const petsPromptKey = (catalogKey) => `afterframe.petsPromptDismissed.${catalogKey || "default"}`;
+function readDismissed(catalogKey) {
+  try { return window.localStorage.getItem(petsPromptKey(catalogKey)) === "1"; } catch { return false; }
+}
 
 function PersonTile({ group, selected, onSelect, onOpen, onAddName, onContextMenu }) {
   const { t } = useTranslation("nav");
   const named = !!group.name?.trim();
+  const pet = isPet(group);
+  const SpeciesIcon = group.subject === "dog" ? Dog : Cat;
   const source = group.cover_preview_path || group.cover_image_path;
+  const openLabel = t("people.openGroup", { name: group.name || t(pet ? "people.unnamedPet" : "people.unnamed") });
 
   return (
     <div className="group/tile relative flex flex-col items-center" data-person-group={group.group_id}>
+      {/* aria-label: without it a pet tile is named by its paw badge ("Cat"). */}
       <button
         type="button"
         onClick={(event) => onSelect(group, event)}
         onDoubleClick={() => onOpen(group)}
         onContextMenu={(event) => onContextMenu(group, event)}
-        title={t("people.openGroup", { name: group.name || t("people.unnamed") })}
+        title={openLabel}
+        aria-label={openLabel}
         className={cx(
           "relative block overflow-hidden rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
           selected ? "ring-2 ring-accent/80" : "",
@@ -46,6 +59,16 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName, onContextMen
         {selected && (
           <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-app shadow-sm">
             <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+          </span>
+        )}
+        {pet && (
+          <span
+            data-testid="pet-badge"
+            title={t(`people.${group.subject}`)}
+            aria-label={t(`people.${group.subject}`)}
+            className="absolute bottom-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/55 text-white shadow-sm"
+          >
+            <PawPrint className="h-3 w-3" />
           </span>
         )}
       </button>
@@ -68,19 +91,27 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName, onContextMen
         </button>
       )}
       <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted2">
-        <ScanFace className="h-2.5 w-2.5" />
-        {t("people.faces", { count: Number(group.face_count) || 0 })}
+        {pet ? <SpeciesIcon className="h-2.5 w-2.5" /> : <ScanFace className="h-2.5 w-2.5" />}
+        {t(pet ? "people.petPhotos" : "people.faces", { count: Number(group.face_count) || 0 })}
       </div>
     </div>
   );
 }
 
-export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
+export default function PeopleView({ people, onOpenGroup, onOpenSettings, catalogKey }) {
   const { t } = useTranslation("nav");
   const {
-    groups, loading, failed, load, selectedId, select, rename, merge, deleteGroups, scan,
-    requestScan, modelMissing, modelNeedsMacOS,
+    groups: allGroups, loading, failed, load, selectedId, select, rename, merge, deleteGroups, scan,
+    requestScan, modelMissing, modelNeedsMacOS, petsReady,
   } = people;
+  const [show, setShow] = useState("all");
+  const hasPets = useMemo(() => allGroups.some(isPet), [allGroups]);
+  const groups = useMemo(
+    () => (hasPets ? allGroups.filter(SHOW_FILTERS[show] || SHOW_FILTERS.all) : allGroups),
+    [allGroups, hasPets, show],
+  );
+  const [petsPromptDismissed, setPetsPromptDismissed] = useState(() => readDismissed(catalogKey));
+  useEffect(() => { setPetsPromptDismissed(readDismissed(catalogKey)); }, [catalogKey]);
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [naming, setNaming] = useState(null); // { group, anchorRect }
@@ -91,7 +122,7 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
   const sentinelRef = useRef(null);
   const gridRef = useRef(null);
 
-  const namedGroups = useMemo(() => groups.filter((group) => group.name?.trim()), [groups]);
+  const namedGroups = useMemo(() => allGroups.filter((group) => group.name?.trim()), [allGroups]);
 
   const ordered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -100,7 +131,7 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
     return [...groups.filter((group) => !isSmall(group)), ...groups.filter(isSmall)];
   }, [groups, query]);
 
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query, show]);
 
   const visible = ordered.slice(0, visibleCount);
   const hasMore = ordered.length > visibleCount;
@@ -120,6 +151,15 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
 
   const scanning = !!scan?.active;
   const scanPercent = Math.round((Number(scan?.progress) || 0) * 100);
+  // Pets on, but the library's last run has no pet count (it ran before pets
+  // existed, or while they were off): offer the pets once instead of
+  // rescanning on its own.
+  const showPetsPrompt = petsReady && !scanning && !petsPromptDismissed && allGroups.length > 0
+    && !!scan?.result && !("pets" in scan.result);
+  function dismissPetsPrompt() {
+    setPetsPromptDismissed(true);
+    try { window.localStorage.setItem(petsPromptKey(catalogKey), "1"); } catch { /* still hidden for now */ }
+  }
 
   // Shared by the header and empty-state scan buttons. Release builds include
   // the face model; a build without it can't scan until one is chosen in
@@ -271,16 +311,40 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
         )}
         actions={(
           <>
+            {/* Beside the actions, never in the title block: there it ran under
+                Scan and squeezed the title to nothing in a narrow pane. */}
+            {hasPets && (
+              <div role="radiogroup" aria-label={t("people.title")} className="mr-1 flex shrink-0 items-center rounded-md border border-border/60 p-0.5">
+                {["all", "people", "pets"].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={show === value}
+                    data-testid={`people-show-${value}`}
+                    onClick={() => setShow(value)}
+                    className={cx(
+                      "rounded px-2 py-0.5 text-[11px] transition",
+                      show === value ? "bg-[var(--fill-3)] text-text" : "text-muted hover:text-text",
+                    )}
+                  >
+                    {t(value === "all" ? "people.showAll" : value === "people" ? "people.showPeople" : "people.showPets")}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => void requestScan()}
                 disabled={scanDisabled}
                 title={modelMissing ? modelMissingTitle : t("people.scanHint")}
+                aria-label={scanLabel}
+                data-testid="people-scan"
                 className="flex h-8 items-center gap-1.5 rounded-md border border-border/60 px-2.5 text-[11px] text-muted transition hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-50"
               >
-                <ScanFace className="h-3.5 w-3.5" />
-                {scanLabel}
+                <ScanFace className="h-3.5 w-3.5 shrink-0" />
+                <span className="people-scan-label">{scanLabel}</span>
               </button>
             </div>
             <Button
@@ -298,6 +362,28 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
       />
 
       <main ref={scrollRef} data-testid="gallery-scroll" className="min-h-0 flex-1 overflow-y-auto p-6">
+        {showPetsPrompt && (
+          <div data-testid="pets-prompt" className="mb-5 flex items-center gap-3 rounded-lg border border-border/55 bg-chrome px-3 py-2 text-[12px] text-muted">
+            <PawPrint className="h-3.5 w-3.5 shrink-0 text-muted2" />
+            <span className="min-w-0 flex-1 truncate">{t("people.petsPrompt")}</span>
+            <button
+              type="button"
+              onClick={() => { dismissPetsPrompt(); void requestScan(); }}
+              className="flex h-7 shrink-0 items-center rounded-md bg-accent px-2.5 text-[11px] font-medium text-app transition hover:bg-accent/90"
+            >
+              {t("people.petsPromptAction")}
+            </button>
+            <button
+              type="button"
+              onClick={dismissPetsPrompt}
+              title={t("people.petsPromptDismiss")}
+              aria-label={t("people.petsPromptDismiss")}
+              className="shrink-0 rounded p-1 text-muted2 transition hover:bg-hover hover:text-text"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         {loading && !groups.length ? (
           <div className="flex h-full min-h-48 flex-col items-center justify-center gap-3 text-muted2">
             <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -391,7 +477,7 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
         <NamePersonPopover
           anchorRect={naming.anchorRect}
           group={naming.group}
-          namedGroups={namedGroups}
+          namedGroups={namedGroups.filter((candidate) => (candidate.subject || "person") === (naming.group.subject || "person"))}
           onClose={() => setNaming(null)}
           onRename={(name) => rename(naming.group.group_id, name)}
           onMerge={(target) => merge(naming.group.group_id, target.group_id)}

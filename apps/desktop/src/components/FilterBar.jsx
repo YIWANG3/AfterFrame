@@ -2,7 +2,7 @@ import { formatLabel } from "../../shared/formats.mjs";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
-import { X, ScanFace, Sparkles, Map as MapIcon, Split, ListChecks } from "lucide-react";
+import { X, ScanFace, Sparkles, Map as MapIcon, Split, ListChecks, PawPrint } from "lucide-react";
 import { activeFilterCount, isEmptyValue } from "../hooks/workspaceLogic";
 import { usePref } from "../hooks/usePref";
 import { ACTION_CHIP } from "./filters/Popover";
@@ -124,7 +124,7 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
   const slotLabel = (id) => ({
     camera: t("filter.camera"), lens: t("filter.lens"), tag: t("filter.tag"), extension: t("filter.format"),
     location_source: t("filter.locationSource.label"), country: t("filter.country"), city: t("filter.city"),
-    text: t("filter.textContains"), color: t("filter.color"), people: t("filter.people"), annotated: t("filter.annotated"), has_raw: t("filter.hasRaw.label"),
+    text: t("filter.textContains"), color: t("filter.color"), people: t("filter.people"), pets: t("filter.pets"), annotated: t("filter.annotated"), has_raw: t("filter.hasRaw.label"),
     person_group: t("filter.person"), in_collection: t("filter.folder"), iso: t("filter.iso"), aperture: t("filter.aperture"),
     focal: t("filter.focal"), date: t("filter.date"), rating: t("filter.rating"), flag: t("filter.flag"), orientation: t("filter.orientation.label"),
   })[id];
@@ -309,6 +309,24 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
         >
           <ScanFace className="h-3 w-3" />
           {t("filter.people")}
+        </button>
+      )}
+
+      {/* Cats and dogs the pet model found — cycles off → pets → cats → dogs → off. */}
+      {shows("pets") && api.can("people") && (
+        <button
+          type="button"
+          data-testid="filter-pets"
+          onClick={() => onChange(setOrDelete(f, "pets",
+            f.pets === "any" ? "cat" : f.pets === "cat" ? "dog" : f.pets === "dog" ? undefined : "any"))}
+          title={t("filter.petsHint")}
+          className={[
+            "flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] transition-colors",
+            f.pets ? "border-accent/50 bg-accent/10 text-text" : "border-border/70 bg-app text-muted hover:border-border hover:text-text",
+          ].join(" ")}
+        >
+          <PawPrint className="h-3 w-3" />
+          {f.pets === "cat" ? t("filter.petsCat") : f.pets === "dog" ? t("filter.petsDog") : t("filter.pets")}
         </button>
       )}
 

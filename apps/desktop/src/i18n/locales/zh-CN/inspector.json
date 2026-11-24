@@ -18,7 +18,7 @@
     "sourceImages": "源图像",
     "otherVersions": "其他版本",
     "similar": "相似",
-    "people": "人物"
+    "people": "人物与宠物"
   },
   "rows": {
     "folder": "文件夹",
@@ -73,7 +73,10 @@
     "coverUpdated": "已更新人物封面",
     "coverFailed": "设置封面图失败",
     "pickerPlaceholder": "搜索人物…",
-    "pickerEmpty": "没有已命名的人物"
+    "pickerEmpty": "没有已命名的人物",
+    "unrecognizedPet": "未匹配到宠物",
+    "cat": "猫",
+    "dog": "狗"
   },
   "toast": {
     "relinked": "已重新连接",

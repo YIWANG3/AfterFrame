@@ -92,6 +92,7 @@ directory; two can only be rebuilt on the machine that made them.
 | `people-images/` | `seed-people-catalog.js` | only if a file is missing: the gitignored `marketing/demo-people/output` sources — author's Mac only |
 | `people-catalog.afcatalog/` | `seed-people-catalog.js` | macOS, the native people-worker and an installed ArcFace model under `~/Library/Application Support/AfterFrame/people-models/` — in practice the author's Mac |
 | `raw/` | `raw/make-raw-fixtures.py` | a real camera DNG and Adobe DNG Converter (macOS); the committed pair is from the author's phone |
+| `pet-images/` | nothing — committed as-is | the author's cat and public-domain Commons photos, downscaled with no EXIF; sources and the similarity margins in `pet-images/SOURCES.md` |
 | `heic/`, `test-videos/` | nothing — committed as-is | — |
 
 A re-seed is not a no-op diff. Both seed scripts wipe the catalog and give
@@ -139,10 +140,10 @@ tests need it there too:
 npm --prefix apps/desktop run fetch:exiftool
 ```
 
-The Core ML models the Mac app ships (the ArcFace face model and Depth Anything
-V2 Small for scene depth) aren't committed either. `npm run dev` fetches them
-into `apps/desktop/native/` the first time (about 160 MB), and the `dist:mac`
-scripts do the same. They come from the repository's own
+The Core ML models the Mac app ships (the ArcFace face model, DINOv2 Small for
+pets and Depth Anything V2 Small for scene depth) aren't committed either.
+`npm run dev` fetches them into `apps/desktop/native/` the first time (about
+200 MB), and the `dist:mac` scripts do the same. They come from the repository's own
 [`models` release](https://github.com/YIWANG3/AfterFrame/releases/tag/models),
 listed with their hashes in `apps/desktop/scripts/bundled-models.mjs`; a
 download is kept in `native/.cache/`. To fetch them yourself, or just one:

@@ -63,7 +63,7 @@ test("it is the inspector, less what the lightbox shows already or what leads el
   expect(names.slice(0, 2)).toEqual(["Properties", "Camera"]);
   expect(names).toContain("Dates");
   expect(names.indexOf("Dates")).toBeLessThan(names.indexOf("Tags"));
-  for (const gone of ["Source", "People", "Duplicates", "Similar", "AI analysis"]) expect(names).not.toContain(gone);
+  for (const gone of ["Source", "People & Pets", "Duplicates", "Similar", "AI analysis"]) expect(names).not.toContain(gone);
   await expect(pane().getByTestId("inspector-rating")).toBeVisible();
   await expect(pane().getByTestId("inspector-captured")).toBeVisible();
   await expect(pane().getByTestId("inspector-tags")).toHaveCount(1);
