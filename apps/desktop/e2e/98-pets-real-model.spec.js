@@ -6,7 +6,8 @@
 // so it never runs the worker or the model.
 //
 // The photos are fixtures/pet-images (fixtures/pet-images/SOURCES.md): Mimi,
-// a ragdoll cat, four times; Larry, another cat, once; Bo, a dog, twice.
+// a ragdoll cat, four times; Larry, another cat, once; Bo, a dog, twice; and
+// sea lions on a buoy, which are no pets.
 // Needs both models fetched (npm run fetch:models) and macOS 14+; skips
 // without them, which is the PR CI VM.
 
@@ -115,5 +116,17 @@ test.describe("pet recognition with the bundled pet model", () => {
     const row = ctx.window.getByRole("button", { name: "Mimi Cat" });
     await expect(row).toBeVisible();
     await expect(row.getByTestId("inspector-pet-species")).toHaveText("Cat");
+  });
+
+  test("sea lions aren't dogs: the Pets filter shows only the cats and the dog", async () => {
+    await ctx.window.getByRole("navigation").getByRole("button", { name: /All Assets/i }).first().click();
+    await expect.poll(() => cards().count()).toBeGreaterThan(8);
+    if (!await ctx.window.getByTestId("filter-pets").isVisible()) await ctx.window.getByRole("button", { name: "Filters" }).click();
+    const chip = ctx.window.getByTestId("filter-pets");
+    await chip.click();
+    await expect(chip).toHaveText("Pets");
+    await expect(cards()).toHaveCount(7);
+    const shown = await cards().evaluateAll((els) => els.map((el) => el.dataset.imagePath.split("/").pop()));
+    expect(shown.sort()).toEqual(["bo_01.jpg", "bo_02.jpg", "larry_01.jpg", "mimi_01.jpg", "mimi_02.jpg", "mimi_03.jpg", "mimi_04.jpg"]);
   });
 });

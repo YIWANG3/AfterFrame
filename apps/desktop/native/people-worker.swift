@@ -716,6 +716,39 @@ private let dogLabels: Set<String> = ["dog", "canine", "bulldog", "sheepdog"]
 // animals with one species wrong; 0.3 kept 27 (one wrong), 0 kept 42 (three).
 private let minimumSpeciesScore: Float = 0.1
 
+// The second look. Both detectors only know cats and dogs, so a cow, a seal,
+// a deer, a rock or a plush toy comes back as one of them, sometimes with
+// full confidence. Vision's classifier knows those, given some of the
+// surroundings: a tight crop of a cow in a field reads as a greyhound, the
+// cow with its field around it as a cow.
+private let contextMargin: CGFloat = 0.25
+// Species labels without their parents: "feline" also means lion and
+// bobcat, "canine" fox, wolf and hyena.
+private let catOnlyLabels: Set<String> = ["cat", "adult_cat", "kitten"]
+private let dogOnlyLabels: Set<String> = [
+    "dog", "australian_shepherd", "basenji", "basset", "beagle", "bernese_mountain", "bichon", "bulldog",
+    "chihuahua", "collie", "corgi", "dachshund", "dalmatian", "doberman", "german_shepherd", "greyhound",
+    "hound", "husky", "irish_wolfhound", "jack_russell_terrier", "malamute", "malinois", "mastiff",
+    "newfoundland", "pitbull", "pomeranian", "poodle", "pug", "retriever", "ridgeback", "rottweiler",
+    "saint_bernard", "schnauzer", "setter", "sheepdog", "spaniel", "terrier", "vizsla", "weimaraner",
+]
+// Other animals, and things shaped like one.
+private let notPetLabels: Set<String> = [
+    "ungulates", "cow", "deer", "elk", "moose", "horse", "donkey", "sheep", "goat", "pig", "camel", "llama",
+    "bison", "boar", "giraffe", "zebra", "rhinoceros", "hippopotamus", "elephant", "kangaroo", "marsupial",
+    "bear", "panda", "koala", "raccoon", "skunk", "otter", "seal", "sealion", "walrus", "cetacean", "dolphin",
+    "whale", "hyena", "fox", "coyote_wolf", "lion", "tiger", "leopard", "cheetah", "cougar", "lynx", "bobcat",
+    "lemur", "rabbit", "rodent", "ferret", "hedgehog", "porcupine", "bird", "poultry", "reptile", "fish", "insect",
+    "rocks", "stuffed_animals", "toy", "doll", "statue", "figurine", "puppet",
+]
+// Something else wins when it scores at least this and more than twice the
+// species. On the 27 animals one photo library turned up (18 cats and dogs;
+// 3 cows, a sea lion, a seal, a deer, 2 rocks, a plush toy) every miss had
+// something else at 23 times its species or more, every pet at most 0.96
+// times: a backlit retriever the classifier half took for a cow.
+private let minimumOtherScore: Float = 0.1
+private let otherOverSpecies: Float = 2
+
 private struct FoundAnimal {
     var subject: String?
     let confidence: Float
@@ -786,6 +819,23 @@ private func classifySpecies(_ crop: CGImage) -> String? {
     return cat >= dog ? "cat" : "dog"
 }
 
+/// True when Vision's classifier, shown the animal with its surroundings,
+/// sees another animal or a thing (a cow, a seal, a rock, a toy) rather
+/// than the cat or dog a detector found.
+private func isSomethingElse(_ context: CGImage, subject: String) -> Bool {
+    let request = VNClassifyImageRequest()
+    let handler = VNImageRequestHandler(cgImage: context, orientation: .up, options: [:])
+    guard (try? handler.perform([request])) != nil, let results = request.results else { return false }
+    let species = subject == "cat" ? catOnlyLabels : dogOnlyLabels
+    var speciesScore: Float = 0
+    var otherScore: Float = 0
+    for observation in results {
+        if species.contains(observation.identifier) { speciesScore = max(speciesScore, observation.confidence) }
+        if notPetLabels.contains(observation.identifier) { otherScore = max(otherScore, observation.confidence) }
+    }
+    return otherScore >= minimumOtherScore && otherScore > speciesScore * otherOverSpecies
+}
+
 private func detectAnimals(in image: CGImage, model: PetModel) throws -> [Animal] {
     let width = image.width
     let height = image.height
@@ -832,6 +882,9 @@ private func detectAnimals(in image: CGImage, model: PetModel) throws -> [Animal
             : animal.body
         guard min(body.width, body.height) >= minimumAnimalPixelSize, let crop = image.cropping(to: body) else { continue }
         guard let subject = animal.subject ?? classifySpecies(crop) else { continue }
+        let context = clamped(body.insetBy(dx: -body.width * contextMargin, dy: -body.height * contextMargin),
+                              width: width, height: height)
+        if let contextCrop = image.cropping(to: context), isSomethingElse(contextCrop, subject: subject) { continue }
         let quality = animal.source == "pose" || min(body.width, body.height) < lowQualityAnimalPixelSize ? "low" : "standard"
         animals.append(Animal(
             subject: subject,
