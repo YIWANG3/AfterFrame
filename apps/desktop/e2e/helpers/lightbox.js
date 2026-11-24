@@ -20,8 +20,8 @@ async function clickLightboxControl(window, control) {
   await control.click();
 }
 
-// Pins the bars, so a spec about something else sees the lightbox as it was
-// before the pin: bars always out, the stage between them.
+// Pins the bars, so a spec about something else can click them without
+// bringing them out first.
 async function pinLightboxControls(window) {
   const pin = window.getByRole("button", { name: "Pin preview controls", includeHidden: true });
   if ((await pin.getAttribute("aria-pressed")) === "true") return;

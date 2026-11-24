@@ -403,9 +403,10 @@ export default function Lightbox({
     }
   });
 
+  // The pin leaves the stage as it is; the details pane takes its width.
   useLayoutEffect(() => {
     updateFitForLayout();
-  }, [controlsPinned, showInfo]);
+  }, [showInfo]);
 
   function zoomFromCenter(nextScale, previewDuringMotion = false) {
     const viewport = viewportRef.current;
@@ -697,6 +698,7 @@ export default function Lightbox({
       style={{ zIndex: Z.lightbox, "--lightbox-info": showInfo ? "var(--inspector-width)" : "0px" }}
       data-layer="lightbox"
       data-lightbox-floating={floatingControls || undefined}
+      data-lightbox-inset={proofMode || isVideo || undefined}
       data-lightbox-controls-hidden={(floatingControls && !controlsRevealed) || undefined}
       className={[
         "fixed inset-0 flex flex-col",
