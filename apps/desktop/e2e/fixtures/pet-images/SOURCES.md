@@ -9,6 +9,7 @@ re-encoded with no EXIF or GPS.
 | `larry_01.jpg` | Larry, the Downing Street cat | [Larry at No. 10, waiting for Mike Pompeo](https://commons.wikimedia.org/?curid=86469455), U.S. Embassy in U.K. | Public domain |
 | `bo_01.jpg` | Bo, a Portuguese water dog | [Bo Obama March 2010 (a)](https://commons.wikimedia.org/?curid=67241066), The White House | Public domain |
 | `bo_02.jpg` | Bo | [Bo Obama March 2010](https://commons.wikimedia.org/?curid=14934844), The White House | Public domain |
+| `sealions_01.jpg` | California sea lions on a buoy: no pet. Before the classifier's second look the worker took three of them for dogs | [MBNMS California sea lions on buoy](https://commons.wikimedia.org/?curid=95407700), Douglas Croft, NOAA National Marine Sanctuaries | Public domain |
 
 Chosen so the result has room to spare at the pet threshold (0.58, cosine of
 DINOv2 Small body embeddings): the four Mimi photos are 0.69 or more apart from
