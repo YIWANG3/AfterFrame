@@ -16,6 +16,8 @@ import { isEmptyValue,
 } from "./workspaceLogic";
 
 const PAGE_SIZE = 180;
+// How long the sidebar counts wait after a rating for the next one.
+const SUMMARY_REFRESH_DELAY_MS = 250;
 
 // The library sort is remembered (utils/prefs.js): the app opens, and a
 // catalog switch lands, on All Assets in the order last picked.
@@ -105,6 +107,17 @@ export default function useWorkspace({ pushToast, onShowMissing } = {}) {
   // COUNTS can stay identical across real changes, so counting is not enough.
   const [catalogRevision, setCatalogRevision] = useState(0);
   const bumpCatalogRevision = () => setCatalogRevision((revision) => revision + 1);
+  // The sidebar counts after an in-UI write that moves one (a rating: Rated,
+  // and the entry itself, shown once something is rated). Those writes send
+  // no catalog-changed, so nothing else asks. One ask after a run of key
+  // presses, not one per key: the sidecar is serial.
+  const summaryTimerRef = useRef(null);
+  const refreshSummarySoon = () => {
+    clearTimeout(summaryTimerRef.current);
+    summaryTimerRef.current = setTimeout(() => {
+      void api.getSummary().then((next) => next && setSummary(next)).catch(() => {});
+    }, SUMMARY_REFRESH_DELAY_MS);
+  };
   // Supersession: every browse takes the next id; a response whose id is no
   // longer current is dropped. The later request always wins, whoever sent it.
   const browserRequestIdRef = useRef(0);
@@ -196,6 +209,7 @@ export default function useWorkspace({ pushToast, onShowMissing } = {}) {
     refreshBrowse: () => refreshBrowse(),
     loadCollections, hasSmartCollections,
     loadFacetValues: () => loadFacetValues(),
+    refreshSummarySoon,
     bumpCatalogRevision, selectedAssetIdRef, setSelectedAssetId, setBrowserOffset,
   };
 
