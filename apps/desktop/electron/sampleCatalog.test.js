@@ -7,12 +7,12 @@ const { copySampleOriginals, repairLegacySamplePreviews } = require("./sampleCat
 
 const source = path.join(__dirname, "..", "sample-photos");
 
-test("sample copy includes exactly the 14 manifest originals, not web thumbnails or metadata", () => {
+test("sample copy includes exactly the 15 manifest originals, not web thumbnails or metadata", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-sample-copy-"));
   try {
     const originals = copySampleOriginals(source, root);
-    assert.equal(originals.length, 14);
-    assert.equal(fs.readdirSync(root).length, 14);
+    assert.equal(originals.length, 15);
+    assert.equal(fs.readdirSync(root).length, 15);
     for (const file of originals) {
       assert.deepEqual(fs.readFileSync(file), fs.readFileSync(path.join(source, path.basename(file))));
     }
@@ -98,11 +98,11 @@ test("openSampleCatalog: fresh copy + import on the first open, a plain switch a
     let populated = false;
     const { sample, samplePath, calls } = fakeWiring(dir, { hasDb: () => populated });
     assert.deepEqual(await sample.openSampleCatalog(), { path: samplePath, fresh: true });
-    assert.equal(fs.readdirSync(path.join(samplePath, "photos")).length, 14);
+    assert.equal(fs.readdirSync(path.join(samplePath, "photos")).length, 15);
     assert.deepEqual(calls, [
       ["switch", samplePath],
       ["roots", "image", [path.join(samplePath, "photos")]],
-      ["import", "processed_only", 14],
+      ["import", "processed_only", 15],
     ]);
     populated = true;
     calls.length = 0;
