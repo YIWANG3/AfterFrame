@@ -793,15 +793,17 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 .fixed.inset-0[data-layer="overlay"] [data-testid="batch-page-card"] > .ring-1:not([class*="ring-[rgb"]) { --tw-ring-color: transparent; box-shadow: var(--shadow-menu); }
 
 /* ───────── 12a · 灯箱上下栏玻璃化:头部与底部(缩放行 + 胶片条)不再是两条实黑,改成压在照片之上的 Clear 玻璃。
-   固定时照片区保留在两栏之间做适配,右侧详情栏打开时照片区和控件都给它留出宽度。
+   照片区用整个窗口的高度,固定与否只决定上下栏是否常驻,照片的位置和大小不变。右侧详情栏打开时照片区和控件都给它留出宽度。
+   放大的照片从上下栏和详情栏底下穿过,所以照片区不裁切。
    玻璃面板画在灯箱根节点的 ::before / ::after 上,向窗口外多伸 40px,避免 backdrop-filter 在窗口边缘采样出浅线 ───────── */
 .fixed.inset-0[data-layer="lightbox"] { position: fixed; }
 /* --lightbox-info 是照片区和控件为详情栏留出的宽度。 */
 .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { position: absolute; top: 0; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
 .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-center.justify-center.gap-3 { position: absolute; bottom: 76px; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
 .fixed.inset-0[data-layer="lightbox"] > .h-16 { position: absolute; bottom: 0; left: 0; right: var(--lightbox-info, 0px); z-index: 20; }
-.fixed.inset-0[data-layer="lightbox"] > [data-lightbox-viewport] { z-index: 1; margin-right: var(--lightbox-info, 0px); }
-.fixed.inset-0[data-layer="lightbox"]:not([data-lightbox-floating]) > [data-lightbox-viewport] { margin-block: 84px 140px; overflow: visible; }
+.fixed.inset-0[data-layer="lightbox"] > [data-lightbox-viewport] { z-index: 1; margin-right: var(--lightbox-info, 0px); overflow: visible; }
+/* 校样和视频沿用两栏之间的照片区:视频的原生画面盖在网页之上,得给上下栏让出位置。 */
+.fixed.inset-0[data-layer="lightbox"][data-lightbox-inset] > [data-lightbox-viewport] { margin-block: 84px 140px; }
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-floating] > div[data-lightbox-control] { pointer-events: auto; }
 .fixed.inset-0[data-layer="lightbox"][data-lightbox-controls-hidden] {
   --lightbox-controls-opacity: 0;

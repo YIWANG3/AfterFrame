@@ -4,9 +4,10 @@
 // bars (the header, the zoom row with the filmstrip, the arrows) stay out of
 // sight until the pointer comes near one of them; back on the photo they go
 // again, and hidden bars drop focus and stay out of the Tab order. The arrow
-// keys page either way. Pinned, the bars stay out and the photo is fitted
-// between them. The photo makes room for the details in both modes. The pin
-// is remembered across a reopen and a restart.
+// keys page either way. Pinned, the bars just stay out, over the photo: the
+// pin moves the photo neither fitted nor zoomed, with the details out or not.
+// The photo makes room for the details in both modes, and a zoomed photo goes
+// on under them in both. The pin is remembered across a reopen and a restart.
 
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, collectCoverage, galleryCards } = require("./helpers/app");
@@ -34,6 +35,22 @@ const shown = () => expect(lightbox(w())).not.toHaveAttribute("data-lightbox-con
 const toCenter = async () => {
   const f = await frame();
   await w().mouse.move(f.left + f.width / 2, f.top + f.height / 2);
+};
+// The photo's box as laid out, its transform included.
+const rect = () => photo().evaluate((image) => {
+  const r = image.getBoundingClientRect();
+  return { left: r.left, top: r.top, width: r.width, height: r.height };
+});
+// Whether the photo is under a point: hit testing skips what the stage clips.
+const photoAt = (x, y) => w().evaluate(([px, py]) => document.elementsFromPoint(px, py)
+  .some((el) => el.matches("[data-lightbox-layer='preview']")), [x, y]);
+const nextFrame = () => w().evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+const loaded = () => expect.poll(() => photo().evaluate((image) => image.complete && image.naturalWidth > 0 && !!image.style.width)).toBe(true);
+const setPinned = async (on) => {
+  if ((await pin().getAttribute("aria-pressed")) === String(on)) return;
+  await clickLightboxControl(w(), pin());
+  await expect(pin()).toHaveAttribute("aria-pressed", String(on));
+  await nextFrame();
 };
 // The fitted photo lies inside the stage.
 const fitsStage = async () => {
@@ -104,7 +121,7 @@ test("the arrow keys page while the bars are hidden", async () => {
 test("unpinned, opening the details refits the photo beside them", async () => {
   // The paging above leaves a photo that may not be loaded and fitted yet (an
   // unloaded one has no size, so it "fits" trivially); read it once it is.
-  await expect.poll(() => photo().evaluate((image) => image.complete && image.naturalWidth > 0 && !!image.style.width)).toBe(true);
+  await loaded();
   await fitsStage();
   const fullStage = await box(viewport());
   await w().keyboard.press("i");
@@ -153,15 +170,58 @@ test("a clicked control loses focus when the bars hide and Tab skips them", asyn
   await expect(zoomRow()).toHaveCSS("opacity", "0");
 });
 
-test("pinned, the bars stay out and the photo is fitted between them; the pin is remembered", async () => {
+test("with the details out, the pin moves the photo neither fitted nor zoomed, and a zoomed photo goes on under them", async () => {
+  await loaded();
+  await w().keyboard.press("i");
+  await expect(pane()).toBeVisible();
+  await fitsStage();
+  const stage = await box(viewport());
+  const fitted = await rect();
+
+  await setPinned(true);
+  await expect(lightbox(w())).not.toHaveAttribute("data-lightbox-floating");
+  expect(await box(viewport())).toEqual(stage);
+  expect(await rect()).toEqual(fitted);
+  await setPinned(false);
+  expect(await rect()).toEqual(fitted);
+
+  // Zoomed in about the middle until the photo runs well past the pane's edge.
+  const paneBox = await box(pane());
+  const midY = stage.top + stage.height / 2;
+  for (let i = 0; i < 6 && (await rect()).left + (await rect()).width < paneBox.left + 80; i += 1) {
+    await viewport().dispatchEvent("wheel", { deltaY: -100, clientX: stage.left + stage.width / 2, clientY: midY });
+    await nextFrame();
+  }
+  const zoomed = await rect();
+  expect(zoomed.left + zoomed.width).toBeGreaterThan(paneBox.left + 80);
+  // Unpinned the photo goes on under the pane, as it does pinned.
+  expect(await photoAt(paneBox.left + 40, midY)).toBe(true);
+
+  await setPinned(true);
+  expect(await rect()).toEqual(zoomed);
+  expect(await photoAt(paneBox.left + 40, midY)).toBe(true);
+  await setPinned(false);
+  expect(await rect()).toEqual(zoomed);
+
+  await clickLightboxControl(w(), w().getByTitle("Reset to fit"));
+  await expect.poll(rect).toEqual(fitted);
+  await toCenter();
+  await w().keyboard.press("i");
+  await expect(pane()).toHaveCount(0);
+});
+
+test("pinned, the bars stay out over the photo, which keeps its place; the pin is remembered", async () => {
+  await loaded();
+  await nextFrame();
   const fullStage = await box(viewport());
+  const unpinned = await rect();
   await clickLightboxControl(w(), pin());
   await expect(pin()).toHaveAttribute("aria-pressed", "true");
   await expect(pin()).not.toBeFocused();
   await expect(lightbox(w())).not.toHaveAttribute("data-lightbox-floating");
-  const stage = await box(viewport());
-  expect(stage.top).toBeGreaterThan(fullStage.top + 40);
-  expect(stage.height).toBeLessThan(fullStage.height - 100);
+  await nextFrame();
+  expect(await box(viewport())).toEqual(fullStage);
+  expect(await rect()).toEqual(unpinned);
   await fitsStage();
 
   // Back on the photo, the bars stay.
@@ -185,9 +245,19 @@ test("pinned, the bars stay out and the photo is fitted between them; the pin is
   await expect(pin()).toHaveAttribute("aria-pressed", "true");
   await expect(lightbox(w())).not.toHaveAttribute("data-lightbox-floating");
 
-  // Unpinned again, the photo is fitted to the whole lightbox.
+  // Unpinned again, the photo stays where it was.
+  await loaded();
+  await fitsStage();
+  await nextFrame();
+  const pinnedStage = await box(viewport());
+  const pinned = await rect();
+  const f = await frame();
+  expect(pinnedStage.top).toBeLessThanOrEqual(f.top + 1);
+  expect(pinnedStage.height).toBeGreaterThanOrEqual(f.height - 1);
   await pin().click();
   await expect(pin()).toHaveAttribute("aria-pressed", "false");
-  await expect.poll(async () => (await box(viewport())).height).toBeGreaterThan(stage.height + 100);
+  await nextFrame();
+  expect(await box(viewport())).toEqual(pinnedStage);
+  expect(await rect()).toEqual(pinned);
   await fitsStage();
 });
