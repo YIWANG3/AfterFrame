@@ -69,8 +69,10 @@ test.beforeAll(async () => {
     prepareCatalog(dir) { catalogDir = dir; },
   });
   await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
-  // The app has upgraded the catalog to the schema with pets by now.
-  execFileSync("sqlite3", [path.join(catalogDir, "catalog.sqlite3"), SEED]);
+  // The app has upgraded the catalog to the schema with pets by now. It still
+  // holds the database open and may be writing at startup; without a busy
+  // timeout the seed fails outright with "database is locked".
+  execFileSync("sqlite3", ["-cmd", ".timeout 10000", path.join(catalogDir, "catalog.sqlite3"), SEED]);
 });
 
 test.afterAll(async () => {
