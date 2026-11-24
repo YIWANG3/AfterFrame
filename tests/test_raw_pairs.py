@@ -19,6 +19,7 @@ from media_workspace.db import (
     list_image_assets,
     raw_pairs,
     set_catalog_path,
+    summary,
 )
 from media_workspace.db.browse import count_image_assets
 from media_workspace.reverse_lookup import resolve_image_batch
@@ -177,6 +178,24 @@ class RawPairsTest(unittest.TestCase):
         self.run_cli("delete-image-assets", "--asset-id", image_id)
         self.assertIsNone(self.connection.execute("SELECT 1 FROM assets WHERE asset_id IN (?, ?)", (image_id, raw_id)).fetchone())
         self.assertIsNone(self.connection.execute("SELECT 1 FROM raw_pairs").fetchone())
+
+    def test_the_sidebar_counts_a_pair_once(self) -> None:
+        # All Assets, Recently Added and Rated count what their grids show:
+        # the RAW of a merged pair in none of them.
+        image_id, _raw_id = self.pair()
+        self.place(JPG, "lonely.jpg")
+        self.imported(self.shoot / "lonely.jpg")
+        self.run_cli("set-asset-rating", "--asset-id", image_id, "--rating", "4")
+        counts = summary(self.connection)
+        self.assertEqual(counts["browse_assets"], 2)
+        self.assertEqual(counts["recently_added_count"], count_image_assets(self.connection, "recent"))
+        self.assertEqual(counts["recently_added_count"], 2)
+        self.assertEqual(counts["rated_count"], count_image_assets(self.connection, "rated"))
+        self.assertEqual(counts["rated_count"], 1)
+        # Separate, both files are photos of their own, both rated.
+        self.run_cli("set-raw-pairs-mode", "--mode", "separate")
+        counts = summary(self.connection)
+        self.assertEqual((counts["browse_assets"], counts["recently_added_count"], counts["rated_count"]), (3, 3, 2))
 
     def test_the_jpg_has_a_raw_for_the_filter(self) -> None:
         self.pair()

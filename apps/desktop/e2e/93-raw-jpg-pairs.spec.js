@@ -42,6 +42,21 @@ async function ratingOf(assetId) {
 
 const card = (assetId) => ctx.window.locator(`[data-gallery-item='true'][data-asset-id='${assetId}']`);
 
+// A browse item in the sidebar ("Recently Added", "Rated") and the count
+// beside it.
+const navItem = (label) => ctx.window.locator("nav button")
+  .filter({ has: ctx.window.locator("span.text-\\[13px\\]", { hasText: new RegExp(`^${label}$`) }) });
+const sidebarCount = async (label) => Number(await navItem(label).locator("span.tabular-nums").textContent());
+
+// Open a browse item: the number beside it is how many photos it shows.
+async function expectSidebarMatchesGrid(label) {
+  await navItem(label).click();
+  await expect(ctx.window.getByTestId("gallery-title")).toHaveText(label);
+  const cards = galleryCards(ctx.window);
+  await expect(cards.first()).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => cards.count()).toBe(await sidebarCount(label));
+}
+
 async function selectCard(assetId) {
   await card(assetId).scrollIntoViewIfNeeded();
   await card(assetId).click();
@@ -90,6 +105,10 @@ test("a RAW+JPG shot is one photo, badged JPG+RAW, and the import says so once",
   await expect(card(jpg.asset_id).locator("[data-raw-pair-badge]")).toHaveText("JPG+RAW");
   await expect(card(rows.get("DSC_0002.DNG").asset_id).locator("[data-raw-pair-badge]")).toHaveCount(0);
   await expect(ctx.window.getByText("1 RAW+JPG pair is shown as one photo")).toBeVisible({ timeout: 10_000 });
+  // The sidebar counts the pair once, as the grid it opens shows it.
+  await expectSidebarMatchesGrid("Recently Added");
+  await expect(card(jpg.asset_id)).toBeVisible();
+  await ctx.window.getByRole("button", { name: /All Assets/i }).first().click();
   expect(await ctx.window.evaluate(() => window.mediaWorkspace.rawPairsStatus())).toEqual({ mode: "merge", pairs: 1, noticed: true });
 });
 
@@ -101,6 +120,10 @@ test("rating the photo rates the RAW too; the Inspector names the RAW file, with
   await ctx.window.keyboard.press("4");
   await expect.poll(() => ratingOf(jpg.asset_id)).toBe(4);
   expect(await ratingOf(jpg.pair_raw_asset_id), "the hidden RAW").toBe(4);
+  // Both files have the stars; Rated counts the one photo it shows.
+  await expectSidebarMatchesGrid("Rated");
+  await expect(card(jpg.asset_id)).toBeVisible();
+  await ctx.window.getByRole("button", { name: /All Assets/i }).first().click();
 });
 
 test("shown separately, both photos are there with their stars, and merging folds them again", async () => {

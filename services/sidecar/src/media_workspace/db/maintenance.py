@@ -11,7 +11,6 @@ from pathlib import Path
 from .browse import count_image_assets
 from .locations import delete_asset_location
 from .resource_sets import get_resource_set_for_asset
-from .visual import LOOKALIKES_CLAUSE
 
 
 def verify_assets(
@@ -539,30 +538,12 @@ def summary(connection: sqlite3.Connection) -> dict[str, int]:
         "raw_enriched": connection.execute(
             "SELECT COUNT(*) FROM raw_metadata_cache WHERE metadata_level = 'full' AND enrichment_status = 'done'"
         ).fetchone()[0],
-        "rated_count": connection.execute(
-            """
-            SELECT COUNT(DISTINCT registry.image_asset_id)
-            FROM image_lookup_registry AS registry
-            JOIN assets ON assets.asset_id = registry.image_asset_id
-            WHERE assets.app_rating > 0
-            """
-        ).fetchone()[0],
-        "lookalike_count": connection.execute(
-            f"""
-            SELECT COUNT(DISTINCT registry.image_asset_id)
-            FROM image_lookup_registry AS registry
-            JOIN assets ON assets.asset_id = registry.image_asset_id
-            WHERE {LOOKALIKES_CLAUSE}
-            """
-        ).fetchone()[0],
-        "recently_added_count": connection.execute(
-            """
-            SELECT COUNT(DISTINCT registry.image_asset_id)
-            FROM image_lookup_registry AS registry
-            JOIN assets ON assets.asset_id = registry.image_asset_id
-            WHERE assets.created_at >= datetime('now', '-7 days')
-            """
-        ).fetchone()[0],
+        # The sidebar's Rated / Look-alikes / Recently Added: the same WHERE
+        # as the grid they open, so the RAW of a merged RAW+JPG pair is no
+        # more counted here than it is shown there.
+        "rated_count": count_image_assets(connection, "rated"),
+        "lookalike_count": count_image_assets(connection, "lookalikes"),
+        "recently_added_count": count_image_assets(connection, "recent"),
     }
 
 

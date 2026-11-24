@@ -78,3 +78,25 @@ test("MCP update_assets refreshes the UI and raises the agent toast", async () =
   expect(verify.assets[0].asset_id).toBe(target);
   expect(verify.assets[0].rating).toBe(4);
 });
+
+test("in Chinese the agent toasts are in Chinese too", async () => {
+  // They were hard-coded English while the rest of the app followed the language.
+  const toasts = ctx.window.getByTestId("toast-card");
+  const english = toasts.filter({ hasText: /Selected|Updated|Collections updated|Agent/ });
+  await expect(english).toHaveCount(0, { timeout: 15_000 }); // the earlier tests' toasts time out
+  await ctx.window.evaluate(() => window.__afterframeTest.setLocale("zh-CN"));
+  await expect(ctx.window.getByRole("button", { name: "全部素材" })).toBeVisible({ timeout: 5_000 });
+
+  const { assets } = await callTool("search_assets", { limit: 2, sort: "name-asc" });
+  await callTool("show_in_app", { asset_ids: [assets[0].asset_id, assets[1].asset_id, "image_does_not_exist"] });
+  await expect(toasts.filter({ hasText: "已选中 2 张照片，1 张没找到。" })).toBeVisible({ timeout: 5_000 });
+  await expect(toasts.filter({ hasText: "已选中 2 张照片，1 张没找到。" })).toContainText("智能体");
+
+  await callTool("update_assets", { asset_ids: [assets[0].asset_id], add_tags: ["e2e-agent-zh"] });
+  await expect(toasts.filter({ hasText: "已更新图库中的 1 个素材。" })).toBeVisible({ timeout: 5_000 });
+
+  await callTool("manage_collections", { action: "create", name: "智能体建的合集" });
+  await expect(toasts.filter({ hasText: "合集已更新。" })).toBeVisible({ timeout: 5_000 });
+
+  await expect(english).toHaveCount(0);
+});

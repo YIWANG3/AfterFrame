@@ -222,7 +222,15 @@ test("the right-click submenu and the folder page reach nested folders", async (
   await w().getByTestId("folders-view-list").click();
   const japanRow = w().getByTestId("folders-list").locator("tr[data-folder-id]").filter({ has: w().locator("[data-folder-name]", { hasText: /^Japan$/ }) });
   await expect(japanRow.locator("td").nth(3)).toHaveText("Trips");
+  // A folder holding only subfolders counts theirs, as the closed sidebar
+  // row does: Trips has no photo of its own.
+  const tripsRow = w().getByTestId("folders-list").locator("tr[data-folder-id]").filter({ has: w().locator("[data-folder-name]", { hasText: /^Trips$/ }) });
+  await expect(tripsRow.locator("td").nth(4)).toHaveText("2");
   await w().getByTestId("folders-view-grid").click();
+  // …and its card shows their photos and count, not "Empty".
+  await expect(card("Trips").locator("[data-folder-meta]")).toHaveText(/^2 items/);
+  await expect(card("Trips").locator("[data-cover-count]")).toHaveAttribute("data-cover-count", "2");
+  await expect(card("Japan").locator("[data-folder-meta]")).toHaveText(/^2 items/);
 });
 
 test("the MCP tools make, move and browse nested folders", async () => {

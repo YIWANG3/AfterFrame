@@ -1,9 +1,11 @@
 // The folder page (FoldersView): which folders show, in what order, and the
 // labels on their cards — pure functions over the collection rows, which carry
 // the page's columns from the sidecar (db/collections.py collection_stats):
-// item_count, last_added_at, captured_from / captured_to, cover_preview_paths.
+// item_count, subtree_count, last_added_at, captured_from / captured_to,
+// cover_preview_paths.
 
 import { FOLDER_SORTS } from "./folderList";
+import { ancestorIds } from "./folderTree";
 
 // The sidebar's four plus the two only the page's columns make possible.
 export const FOLDER_PAGE_SORTS = ["lastAdded", ...FOLDER_SORTS, "captured"];
@@ -35,6 +37,23 @@ export function hasFolderFilters(filters) {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// How many photos a card says the folder has: its own and its subfolders',
+// as the sidebar's collapsed row says and as the folder opens (subfolders
+// included by default). The cover and span cover the same photos.
+export function folderPhotoCount(folder) {
+  return Number(folder?.subtree_count ?? folder?.item_count ?? 0) || 0;
+}
+
+// The selection bar's photo count: a selected subfolder of a selected folder
+// is already in that folder's count.
+export function selectedPhotoCount(collections, selectedIds) {
+  const selected = new Set(selectedIds);
+  const byId = new Map((collections || []).map((c) => [c.collection_id, c]));
+  return [...selected].reduce((n, id) => (
+    ancestorIds(collections, id).some((ancestor) => selected.has(ancestor)) ? n : n + folderPhotoCount(byId.get(id))
+  ), 0);
+}
+
 // SQLite's CURRENT_TIMESTAMP has no zone and is UTC ("2026-10-15 05:00:00");
 // capture times are the camera's local wall clock ("2025-03-02T10:00:00",
 // sometimes EXIF's "2025:03:02 10:00:00"). Both become a Date; null if neither.
@@ -55,7 +74,7 @@ const ymd = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padSt
 
 function matchesFilters(folder, filters, now) {
   const f = filters || {};
-  const count = folder.item_count || 0;
+  const count = folderPhotoCount(folder);
   if (f.status === "empty" && count !== 0) return false;
   if (f.status === "recent") {
     const added = lastAddedDate(folder);
@@ -96,7 +115,7 @@ export function visibleFolderCards(collections, { sort = DEFAULT_FOLDER_PAGE_SOR
     custom: (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || byName(a, b),
     name: byName,
     newest: (a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")) || byName(a, b),
-    largest: (a, b) => (b.item_count || 0) - (a.item_count || 0) || byName(a, b),
+    largest: (a, b) => folderPhotoCount(b) - folderPhotoCount(a) || byName(a, b),
     // Folders nothing was ever added to sink to the end, by name.
     lastAdded: (a, b) => stamp(b.last_added_at, "utc") - stamp(a.last_added_at, "utc") || byName(a, b),
     captured: (a, b) => stamp(b.captured_to, "local") - stamp(a.captured_to, "local") || byName(a, b),

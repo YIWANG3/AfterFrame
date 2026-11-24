@@ -11,6 +11,7 @@
 //     main process so MCP get_selection answers "these photos" instantly.
 
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 
 export default function useAgentBridge({
@@ -24,6 +25,7 @@ export default function useAgentBridge({
   pushToast,
   onBeforeReveal,
 }) {
+  const { t } = useTranslation("app");
   // 1. Reveal — listener registers once; latest closure flows through a ref.
   const revealRef = useRef(null);
   revealRef.current = async ({ requestId, assetIds }) => {
@@ -32,10 +34,11 @@ export default function useAgentBridge({
     setSelectedIds(result.found);
     setAnchorId(result.found[0] || null);
     if (result.found.length || result.missing.length) {
-      const missingNote = result.missing.length ? ` (${result.missing.length} not found)` : "";
+      const count = result.found.length;
+      const missing = result.missing.length;
       pushToast?.({
-        title: "Agent",
-        message: `Selected ${result.found.length} photo${result.found.length === 1 ? "" : "s"}${missingNote}.`,
+        title: t("agent.title"),
+        message: missing ? t("agent.selectedMissing", { count, missing }) : t("agent.selected", { count }),
         ttl: 4000,
       });
     }
@@ -50,11 +53,11 @@ export default function useAgentBridge({
     if (!lastAgentChange) return;
     const n = lastAgentChange.ids?.length || 0;
     pushToast?.({
-      title: "Agent",
+      title: t("agent.title"),
       message:
         lastAgentChange.scope === "collections"
-          ? "Collections updated."
-          : `Updated ${n || "some"} item${n === 1 ? "" : "s"} in the library.`,
+          ? t("agent.collectionsUpdated")
+          : n ? t("agent.itemsUpdated", { count: n }) : t("agent.someItemsUpdated"),
       ttl: 3500,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

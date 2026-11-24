@@ -3,10 +3,12 @@ import {
   FOLDER_PAGE_SORTS,
   coverLayout,
   folderFilterCount,
+  folderPhotoCount,
   formatMonthRange,
   formatRelativeTime,
   parseStamp,
   selectRange,
+  selectedPhotoCount,
   statusCounts,
   visibleFolderCards,
 } from "./foldersPage";
@@ -85,6 +87,32 @@ describe("visibleFolderCards", () => {
   it("counts active facets like the filter bar's badge", () => {
     expect(folderFilterCount({})).toBe(0);
     expect(folderFilterCount({ status: "empty", count_min: 1, count_max: 5, date_within_days: 7, added_within_days: 30 })).toBe(4);
+  });
+});
+
+describe("a folder that holds subfolders", () => {
+  // "Trips" holds nothing itself; "Highway 1" under it holds 8 photos.
+  const NESTED = [
+    folder("Trips", { item_count: 0, subtree_count: 8, last_added_at: "2026-10-14 08:00:00" }),
+    folder("Highway 1", { item_count: 8, subtree_count: 8, parent_collection_id: "id-Trips", last_added_at: "2026-10-14 08:00:00" }),
+    folder("Bare", { item_count: 0, subtree_count: 0 }),
+    folder("Old row", { item_count: 3 }), // a sidecar without subtree_count
+  ];
+
+  it("counts its subfolders' photos, as the sidebar's closed row does", () => {
+    expect(NESTED.map(folderPhotoCount)).toEqual([8, 8, 0, 3]);
+  });
+
+  it("is not empty, and sorts and filters by that count", () => {
+    expect(names(visibleFolderCards(NESTED, { filters: { status: "empty" }, now: NOW }))).toEqual(["Bare"]);
+    expect(names(visibleFolderCards(NESTED, { filters: { count_min: 5 }, now: NOW }))).toEqual(["Highway 1", "Trips"]);
+    expect(names(visibleFolderCards(NESTED, { sort: "largest", now: NOW }))).toEqual(["Highway 1", "Trips", "Old row", "Bare"]);
+  });
+
+  it("does not count a selected subfolder twice in the selection's photos", () => {
+    expect(selectedPhotoCount(NESTED, ["id-Trips", "id-Highway 1"])).toBe(8);
+    expect(selectedPhotoCount(NESTED, ["id-Highway 1", "id-Old row"])).toBe(11);
+    expect(selectedPhotoCount(NESTED, [])).toBe(0);
   });
 });
 

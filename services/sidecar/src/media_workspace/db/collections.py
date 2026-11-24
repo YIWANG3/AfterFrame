@@ -76,6 +76,25 @@ def _add_tree_fields(collections: list[dict]) -> None:
         collection["path"] = " / ".join(reversed(names))
 
 
+# Per folder (root_id), each distinct photo in it or in any folder under it,
+# with when it last joined one of them. The recursive UNION ends on a cycle in
+# the data. What the sidebar shows for a collapsed folder, and what the folder
+# opens to with "include subfolders" on (the default).
+_SUBTREE_MEMBERS_CTE = """
+    WITH RECURSIVE tree(root_id, collection_id) AS (
+        SELECT collection_id, collection_id FROM collections WHERE kind = 'manual'
+        UNION
+        SELECT tree.root_id, c.collection_id
+        FROM collections c JOIN tree ON c.parent_collection_id = tree.collection_id
+    ),
+    members AS (
+        SELECT tree.root_id, ci.asset_id, MAX(ci.added_at) AS added_at
+        FROM tree JOIN collection_items ci ON ci.collection_id = tree.collection_id
+        GROUP BY tree.root_id, ci.asset_id
+    )
+"""
+
+
 def _subtree_counts(connection: sqlite3.Connection) -> dict[str, int]:
     """Per folder, how many distinct photos sit in it or in any folder under
     it — the count a collapsed folder shows. One recursive query; folders
@@ -83,17 +102,7 @@ def _subtree_counts(connection: sqlite3.Connection) -> dict[str, int]:
     return {
         row[0]: int(row[1])
         for row in connection.execute(
-            """
-            WITH RECURSIVE tree(root_id, collection_id) AS (
-                SELECT collection_id, collection_id FROM collections WHERE kind = 'manual'
-                UNION
-                SELECT tree.root_id, c.collection_id
-                FROM collections c JOIN tree ON c.parent_collection_id = tree.collection_id
-            )
-            SELECT tree.root_id, COUNT(DISTINCT ci.asset_id)
-            FROM tree JOIN collection_items ci ON ci.collection_id = tree.collection_id
-            GROUP BY tree.root_id
-            """
+            f"{_SUBTREE_MEMBERS_CTE} SELECT root_id, COUNT(*) FROM members GROUP BY root_id"
         )
     }
 
@@ -171,19 +180,22 @@ def empty_stats() -> dict:
 def collection_stats(connection: sqlite3.Connection) -> dict[str, dict]:
     """Per folder, what the folder page shows besides the count: when a photo
     last joined, the capture-time span of its photos, and the previews of its
-    newest `COVER_COUNT` photos (the first is the single cover). Two passes
-    over collection_items, no per-folder queries. Folders without items are
-    absent; callers fill in `empty_stats()`."""
+    newest `COVER_COUNT` photos (the first is the single cover). Like
+    `subtree_count`, a folder's photos include those of the folders under it,
+    so a folder holding only subfolders shows theirs rather than "empty". Two
+    passes over collection_items, no per-folder queries. Folders without
+    items are absent; callers fill in `empty_stats()`."""
     stats: dict[str, dict] = {}
     for row in connection.execute(
-        """
-        SELECT ci.collection_id,
-               MAX(ci.added_at) AS last_added_at,
+        f"""
+        {_SUBTREE_MEMBERS_CTE}
+        SELECT members.root_id AS collection_id,
+               MAX(members.added_at) AS last_added_at,
                MIN(NULLIF(json_extract(a.metadata_json, '$.capture_time'), '')) AS captured_from,
                MAX(NULLIF(json_extract(a.metadata_json, '$.capture_time'), '')) AS captured_to
-        FROM collection_items ci
-        JOIN assets a ON a.asset_id = ci.asset_id
-        GROUP BY ci.collection_id
+        FROM members
+        JOIN assets a ON a.asset_id = members.asset_id
+        GROUP BY members.root_id
         """
     ):
         stats[row["collection_id"]] = {
@@ -195,15 +207,16 @@ def collection_stats(connection: sqlite3.Connection) -> dict[str, dict]:
     # Newest added first; a photo without a ready preview is skipped, so the
     # mosaic never shows a hole for it.
     for row in connection.execute(
-        """
+        f"""
+        {_SUBTREE_MEMBERS_CTE}
         SELECT collection_id, relative_path FROM (
-            SELECT ci.collection_id, pe.relative_path,
+            SELECT members.root_id AS collection_id, pe.relative_path,
                    ROW_NUMBER() OVER (
-                       PARTITION BY ci.collection_id ORDER BY ci.added_at DESC, ci.asset_id
+                       PARTITION BY members.root_id ORDER BY members.added_at DESC, members.asset_id
                    ) AS rn
-            FROM collection_items ci
+            FROM members
             JOIN preview_entries pe
-              ON pe.asset_id = ci.asset_id AND pe.kind = 'preview' AND pe.status = 'ready'
+              ON pe.asset_id = members.asset_id AND pe.kind = 'preview' AND pe.status = 'ready'
         )
         WHERE rn <= ?
         ORDER BY collection_id, rn

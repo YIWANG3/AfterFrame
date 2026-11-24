@@ -167,5 +167,16 @@
     "found_one": "{{count}} RAW+JPG pair can be shown as one photo",
     "found_other": "{{count}} RAW+JPG pairs can be shown as one photo each",
     "merge": "Merge"
+  },
+  "agent": {
+    "title": "Agent",
+    "selected_one": "Selected {{count}} photo.",
+    "selected_other": "Selected {{count}} photos.",
+    "selectedMissing_one": "Selected {{count}} photo ({{missing}} not found).",
+    "selectedMissing_other": "Selected {{count}} photos ({{missing}} not found).",
+    "collectionsUpdated": "Collections updated.",
+    "itemsUpdated_one": "Updated {{count}} item in the library.",
+    "itemsUpdated_other": "Updated {{count}} items in the library.",
+    "someItemsUpdated": "Updated some items in the library."
   }
 }

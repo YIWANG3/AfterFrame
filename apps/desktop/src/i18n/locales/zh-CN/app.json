@@ -157,5 +157,13 @@
     "separate": "改为分开",
     "found_other": "发现 {{count}} 组同名 RAW+JPG，可以合并为一张",
     "merge": "合并显示"
+  },
+  "agent": {
+    "title": "智能体",
+    "selected_other": "已选中 {{count}} 张照片。",
+    "selectedMissing_other": "已选中 {{count}} 张照片，{{missing}} 张没找到。",
+    "collectionsUpdated": "合集已更新。",
+    "itemsUpdated_other": "已更新图库中的 {{count}} 个素材。",
+    "someItemsUpdated": "已更新图库中的部分素材。"
   }
 }
