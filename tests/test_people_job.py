@@ -367,6 +367,70 @@ class PeopleIndexJobTest(unittest.TestCase):
             )
             connection.close()
 
+    def test_turning_on_pets_keeps_the_faces_even_when_the_pixel_hash_drifted(self) -> None:
+        # A macOS update can change how a photo decodes, so the pixel hash of
+        # an untouched file no longer matches. With the face half's size and
+        # mtime unchanged, its faces (and the people they belong to) stay put.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, face_model, pet_model = self._pet_job_setup(root)
+            self._run(connection, self._write_fake_worker(root), face_model, None)
+            (face_id,) = [row["face_id"] for row in connection.execute("SELECT face_id FROM asset_faces")]
+            connection.execute(
+                "INSERT INTO person_groups (group_id, model_id, model_version, name, state, cover_face_id)"
+                " VALUES ('ann', 'arcface-r100', 'test-v1', 'Ann', 'confirmed', ?)",
+                (face_id,),
+            )
+            connection.execute("INSERT INTO person_group_faces (group_id, face_id) VALUES ('ann', ?)", (face_id,))
+            connection.commit()
+
+            drifted = self._write_fake_worker(root, input_hash="input-hash-b")
+            result = self._run(connection, drifted, face_model, pet_model)
+
+            self.assertEqual((result["analyzed"], result["faces"], result["pets"]), (1, 0, 1))
+            self.assertEqual(
+                [(row["face_id"], row["group_id"]) for row in connection.execute(
+                    "SELECT f.face_id, pgf.group_id FROM asset_faces AS f"
+                    " JOIN person_group_faces AS pgf ON pgf.face_id = f.face_id WHERE f.subject = 'person'"
+                )],
+                [(face_id, "ann")],
+            )
+            index = connection.execute(
+                "SELECT input_hash FROM people_asset_index WHERE model_id = 'arcface-r100'"
+            ).fetchone()
+            self.assertEqual(index["input_hash"], "input-hash-a")
+            # Both halves pass the stat gate now: the next scan doesn't decode.
+            again = self._run(connection, drifted, face_model, pet_model)
+            self.assertEqual((again["analyzed"], again["skipped"]), (0, 1))
+            self.assertEqual(len((root / "worker-requests.log").read_text().splitlines()), 2)
+            connection.close()
+
+    def test_an_edited_photo_is_analyzed_again_and_keeps_its_person(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, face_model, _pet_model = self._pet_job_setup(root)
+            self._run(connection, self._write_fake_worker(root), face_model, None)
+            (face_id,) = [row["face_id"] for row in connection.execute("SELECT face_id FROM asset_faces")]
+            connection.execute(
+                "INSERT INTO person_groups (group_id, model_id, model_version, name, state)"
+                " VALUES ('ann', 'arcface-r100', 'test-v1', 'Ann', 'confirmed')"
+            )
+            connection.execute("INSERT INTO person_group_faces (group_id, face_id) VALUES ('ann', ?)", (face_id,))
+            connection.commit()
+            source = root / "dog.jpg"
+            source.write_bytes(b"edited-pixels")
+
+            result = self._run(connection, self._write_fake_worker(root, input_hash="input-hash-b"), face_model, None)
+
+            self.assertEqual((result["analyzed"], result["faces"]), (1, 1))
+            (new_face_id,) = [row["face_id"] for row in connection.execute("SELECT face_id FROM asset_faces")]
+            self.assertNotEqual(new_face_id, face_id)
+            group = connection.execute(
+                "SELECT group_id FROM person_group_faces WHERE face_id = ?", (new_face_id,)
+            ).fetchone()
+            self.assertEqual(group["group_id"], "ann")
+            connection.close()
+
     def test_a_pet_failure_keeps_the_faces_and_is_retried(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -387,7 +451,9 @@ class PeopleIndexJobTest(unittest.TestCase):
             self.assertEqual(len((root / "worker-requests.log").read_text().splitlines()), 2)
             connection.close()
 
-    def _write_fake_worker(self, root: Path, *, stderr_per_request: int = 0, pet_error: str | None = None) -> Path:
+    def _write_fake_worker(
+        self, root: Path, *, stderr_per_request: int = 0, pet_error: str | None = None, input_hash: str = "input-hash-a"
+    ) -> Path:
         embedding = [1.0 / math.sqrt(512)] * 512
         pet_embedding = [1.0 / math.sqrt(384)] * 384
         code = f'''import json
@@ -397,6 +463,7 @@ import sys
 embedding = {json.dumps(embedding)}
 pet_embedding = {json.dumps(pet_embedding)}
 pet_error = {pet_error!r}
+input_hash = {input_hash!r}
 pets = "--pet-model" in sys.argv
 pathlib.Path({json.dumps(str(root / "worker-argv.log"))}).write_text(" ".join(sys.argv[1:]))
 log = pathlib.Path({json.dumps(str(root / "worker-requests.log"))})
@@ -404,10 +471,10 @@ for line in sys.stdin:
     request = json.loads(line)
     with log.open("a") as fh:
         fh.write(request["id"] + "\\n")
-    faces_skipped = request.get("known_input_hash") == "input-hash-a"
-    animals_skipped = pets and request.get("known_pet_input_hash") == "input-hash-a"
+    faces_skipped = request.get("known_input_hash") == input_hash
+    animals_skipped = pets and request.get("known_pet_input_hash") == input_hash
     faces = [] if faces_skipped else [{{"bounding_box": [0.1, 0.1, 0.5, 0.5], "landmarks": [0.1, 0.1, 0.2, 0.1, 0.15, 0.2, 0.1, 0.3, 0.2, 0.3], "confidence": 1.0, "quality": "standard", "embedding": embedding}}]
-    response = {{"id": request["id"], "ok": True, "skipped": faces_skipped, "input_hash": "input-hash-a", "image_size": {{"width": 100, "height": 100}}, "faces": faces, "error": None}}
+    response = {{"id": request["id"], "ok": True, "skipped": faces_skipped, "input_hash": input_hash, "image_size": {{"width": 100, "height": 100}}, "faces": faces, "error": None}}
     if pets:
         if pet_error:
             response.update(animals=None, animals_skipped=False, animals_error=pet_error)

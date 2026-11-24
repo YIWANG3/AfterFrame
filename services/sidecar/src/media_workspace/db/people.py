@@ -169,14 +169,41 @@ def replace_asset_faces(
 ) -> list[dict[str, object]]:
     """Atomically replace one asset's automatic face records for a model.
 
-    Re-analysis invalidates automatic membership for the replaced faces through
-    foreign-key cascades. Confirmed group policy is handled by the future
-    clustering/correction layer; this low-level writer only persists model output.
+    Automatic memberships go with the replaced faces; the next clustering pass
+    rebuilds them. What the user decided survives: a face in a named,
+    confirmed or ignored group, a "not this person" rejection and a chosen
+    cover move to the new face found in the same place (same subject, box
+    overlap of at least ``_CARRY_OVER_IOU``). A face with no such successor
+    leaves its group, as before.
     With ``pets`` the records are the cats and dogs a pet model found.
     """
     prepared = [_validate_face(face, pets=pets) for face in faces]
     savepoint = "people_replace_faces"
     with _write_scope(connection, savepoint, commit):
+        decided = connection.execute(
+            """
+            SELECT f.bbox_json, f.subject, pgf.group_id, pgf.membership_state,
+                   pgf.source, pgf.reviewed_at,
+                   pg.cover_face_id = f.face_id AS is_cover
+            FROM asset_faces AS f
+            JOIN person_group_faces AS pgf ON pgf.face_id = f.face_id
+            JOIN person_groups AS pg ON pg.group_id = pgf.group_id
+            WHERE f.asset_id = ? AND f.model_id = ? AND f.model_version = ?
+              AND (pg.state != 'candidate' OR pgf.membership_state = 'rejected')
+            """,
+            (asset_id, model_id, model_version),
+        ).fetchall()
+        # Explicit, like rebuild_candidate_groups: don't lean on the cascade.
+        connection.execute(
+            """
+            DELETE FROM person_group_faces
+            WHERE face_id IN (
+                SELECT face_id FROM asset_faces
+                WHERE asset_id = ? AND model_id = ? AND model_version = ?
+            )
+            """,
+            (asset_id, model_id, model_version),
+        )
         connection.execute(
             """
             DELETE FROM asset_faces
@@ -210,6 +237,7 @@ def replace_asset_faces(
                 ),
             )
             inserted.append({"face_id": face_id, **_public_face(face)})
+        _carry_over_decisions(connection, decided, inserted)
         # Empty candidate groups are an implementation artefact after an asset
         # refresh. Confirmed groups stay intact so a later correction layer can
         # surface the missing members instead of silently deleting the person.
@@ -237,6 +265,57 @@ def replace_asset_faces(
             commit=False,
         )
         return inserted
+
+
+_CARRY_OVER_IOU = 0.5
+
+
+def _box_iou(a: list[float], b: list[float]) -> float:
+    """Overlap of two [x, y, width, height] boxes, 0 to 1."""
+    left, top = max(a[0], b[0]), max(a[1], b[1])
+    right, bottom = min(a[0] + a[2], b[0] + b[2]), min(a[1] + a[3], b[1] + b[3])
+    inter = max(0.0, right - left) * max(0.0, bottom - top)
+    union = a[2] * a[3] + b[2] * b[3] - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _carry_over_decisions(
+    connection: sqlite3.Connection,
+    decided: list[sqlite3.Row],
+    inserted: list[dict[str, object]],
+) -> None:
+    """Give each user-decided old face's membership to the new face in its
+    place: best overlaps first, one new face per old one."""
+    pairs: list[tuple[float, int, int]] = []
+    for old_index, old in enumerate(decided):
+        old_box = json.loads(old["bbox_json"])
+        for new_index, new in enumerate(inserted):
+            if new["subject"] != old["subject"]:
+                continue
+            overlap = _box_iou(old_box, new["bounding_box"])  # type: ignore[arg-type]
+            if overlap >= _CARRY_OVER_IOU:
+                pairs.append((overlap, old_index, new_index))
+    taken_old: set[int] = set()
+    taken_new: set[int] = set()
+    for _overlap, old_index, new_index in sorted(pairs, key=lambda pair: -pair[0]):
+        if old_index in taken_old or new_index in taken_new:
+            continue
+        taken_old.add(old_index)
+        taken_new.add(new_index)
+        old = decided[old_index]
+        face_id = inserted[new_index]["face_id"]
+        connection.execute(
+            """
+            INSERT INTO person_group_faces (group_id, face_id, membership_state, source, reviewed_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (old["group_id"], face_id, old["membership_state"], old["source"], old["reviewed_at"]),
+        )
+        if old["is_cover"]:
+            connection.execute(
+                "UPDATE person_groups SET cover_face_id = ? WHERE group_id = ?",
+                (face_id, old["group_id"]),
+            )
 
 
 def list_asset_faces(
