@@ -211,6 +211,8 @@
     "folderPath": "{{path}}",
     "noSmart": "暂无智能合集",
     "newSmart": "新建智能合集",
+    "searchSmart": "搜索智能合集",
+    "noSmartMatches": "没有匹配“{{query}}”的智能合集",
     "newSmartHint": "在筛选栏里设好条件，再点「存为智能合集」。",
     "more": "更多",
     "sortBy": "排序方式",
