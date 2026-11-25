@@ -24,6 +24,12 @@ export function isWithin(child, parent) {
 // when it, or a folder above it, is watched.
 export const isSynced = (path, watchedDirs = []) => (watchedDirs || []).some((dir) => isWithin(path, dir));
 
+// The watched folder that syncs it: itself, or the nearest one above it.
+export function syncedBy(path, watchedDirs = []) {
+  const covering = (watchedDirs || []).filter((dir) => isWithin(path, dir));
+  return covering.sort((a, b) => String(b).length - String(a).length)[0] || null;
+}
+
 // The folders the given one holds directly.
 export function childrenOf(folders, path) {
   return (folders || []).filter((folder) => folder.parent === path);

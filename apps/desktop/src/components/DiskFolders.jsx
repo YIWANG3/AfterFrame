@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { Album, ChevronDown, ChevronRight, EyeOff, Folder, FolderCog, FolderSearch, FolderX, HardDrive, Plus, RefreshCw, Search, Trash2, FolderSync, Eye, X } from "lucide-react";
 import FaceMenu from "./FaceMenu";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
-import { DISK_FOLDER_SORTS, ancestorsOf, isSynced, visibleRows } from "./diskFolderTree";
+import { DISK_FOLDER_SORTS, ancestorsOf, folderName, isSynced, isWithin, syncedBy, visibleRows } from "./diskFolderTree";
 import SectionMoreMenu from "./SectionMoreMenu";
 import { setSidebarHidden } from "./sidebarLayout";
 import { usePref } from "../hooks/usePref";
@@ -168,7 +168,7 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
                 <span className="flex min-w-0 items-center gap-2.5 overflow-hidden">
                   <Icon className={`h-4 w-4 shrink-0 stroke-[1.6] ${active ? "text-accent" : ""} ${folder.exists ? "" : "text-muted2"}`} />
                   <span className={`min-w-0 truncate text-[13px] ${folder.exists ? "" : "text-muted2"}`}>{folder.name}</span>
-                  {synced && <RefreshCw data-auto-synced="true" aria-label={t("diskFolders.autoSynced")} className="h-3 w-3 shrink-0 text-muted2" />}
+                  {synced && <AutoSyncMark path={folder.path} watchedDirs={watchedDirs} />}
                 </span>
                 <span className="flex shrink-0 items-center gap-1">
                   <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{count}</span>
@@ -192,6 +192,23 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
       )}
       {menu && <FaceMenu testId="sidebar-disk-folder-menu" position={menu} items={menuItems(menu.folder)} onClose={() => setMenu(null)} />}
     </div>
+  );
+}
+
+// The auto-sync mark, in the sidebar and on the manager's Folders tab. It is
+// a state, not a button, so hovered it says what it means, and for a folder
+// under a watched one, which folder it follows.
+export function AutoSyncMark({ path, watchedDirs }) {
+  const { t } = useTranslation("nav");
+  const by = syncedBy(path, watchedDirs);
+  if (!by) return null;
+  const label = isWithin(by, path)
+    ? t("diskFolders.autoSyncedHint")
+    : t("diskFolders.autoSyncedVia", { name: folderName(by) });
+  return (
+    <span data-auto-synced="true" role="img" aria-label={label} title={label} className="inline-flex shrink-0">
+      <RefreshCw aria-hidden="true" className="h-3 w-3 text-muted2" />
+    </span>
   );
 }
 

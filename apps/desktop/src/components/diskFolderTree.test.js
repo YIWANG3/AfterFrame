@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ancestorsOf, folderName, hasChildren, isSynced, isWithin, visibleRows } from "./diskFolderTree";
+import { ancestorsOf, folderName, hasChildren, isSynced, isWithin, syncedBy, visibleRows } from "./diskFolderTree";
 
 const folder = (path, parent, volume = "") => ({ path, name: folderName(path), parent, volume, direct: 1, total: 1, exists: true });
 
@@ -28,6 +28,13 @@ describe("disk folders", () => {
     expect(isSynced("/Users/me/2024/Tokyo", ["/Users/me/2024"])).toBe(true);
     expect(isSynced("/Users/me/2024", ["/Users/me/2024/Tokyo"])).toBe(false);
     expect(isSynced("/x", [])).toBe(false);
+  });
+
+  it("names the watched folder that syncs it: itself, or the nearest one above", () => {
+    expect(syncedBy("/Users/me/2024", ["/Users/me/2024"])).toBe("/Users/me/2024");
+    expect(syncedBy("/Users/me/2024/Tokyo/Day 2", ["/Users/me", "/Users/me/2024"])).toBe("/Users/me/2024");
+    expect(syncedBy("/Users/me/2024 copy", ["/Users/me/2024"])).toBeNull();
+    expect(syncedBy("/x", undefined)).toBeNull();
   });
 
   it("knows a folder's ancestors and whether it has children", () => {

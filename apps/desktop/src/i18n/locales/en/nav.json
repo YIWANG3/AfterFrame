@@ -773,7 +773,8 @@
   "diskFolders": {
     "thisMac": "This Mac",
     "missing": "Not at this place on disk any more. Right-click to locate it.",
-    "autoSynced": "Synced automatically",
+    "autoSyncedHint": "Synced automatically: new files put in this folder are imported. Right-click to stop.",
+    "autoSyncedVia": "Synced automatically with “{{name}}”: new files put here are imported.",
     "locate": "Locate…",
     "sync": "Sync",
     "autoSyncOn": "Sync Automatically",

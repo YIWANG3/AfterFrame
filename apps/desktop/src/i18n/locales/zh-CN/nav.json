@@ -727,7 +727,8 @@
   "diskFolders": {
     "thisMac": "本机",
     "missing": "磁盘上的这个位置已经找不到了。右键可以定位。",
-    "autoSynced": "自动同步中",
+    "autoSyncedHint": "自动同步中：放进这个文件夹的新文件会自动导入。右键可以停止。",
+    "autoSyncedVia": "跟着「{{name}}」自动同步：放进来的新文件会自动导入。",
     "locate": "定位…",
     "sync": "同步",
     "autoSyncOn": "自动同步",

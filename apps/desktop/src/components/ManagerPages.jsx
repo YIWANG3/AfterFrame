@@ -15,7 +15,7 @@ import { localFileUrl } from "../utils/format";
 import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import ManagerTabs from "./ManagerTabs";
-import { diskFolderMenu } from "./DiskFolders";
+import { AutoSyncMark, diskFolderMenu } from "./DiskFolders";
 import { ancestorsOf, isSynced } from "./diskFolderTree";
 
 // How many cards fetch a cover photo; past that they show the icon.
@@ -225,7 +225,7 @@ export function DiskFoldersPage({ diskFolders, tab, onTab, counts, onOpen, onImp
   const badges = (f) => (
     <>
       {!f.exists && <span className="shrink-0 rounded border border-[rgba(239,159,39,0.42)] px-1 text-[10px] text-[#EF9F27]" data-folder-missing="true">{t("manager.notFound")}</span>}
-      {isSynced(f.path, watchedDirs) && <RefreshCw aria-label={t("diskFolders.autoSynced")} className="h-3 w-3 shrink-0 text-muted2" data-auto-synced="true" />}
+      {isSynced(f.path, watchedDirs) && <AutoSyncMark path={f.path} watchedDirs={watchedDirs} />}
     </>
   );
 
