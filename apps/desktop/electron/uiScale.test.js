@@ -16,7 +16,13 @@ function setup(initial, windows = []) {
 
 function fakeWindow() {
   const zooms = [];
-  return { zooms, isDestroyed: () => false, webContents: { setZoomFactor: (f) => zooms.push(f) } };
+  const sent = [];
+  return {
+    zooms,
+    sent,
+    isDestroyed: () => false,
+    webContents: { setZoomFactor: (f) => zooms.push(f), send: (channel, value) => sent.push([channel, value]) },
+  };
 }
 
 test("starts from the saved scale, 100% for anything missing or not on the list", () => {
@@ -37,6 +43,8 @@ test("app:set-ui-scale persists, zooms every open window and answers the new val
   assert.equal(settings().uiScale, 0.9);
   assert.equal(settings().locale, "zh-CN", "the other settings stay");
   assert.deepEqual(window.zooms, [0.9]);
+  // and tells the page, which sizes the traffic-light gutters from it
+  assert.deepEqual(window.sent, [["app:ui-scale", 0.9]]);
   assert.equal(await handlers.get("app:get-ui-scale")({}), 0.9);
 });
 
