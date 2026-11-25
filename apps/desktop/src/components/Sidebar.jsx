@@ -11,6 +11,7 @@ import { openSidebarSettings, setSidebarHidden, useSidebarHidden } from "./sideb
 import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
+import { useSectionFloors } from "./sidebarSectionFloors";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { FOLDER_SORTS, canReorderFolders } from "./folderList";
 import { ancestorIds, canDropInto, parentIdOf, siblingIds, visibleTreeRows } from "./folderTree";
@@ -194,6 +195,8 @@ export default function Sidebar({
   });
   const hoverExpandRef = useRef(null);
   const folderScrollRef = useRef(null);
+  const navRef = useRef(null);
+  useSectionFloors(navRef);
   const folderScrollSpeed = useRef(0);
   useEffect(() => {
     if (!revealFolderId) return;
@@ -352,7 +355,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-4">
+      <nav ref={navRef} className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="shrink-0 space-y-1">
           {browse.map((item, idx) => {
             const Icon = ICON_MAP[item.icon];
@@ -487,7 +490,8 @@ export default function Sidebar({
             collections (a tree the user arranges) and folders on disk. Each is
             as tall as its rows, up to a share of the sidebar, and scrolls
             inside past that; when together they don't fit, each gives way in
-            proportion and scrolls inside. The sidebar itself never scrolls. */}
+            proportion and scrolls inside, but keeps its first rows in view
+            (sidebarSectionFloors.js). The sidebar itself never scrolls. */}
         {!hidden.has("smartCollections") && <SmartCollections
           headingProps={hideMenu("smartCollections", t("sidebar.smartCollections"))}
           collections={collections}
