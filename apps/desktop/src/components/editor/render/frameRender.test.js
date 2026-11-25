@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { coveredFieldsFromLogoVariants, fitLogoBounds, geometry, layoutRef, resolveTokens } from "./frameRender";
+import { coveredFieldsFromLogoVariants, fitLogoBounds, geometry, layoutRef, onPhotoPixels, resolveTokens } from "./frameRender";
+import { FRAME_TEMPLATES } from "../frameTemplates";
 
 describe("frame logo bounds", () => {
   it("moves a rotated wordmark down when its top edge would be clipped", () => {
@@ -95,5 +96,44 @@ describe("frame layout reference", () => {
     expect(pano.photoW).toBe(7680);
     expect(pano.outW).toBe(7680);
     expect(portrait.outW).toBe(3943);
+  });
+});
+
+describe("templates with a canvas ratio", () => {
+  it("widens the margins on the narrow axis until the output has the ratio", () => {
+    // 3:2 landscape into 9:16: the extra goes evenly to top and bottom.
+    const tpl = { canvas: { pad: { top: 0.04, right: 0.04, bottom: 0.04, left: 0.04 }, aspect: "9:16" } };
+    const g = geometry({ width: 3000, height: 2000 }, tpl, {});
+    expect(g.outW / g.outH).toBeCloseTo(9 / 16, 2);
+    expect(g.padPx.left).toBeCloseTo(0.04 * 3000);
+    expect(g.padPx.top).toBeCloseTo(g.padPx.bottom);
+    expect(g.padPx.top).toBeGreaterThan(g.padPx.left);
+  });
+
+  it("widens left and right for a photo taller than the ratio", () => {
+    const tpl = { canvas: { pad: { bottom: 0.1 }, aspect: "4:5" } };
+    const g = geometry({ width: 2000, height: 3000 }, tpl, {});
+    expect(g.outW / g.outH).toBeCloseTo(4 / 5, 2);
+    expect(g.padPx.left).toBeCloseTo(g.padPx.right);
+    expect(g.padPx.bottom).toBeCloseTo(0.1 * 3000);
+  });
+});
+
+describe("text over photo pixels", () => {
+  it("is the overlay family and any template whose margin is made of the photo", () => {
+    expect(onPhotoPixels({ family: "overlay", canvas: {} })).toBe(true);
+    expect(onPhotoPixels({ family: "photo-bg", canvas: { bg: { mode: "blur" } } })).toBe(true);
+    expect(onPhotoPixels({ family: "photo-bg", canvas: { bg: { mode: "palette" } } })).toBe(true);
+    expect(onPhotoPixels({ family: "bar", canvas: { bg: { type: "solid", color: "#ffffff" } } })).toBe(false);
+  });
+
+  it("covers every built-in that uses the photo as its background", () => {
+    const photoBg = FRAME_TEMPLATES.filter((t) => ["blur", "palette"].includes(t.canvas?.bg?.mode));
+    expect(photoBg.map((t) => t.id)).toEqual(["blur-card", "palette-card", "blur-story", "palette-45"]);
+    for (const t of photoBg) expect(onPhotoPixels(t)).toBe(true);
+  });
+
+  it("keeps the first built-in (the default an agent gets) as it was", () => {
+    expect(FRAME_TEMPLATES[0].id).toBe("bar-id");
   });
 });

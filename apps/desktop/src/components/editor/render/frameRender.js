@@ -12,6 +12,8 @@ import { drawLayersOnCanvas } from "./drawLayers";
 import { drawScrim } from "./canvasHelpers";
 import { FRAME_FONTS } from "../frameTemplates";
 import { brandIdForExif, logoHeightFor, pickVariant } from "./frameLogos";
+import { bgUsesPhoto, clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./frameBackdrop";
+import { resolveCanvasPad } from "../imageMath";
 import {
   formatAperture, formatShutterSpeed, formatFocalLength, formatISO,
 } from "../../../utils/format";
@@ -224,15 +226,52 @@ export function geometry(photo, template, adjust) {
   const wref = layoutRef(photoW, href);
   const pad = template.canvas?.pad || {};
   const m = adjust?.margin ?? 1; // "blank area" knob scales the padding bands
-  const padPx = {
+  let padPx = {
     top: (pad.top || 0) * wref * m,
     right: (pad.right || 0) * wref * m,
     bottom: (pad.bottom || 0) * wref * m,
     left: (pad.left || 0) * wref * m,
   };
+  // A template with a canvas ratio (a 9:16 story): the margins widen on the
+  // narrow axis, the same way the editor lays a ratio out (resolveCanvasPad),
+  // and the elements anchor in the widened bands.
+  if (template.canvas?.aspect) {
+    const short = Math.min(photoW, href);
+    const wide = resolveCanvasPad({
+      pad: { top: padPx.top / short, right: padPx.right / short, bottom: padPx.bottom / short, left: padPx.left / short },
+      aspect: template.canvas.aspect,
+    }, photoW, href);
+    padPx = { top: wide.top * short, right: wide.right * short, bottom: wide.bottom * short, left: wide.left * short };
+  }
   const outW = Math.round(photoW + padPx.left + padPx.right);
   const outH = Math.round(href + padPx.top + padPx.bottom);
   return { wref, photoW, href, padPx, outW, outH };
+}
+
+/** Is the template's text drawn over photo pixels: on the photo itself (the
+ *  overlay family), or in margins filled with the photo's colours or the photo
+ *  blurred? Such text picks black or white by what is behind it, and gets a
+ *  soft shadow, as no fixed colour reads on every photo. */
+export function onPhotoPixels(template) {
+  return template.family === "overlay" || bgUsesPhoto(template.canvas?.bg);
+}
+
+/** The template's canvas without its layers: background (a flat colour, a
+ *  gradient, the photo's colours or the photo blurred), the photo with its
+ *  corners and shadow, and the scrim on the photo. */
+export function drawFrameBase(ctx, template, photo, g) {
+  const short = Math.min(g.photoW, g.href);
+  const rect = { x: g.padPx.left, y: g.padPx.top, width: g.photoW, height: g.href };
+  const photoStyle = template.canvas?.photo;
+  drawCanvasBackground(ctx, template.canvas?.bg, { W: g.outW, H: g.outH, source: photo, short });
+  drawPhotoShadow(ctx, rect, photoStyle, short);
+  ctx.save();
+  clipToPhoto(ctx, rect, photoStyle, short);
+  ctx.drawImage(photo, rect.x, rect.y, rect.width, rect.height);
+  ctx.restore();
+  // Optional edge scrim — keeps on-photo (overlay) text legible regardless of
+  // how bright the photo is at the edge.
+  drawScrim(ctx, template.canvas?.scrim, rect);
 }
 
 // Average luminance (0..1) of a canvas region — for picking legible text color
@@ -476,28 +515,21 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
 export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor }) {
   const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
   const g = geometry(photo, template, adj);
-  const { wref, photoW, padPx, outW, outH } = g;
+  const { wref, outW, outH } = g;
   const factor = wref / outW; // size(frac of wref) -> drawLayers conventions
-  const isOverlay = template.family === "overlay"; // on-photo text needs adaptive contrast
+  const isOverlay = onPhotoPixels(template); // text over photo pixels needs adaptive contrast
 
   const canvas = document.createElement("canvas");
   canvas.width = outW;
   canvas.height = outH;
-  // Only overlay templates read pixels back (sampleLuminance for adaptive text
-  // contrast); flag those so getImageData is fast + silent. Non-overlay stays
-  // GPU-backed for fast drawing.
+  // Only templates with text over photo pixels read pixels back
+  // (sampleLuminance for adaptive text contrast); flag those so getImageData
+  // is fast + silent. The rest stay GPU-backed for fast drawing.
   const ctx = canvas.getContext("2d", isOverlay ? { willReadFrequently: true } : undefined);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  // Background + photo.
-  ctx.fillStyle = template.canvas?.bg?.color || "#ffffff";
-  ctx.fillRect(0, 0, outW, outH);
-  ctx.drawImage(photo, padPx.left, padPx.top, photoW, g.href);
-
-  // Optional edge scrim — keeps on-photo (overlay) text legible regardless of
-  // how bright the photo is at the edge.
-  drawScrim(ctx, template.canvas?.scrim, { x: padPx.left, y: padPx.top, width: photoW, height: g.href });
+  drawFrameBase(ctx, template, photo, g);
 
   const layers = buildFrameLayers(ctx, {
     template, exif, profile, geom: g, adjust: adj, factor,

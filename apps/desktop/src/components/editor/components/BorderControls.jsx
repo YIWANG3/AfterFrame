@@ -288,37 +288,42 @@ export default function BorderControls({
         </div>
       </div>
 
-      {photoBg === "blur" && (
-        <SliderRow
-          compact
-          label={t("border.blur")}
-          min={0} max={100}
-          value={bg.blur ?? DEFAULT_BG_BLUR}
-          onChange={(v) => onBg({ ...bg, blur: v }, { live: true })}
-          onCommit={(v) => onBg({ ...bg, blur: v })}
-          testId="frame-bg-blur"
-        />
-      )}
-      {onPhoto && (
-        <div className="flex flex-col gap-1.5" data-frame-photo-style="true">
-          <SliderRow
-            compact
-            label={t("border.radius")}
-            min={0} max={100}
-            value={photoStyle.radius}
-            onChange={(v) => setPhoto({ radius: v })}
-            onCommit={() => onPhotoCommit?.()}
-            testId="frame-photo-radius"
-          />
-          <SliderRow
-            compact
-            label={t("border.shadow")}
-            min={0} max={100}
-            value={photoStyle.shadow}
-            onChange={(v) => setPhoto({ shadow: v })}
-            onCommit={() => onPhotoCommit?.()}
-            testId="frame-photo-shadow"
-          />
+      {/* One slider stack, so blur → corners → shadow sit evenly apart. */}
+      {(photoBg === "blur" || onPhoto) && (
+        <div className="flex flex-col gap-1.5" data-frame-sliders="true">
+          {photoBg === "blur" && (
+            <SliderRow
+              compact
+              label={t("border.blur")}
+              min={0} max={100}
+              value={bg.blur ?? DEFAULT_BG_BLUR}
+              onChange={(v) => onBg({ ...bg, blur: v }, { live: true })}
+              onCommit={(v) => onBg({ ...bg, blur: v })}
+              testId="frame-bg-blur"
+            />
+          )}
+          {onPhoto && (
+            <div className="flex flex-col gap-1.5" data-frame-photo-style="true">
+              <SliderRow
+                compact
+                label={t("border.radius")}
+                min={0} max={100}
+                value={photoStyle.radius}
+                onChange={(v) => setPhoto({ radius: v })}
+                onCommit={() => onPhotoCommit?.()}
+                testId="frame-photo-radius"
+              />
+              <SliderRow
+                compact
+                label={t("border.shadow")}
+                min={0} max={100}
+                value={photoStyle.shadow}
+                onChange={(v) => setPhoto({ shadow: v })}
+                onCommit={() => onPhotoCommit?.()}
+                testId="frame-photo-shadow"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
