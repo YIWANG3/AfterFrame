@@ -1,9 +1,11 @@
 // Sidebar section for smart collections: saved filters with a live count.
 // Unlike folders they are not drop targets and have no manual order — what is
 // in them is decided by their conditions (hooks/workspaceLogic.rulesFromScope).
+// Like the other two sections the heading has a search, which narrows the rows
+// to the names that hold it (the same rule as the manager's Smart tab).
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { EyeOff, FolderCog, FolderInput, Image as ImageIcon, List, ListFilter, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { EyeOff, FolderCog, FolderInput, Image as ImageIcon, List, ListFilter, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
 import FaceMenu from "./FaceMenu";
@@ -31,7 +33,12 @@ export default function SmartCollections({ collections, activeId, view = "list",
     { key: "delete", icon: Trash2, label: t("sidebar.delete"), danger: true, onClick: () => onDelete?.(col.collection_id) },
   ].filter(Boolean);
   const smart = (collections || []).filter((c) => c.kind === "smart");
-  const [open, toggleOpen] = useSectionOpen("smart");
+  const [open, toggleOpen, showSection] = useSectionOpen("smart");
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState("");
+  const closeSearch = () => { setSearching(false); setQuery(""); };
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? smart.filter((c) => String(c.name).toLowerCase().includes(needle)) : smart;
 
   // Covers: the first photo the saved filter currently shows. Keyed on the
   // conditions and the live count, so a cover follows its collection when a
@@ -77,13 +84,24 @@ export default function SmartCollections({ collections, activeId, view = "list",
         onToggle={toggleOpen}
         holdsActive={smart.some((c) => c.collection_id === activeId)}
       >
+        <button
+          type="button"
+          className={`rounded p-0.5 transition-colors hover:bg-hover hover:text-text ${searching ? "text-text" : "text-muted2"}`}
+          title={t("sidebar.searchSmart")}
+          aria-label={t("sidebar.searchSmart")}
+          aria-pressed={searching}
+          onClick={() => { if (searching) closeSearch(); else { showSection(); setSearching(true); } }}
+        >
+          <Search className="h-3.5 w-3.5" />
+        </button>
         {onNew && (
           <button
             type="button"
             className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
             title={t("sidebar.newSmart")}
             aria-label={t("sidebar.newSmart")}
-            onClick={onNew}
+            // No search hides the one it makes.
+            onClick={() => { closeSearch(); onNew(); }}
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
@@ -98,10 +116,31 @@ export default function SmartCollections({ collections, activeId, view = "list",
           ].filter((item) => item !== false && item !== undefined)}
         />
       </SectionHeading>
+      {open && searching && (
+        <div className="relative mx-2.5 mb-1.5 shrink-0">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted2" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Escape") closeSearch(); }}
+            placeholder={t("sidebar.searchSmart")}
+            aria-label={t("sidebar.searchSmart")}
+            data-testid="smart-collection-search"
+            className="h-7 w-full rounded-md bg-[var(--fill-2)] pl-6 pr-6 text-[12px] text-text outline-none placeholder:text-muted2/60"
+          />
+          {query && (
+            <button type="button" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted2 hover:text-text" aria-label={t("sidebar.clearFolderSearch")} title={t("sidebar.clearFolderSearch")} onClick={() => setQuery("")}>
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
       {open && (
       <div className="min-h-0 overflow-y-auto overscroll-contain" data-smart-collections-list="true">
       {!smart.length && <div className="px-2.5 py-2 text-[11px] text-muted2">{t("sidebar.noSmart")}</div>}
-      {smart.map((col) => {
+      {smart.length > 0 && !shown.length && <div className="px-2.5 py-2 text-[11px] text-muted2">{t("sidebar.noSmartMatches", { query: query.trim() })}</div>}
+      {shown.map((col) => {
         const active = activeId === col.collection_id;
         // Rules this version cannot read (written by a newer one): shown, but inert.
         const readable = !!col.rules;

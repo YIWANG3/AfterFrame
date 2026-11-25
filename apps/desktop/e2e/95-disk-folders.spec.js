@@ -149,6 +149,14 @@ test.describe("folders on disk", () => {
     await menuItem("auto-sync").click();
     await expect(folderRow(year).locator("[data-auto-synced]")).toBeVisible({ timeout: 10_000 });
     await expect.poll(() => w().evaluate(() => window.mediaWorkspace.getWatchedDirs()), { timeout: 10_000 }).toContain(year);
+    // The mark is a state, not a button: hovered, it says what it means, and
+    // on a folder inside the watched one, which folder it follows.
+    await expect(folderRow(year).locator("[data-auto-synced]"))
+      .toHaveAttribute("title", "Synced automatically: new files put in this folder are imported. Right-click to stop.");
+    const kyoto = path.join(year, "Kyoto");
+    if (!(await folderRow(kyoto).count())) await expand(year);
+    await expect(folderRow(kyoto).locator("[data-auto-synced]"))
+      .toHaveAttribute("title", "Synced automatically with “2026”: new files put here are imported.");
 
     const outside = path.join(root, "Osaka");
     fs.mkdirSync(outside);

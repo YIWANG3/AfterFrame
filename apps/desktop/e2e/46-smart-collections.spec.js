@@ -276,6 +276,54 @@ test("a snapshot freezes the current photos into an ordinary folder", async () =
     .then((rows) => rows.find((row) => row.name === "Five stars (snapshot)")?.item_count ?? null))).toBe(expected);
 });
 
+// The section's heading has a search, like the collections and the folders:
+// it keeps the rows whose name holds what is typed, in any case.
+test("the heading's search narrows the smart collections by name, and Escape closes it", async () => {
+  const section = window.locator("[data-smart-collections]");
+  const searchButton = section.getByRole("button", { name: "Search smart collections" });
+  const search = window.getByTestId("smart-collection-search");
+  const names = () => window.locator("[data-smart-collection]").allInnerTexts()
+    .then((texts) => texts.map((text) => text.replace(/\s*\d+$/, "").trim()).sort());
+  const everything = await names();
+  expect(everything).toEqual(expect.arrayContaining(["Five star Canon", "Five stars", "Rated ones", "This month"]));
+
+  // Folded, the search unfolds the section to show its field.
+  await window.locator("[data-sidebar-section-toggle='smart']").click();
+  await expect(section).toHaveAttribute("data-open", "false");
+  await searchButton.click();
+  await expect(section).toHaveAttribute("data-open", "true");
+  await expect(searchButton).toHaveAttribute("aria-pressed", "true");
+  await expect(search).toBeFocused();
+
+  await search.fill("FIVE");
+  await expect.poll(names).toEqual(["Five star Canon", "Five stars"]);
+  await search.fill("  canon ");
+  await expect.poll(names).toEqual(["Five star Canon"]);
+  await search.fill("zzz");
+  await expect(window.locator("[data-smart-collection]")).toHaveCount(0);
+  await expect(section.getByText("No smart collections match “zzz”")).toBeVisible();
+  // The X clears it and keeps the field open.
+  await section.getByRole("button", { name: "Clear search" }).click();
+  await expect(search).toHaveValue("");
+  await expect.poll(names).toEqual(everything);
+
+  // Escape closes the field and brings every row back.
+  await search.fill("month");
+  await expect.poll(names).toEqual(["This month"]);
+  await search.press("Escape");
+  await expect(search).toHaveCount(0);
+  await expect(searchButton).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(names).toEqual(everything);
+  // It opens empty the next time; the button closes it too.
+  await searchButton.click();
+  await expect(search).toHaveValue("");
+  await search.fill("rated");
+  await expect.poll(names).toEqual(["Rated ones"]);
+  await searchButton.click();
+  await expect(search).toHaveCount(0);
+  await expect.poll(names).toEqual(everything);
+});
+
 test("an agent can create, browse and re-condition a smart collection over MCP", async () => {
   const tool = async (name, args) => {
     const result = await mcpCall(mcpPort, "tools/call", { name, arguments: args });
