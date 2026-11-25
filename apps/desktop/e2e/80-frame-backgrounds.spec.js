@@ -141,6 +141,18 @@ test.describe("Frame backgrounds made from the photo", () => {
     await expect(window.locator("[data-frame-photo-bg] [data-bg-mode]")).toHaveCount(2);
   });
 
+  test("the blur, corners and shadow sliders sit evenly apart", async () => {
+    const gaps = await window.evaluate(() => {
+      const rows = ["frame-bg-blur", "frame-photo-radius", "frame-photo-shadow"].map((id) => {
+        let el = document.querySelector(`[data-testid="${id}"]`);
+        while (el.parentElement && !el.parentElement.matches("[data-frame-sliders], [data-frame-photo-style]")) el = el.parentElement;
+        return el.getBoundingClientRect();
+      });
+      return [rows[1].top - rows[0].bottom, rows[2].top - rows[1].bottom];
+    });
+    expect(Math.abs(gaps[0] - gaps[1])).toBeLessThan(1);
+  });
+
   test("the photo's corners and shadow sliders change the state as one step each", async () => {
     const before = (await state()).historyLength;
     const radius = window.getByTestId("frame-photo-radius");
@@ -252,5 +264,46 @@ test.describe("Frame backgrounds made from the photo", () => {
     await window.evaluate(() => window.__afterframeTest.undo());
     await expect.poll(async () => (await state()).canvasBg?.mode ?? null).not.toBe("blur");
     expect(await model()).toBe("#1a1a1a");
+  });
+
+  test("photo-background presets: blur, ratio, corners and shadow in one step; a template without them drops them", async () => {
+    // Their thumbnails render (the blurred photo needs the photo itself).
+    await expect(window.locator('[data-frame-template="blur-story"] img')).toBeVisible();
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("blur-story"));
+    await expect.poll(async () => (await state()).canvasAspect).toBe("9:16");
+    let s = await state();
+    expect(s.canvasBg).toMatchObject({ mode: "blur", blur: 70 });
+    expect(s.canvasPhoto).toEqual({ radius: 12, shadow: 50 });
+    expect(s.layers.some((l) => l.fromPreset)).toBe(true);
+    // One undo takes the whole preset back.
+    await window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(async () => (await state()).canvasAspect).toBeNull();
+    expect((await state()).canvasBg?.mode ?? null).not.toBe("blur");
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("blur-story"));
+    await expect.poll(async () => (await state()).canvasAspect).toBe("9:16");
+    await window.screenshot({ path: path.join(SHOTS, "preset-blur-story.png") });
+    const { info } = await readPixels(await saveTo("blur-story.jpg"));
+    expect(info.width / info.height).toBeCloseTo(9 / 16, 2);
+    await clearToasts();
+
+    // An info bar says nothing about the ratio or the photo's corners: the
+    // story's go with it.
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
+    await expect.poll(async () => (await state()).canvasAspect).toBeNull();
+    s = await state();
+    expect(s.canvasPhoto).toBeNull();
+    expect(s.canvasBg?.mode ?? null).not.toBe("blur");
+
+    // A ratio the user picked stays; the card's own untouched corners go.
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("palette-card"));
+    await expect.poll(async () => (await state()).canvasBg?.mode).toBe("palette");
+    expect((await state()).canvasPhoto).toEqual({ radius: 10, shadow: 35 });
+    await window.locator("[data-frame-aspect]").getByRole("button", { name: "1:1" }).click();
+    await expect.poll(async () => (await state()).canvasAspect).toBe("1:1");
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
+    await expect.poll(async () => (await state()).canvasBg?.mode ?? null).not.toBe("palette");
+    s = await state();
+    expect(s.canvasAspect).toBe("1:1");
+    expect(s.canvasPhoto).toBeNull();
   });
 });

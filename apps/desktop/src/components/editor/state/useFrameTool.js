@@ -9,9 +9,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FRAME_TEMPLATES, FRAME_FONTS } from "../frameTemplates";
 import { brandIdForExif, builtInBrandMarks, builtInModelMarks, cameraNamesFor, mineFor, modelKeyFor, normalizeMake } from "../render/frameLogos";
 import { labelledExif, loadLogoRegistry, prepareLogoNeed, setBrandLogo, subscribeBrandLogos } from "../render/brandLogos";
-import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
+import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers, drawFrameBase, onPhotoPixels } from "../render/frameRender";
 import { effectiveCanvasPad, layersFromDisplay, resolveCanvasPad } from "../imageMath";
-import { drawScrim } from "../render/canvasHelpers";
 import { createDefaultLayer, createOverlayLayer, createStickerLayer, measureTextWidthDOM } from "../textState";
 import {
   USER_TEMPLATE_PREFIX, isUserTemplate, layersFromTemplate, logoElementOf, logoRefOf, outputGeometry,
@@ -377,21 +376,19 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     if (isUserTemplate(tpl)) return placeLayers(await userTemplateLayers(tpl, lg, base, currentProfile));
     await ensureLogos(lg, tpl, base.height || 1200);
     const g = geometry(base, tpl, ADJUST);
-    const isOverlay = tpl.family === "overlay";
+    const isOverlay = onPhotoPixels(tpl);
 
-    // Overlay presets pick text color by the luminance behind it — draw the
-    // composed background (bg + photo + scrim) once so buildFrameLayers can
-    // sample it, restoring the baked pipeline's adaptive contrast.
+    // Presets with text over photo pixels pick its color by the luminance
+    // behind it — draw the composed background (bg + photo + scrim) once so
+    // buildFrameLayers can sample it, restoring the baked pipeline's adaptive
+    // contrast.
     let sampleCtx = null;
     if (isOverlay) {
       const sample = document.createElement("canvas");
       sample.width = g.outW;
       sample.height = g.outH;
       sampleCtx = sample.getContext("2d", { willReadFrequently: true });
-      sampleCtx.fillStyle = tpl.canvas?.bg?.color || "#ffffff";
-      sampleCtx.fillRect(0, 0, g.outW, g.outH);
-      sampleCtx.drawImage(base, g.padPx.left, g.padPx.top);
-      drawScrim(sampleCtx, tpl.canvas?.scrim, { x: g.padPx.left, y: g.padPx.top, width: g.photoW, height: g.href });
+      drawFrameBase(sampleCtx, tpl, base, g);
     }
 
     const built = buildFrameLayers(sampleCtx, {
@@ -409,7 +406,19 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       top: (tp.top || 0) * k, right: (tp.right || 0) * k,
       bottom: (tp.bottom || 0) * k, left: (tp.left || 0) * k,
     };
-    const bg = { color: tpl.canvas?.bg?.color || "#ffffff" };
+    // The margins the layers were laid out in: the template's own, widened
+    // when it has a canvas ratio.
+    const layoutPad = {
+      top: g.padPx.top / short, right: g.padPx.right / short,
+      bottom: g.padPx.bottom / short, left: g.padPx.left / short,
+    };
+    // A flat colour, or one of the editor's own backgrounds (the photo's
+    // colours, the photo blurred) as the editor stores it.
+    const bg = tpl.canvas?.bg?.mode ? { ...tpl.canvas.bg } : { color: tpl.canvas?.bg?.color || "#ffffff" };
+    // Most built-ins say nothing about the ratio or the photo's corners and
+    // shadow (undefined: the editor keeps its own); a few set them.
+    const aspect = tpl.canvas && "aspect" in tpl.canvas ? tpl.canvas.aspect ?? null : undefined;
+    const photo = tpl.canvas && "photo" in tpl.canvas ? (tpl.canvas.photo ? { ...tpl.canvas.photo } : null) : undefined;
     const scrim = tpl.canvas?.scrim ? { ...tpl.canvas.scrim } : null;
     // Convert generated elements to real editable layers. TextCanvas centers
     // layers at x/y (ignores align), so anchor everything at the element's
@@ -463,7 +472,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       }
       return null;
     }).filter(Boolean);
-    return placeLayers({ pad, bg, scrim, stickerImages, layers });
+    return placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, stickerImages, layers });
   }
 
   // A user template's layers on this photo, as generatePresetLayers returns

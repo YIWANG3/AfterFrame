@@ -81,6 +81,72 @@ export const FRAME_TEMPLATES = [
     ],
   },
 
+  // ───────────────────────── 照片底色 Photo backgrounds ─────────────────────────
+  // The margin is the photo blurred or the photo's own colours (bg in the
+  // editor's own form), the photo a card on it with soft corners and a shadow
+  // (`photo`, 0..100 as on the sliders); a few set a canvas ratio. Text over
+  // those pixels goes black or white by what is behind it (onPhotoPixels).
+  {
+    id: "blur-card", name: "虚化 · 卡片", family: "photo-bg",
+    canvas: {
+      pad: { top: 0.055, left: 0.055, right: 0.055, bottom: 0.15 },
+      bg: { mode: "blur", blur: 60 }, photo: { radius: 15, shadow: 45 },
+    },
+    elements: [
+      { type: "logo", variant: "symbol", color: WHITE,
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.02 },
+        style: { size: 0.05 } },
+      { type: "exif", labeled: true, fields: ["aperture", "shutter", "iso"],
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.03 },
+        style: { font: "grotesk", weight: 400, size: 0.015, color: WHITE } },
+    ],
+  },
+  {
+    id: "palette-card", name: "照片取色 · 卡片", family: "photo-bg",
+    canvas: {
+      pad: { top: 0.055, left: 0.055, right: 0.055, bottom: 0.14 },
+      bg: { mode: "palette" }, photo: { radius: 10, shadow: 35 },
+    },
+    elements: [
+      { type: "text", content: "{camera_model}", group: "info",
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05 },
+        style: { font: "grotesk", weight: 400, size: 0.022, color: WHITE } },
+      { type: "exif", fields: ["focal", "aperture", "shutter", "iso"], group: "info",
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05 },
+        style: { font: "grotesk", weight: 400, size: 0.0145, color: WHITE, tracking: 0.04 } },
+    ],
+  },
+  {
+    id: "blur-story", name: "虚化 · 9:16", family: "photo-bg",
+    canvas: {
+      pad: { top: 0.045, left: 0.045, right: 0.045, bottom: 0.045 }, aspect: "9:16",
+      bg: { mode: "blur", blur: 70 }, photo: { radius: 12, shadow: 50 },
+    },
+    elements: [
+      { type: "logo", variant: "wordmark", color: WHITE,
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.018 },
+        style: { size: 0.06 } },
+      { type: "exif", fields: ["focal", "aperture", "shutter", "iso"],
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.03 },
+        style: { font: "grotesk", weight: 400, size: 0.0145, color: WHITE, tracking: 0.05 } },
+    ],
+  },
+  {
+    id: "palette-45", name: "照片取色 · 4:5", family: "photo-bg",
+    canvas: {
+      pad: { top: 0.05, left: 0.05, right: 0.05, bottom: 0.11 }, aspect: "4:5",
+      bg: { mode: "palette" }, photo: { radius: 8, shadow: 30 },
+    },
+    elements: [
+      { type: "logo", variant: "symbol", color: WHITE,
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.016 },
+        style: { size: 0.045 } },
+      { type: "text", content: "{camera_model}",
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.028 },
+        style: { font: "grotesk", weight: 400, size: 0.017, color: WHITE } },
+    ],
+  },
+
   // ───────────────────────── 留白 Margin ─────────────────────────
   {
     id: "margin-logo", name: "留白 · 标志居中", family: "margin",

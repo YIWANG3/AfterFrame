@@ -101,6 +101,8 @@ function canvasShapeEquals(a, b) {
 
 const SPLIT_DIR_PREF = "split.outputDir";
 const SPLIT_SUBFOLDER_PREF = "split.subfolder";
+// What a frame template may set on the canvas besides margins and background.
+const PRESET_CANVAS_KEYS = ["aspect", "photo"];
 
 // Whether a remembered folder is still there (an unplugged drive, a deleted
 // folder: back to the original's folder).
@@ -828,6 +830,19 @@ export default function EditorOverlay({
   const frameToolRef = useRef(null);
   frameToolRef.current = frameTool;
 
+  // The ratio and the photo's corners and shadow as the last template set
+  // them. A template that says nothing about one keeps the user's own, but
+  // not another template's: from a 9:16 story to an info bar, the story's
+  // ratio goes. Compared by value, so a slider moved since makes it the user's.
+  const presetCanvasRef = useRef({});
+  function keptCanvas(res, key) {
+    if (res[key] !== undefined) return res[key];
+    const cur = editorStateRef.current.canvas?.[key] ?? null;
+    const fromPreset = presetCanvasRef.current;
+    if (key in fromPreset && JSON.stringify(fromPreset[key] ?? null) === JSON.stringify(cur)) return null;
+    return cur;
+  }
+
   // Apply a frame preset (`res` from generatePresetLayers) or clear it (res=null)
   // as ONE atomic history entry: set canvas margins/bg/scrim AND replace the
   // preset's layers (keeping the user's own, re-expressed into the new basis)
@@ -837,12 +852,12 @@ export default function EditorOverlay({
   function setCanvasPreset(res) {
     const s = editorStateRef.current;
     const nextPad = res ? res.pad : { top: 0, right: 0, bottom: 0, left: 0 };
-    // A template that says nothing about the ratio or the photo's corners and
-    // shadow (every built-in one) leaves the user's; clearing resets them.
-    const kept = (key) => (res[key] !== undefined ? res[key] : s.canvas?.[key] ?? null);
     const nextState = res
-      ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: null, aspect: kept("aspect"), photo: kept("photo") } }
+      ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: null, aspect: keptCanvas(res, "aspect"), photo: keptCanvas(res, "photo") } }
       : { ...s, canvas: { ...s.canvas, pad: nextPad, bg: null, scrim: null, aspect: null, photo: null } };
+    presetCanvasRef.current = res
+      ? Object.fromEntries(PRESET_CANVAS_KEYS.filter((k) => res[k] !== undefined).map((k) => [k, res[k]]))
+      : {};
     // Layers are full-photo coords, basis-independent — the user's own layers
     // stay put; the preset's generated layers already arrive in full-photo coords.
     // Re-applying a preset REPLACES the previous preset's layers (don't stack).
@@ -869,10 +884,8 @@ export default function EditorOverlay({
     // The template's colours, where they would not read on its background
     // (a saved template's dark text on a dark blurred photo), as one step
     // with the template.
-    const s = editorStateRef.current;
-    const kept = (key) => (res[key] !== undefined ? res[key] : s.canvas?.[key] ?? null);
     const adapted = await adaptFrameColors(res.layers, {
-      pad: res.pad, bg: res.bg, aspect: kept("aspect"), photo: kept("photo"),
+      pad: res.pad, bg: res.bg, aspect: keptCanvas(res, "aspect"), photo: keptCanvas(res, "photo"),
     });
     setCanvasPreset(adapted ? { ...res, layers: adapted } : res);
   }
