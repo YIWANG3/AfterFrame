@@ -947,15 +947,15 @@ export default function EditorOverlay({
     else recordCanvas(patch);
   }
 
-  // Another camera, fit or way of holding it: laid out again. The camera's
-  // exposure and reflection move nothing: just the change (`live` mid-drag,
-  // recorded on release).
+  // Another camera or way of holding it: laid out again. The display's
+  // corners, the camera's exposure and reflection move nothing: just the
+  // change (`live` mid-drag, recorded on release).
   function changeMockup(patch, { live = false } = {}) {
     const s = editorStateRef.current;
     const cur = s.canvas?.mockup;
     if (!cur) return;
     const mockup = { ...cur, ...patch };
-    if (Object.keys(patch).every((key) => key === "exposure" || key === "reflection")) {
+    if (Object.keys(patch).every((key) => key === "exposure" || key === "reflection" || key === "radius")) {
       const next = { ...s, canvas: { ...s.canvas, mockup } };
       if (live) applyState(next);
       else recordState(next);
@@ -1458,6 +1458,7 @@ export default function EditorOverlay({
                   ? mockupRotation(mockupAsset, editorState.canvas.mockup, previewContentRect.width, previewContentRect.height)
                   : 0}
                 onCanvasMockup={changeMockup}
+                mockupMissing={frameTool.mockupMissing}
               />
             ) : tool === "split" ? (
               <SplitPanel

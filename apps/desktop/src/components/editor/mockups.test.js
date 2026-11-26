@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { MOCKUPS, GENERIC_MOCKUPS, mockupBrandOf, mockupById, modelKey, pickMockupId, resolveMockupSpec } from "./mockups";
+import {
+  MOCKUPS, GENERIC_MOCKUPS, mockupBrandOf, mockupById, mockupMatchFor, mockupOfMaker, modelKey, pickMockupId, resolveMockupSpec,
+} from "./mockups";
 
 const LIST = [
   { id: "hasselblad-907x", brand: "hasselblad", name: "Hasselblad 907X & CFV 100C", match: ["CFV 100C/907X", "CFV II 50C/907X"], brandDefault: true },
@@ -52,6 +54,13 @@ describe("picking a camera for a photo", () => {
     expect(pick({ make: "RICOH IMAGING COMPANY, LTD.", camera_model: "PENTAX KF" })).toBe("pentax-k-1-ii");
   });
 
+  it("says how well the photo's camera is matched", () => {
+    expect(mockupMatchFor({ make: "Canon", camera_model: "Canon EOS R6m2" }, LIST)).toBe("model");
+    expect(mockupMatchFor({ make: "Canon", camera_model: "Canon EOS R8" }, LIST)).toBe("brand");
+    expect(mockupMatchFor({ make: "Apple", camera_model: "iPhone XS Max" }, LIST)).toBe("none");
+    expect(mockupMatchFor({}, LIST)).toBe("none");
+  });
+
   it("gives an unknown camera the generic one for the photo's orientation", () => {
     expect(pick({ make: "Apple", camera_model: "iPhone 16 Pro" })).toBe("hasselblad-907x");
     expect(pick({ make: "Apple", camera_model: "iPhone 16 Pro" }, true)).toBe("leica-m11-p");
@@ -87,9 +96,15 @@ describe("the bundled mockups", () => {
     }
   });
 
+  it("knows a camera of the photo's own maker", () => {
+    expect(mockupOfMaker("canon-eos-r5", { make: "Canon", camera_model: "Canon EOS R8" })).toBe(true);
+    expect(mockupOfMaker("leica-m11-p", { make: "Apple", camera_model: "iPhone XS Max" })).toBe(false);
+    expect(mockupOfMaker("fujifilm-x100vi", { make: "Canon", camera_model: "Canon EOS R5" })).toBe(false);
+  });
+
   it("settles a template's camera for a photo", () => {
     const spec = resolveMockupSpec({ id: "auto", fit: "fill" }, { make: "Canon", camera_model: "Canon EOS R5" }, 3000, 2000);
-    expect(spec).toEqual({ id: "canon-eos-r5", fit: "fill", rotation: "auto", layout: "screen", reflection: false, exposure: 0 });
+    expect(spec).toEqual({ id: "canon-eos-r5", fit: "fill", rotation: "auto", layout: "screen", reflection: false, exposure: 0, radius: 0 });
     expect(resolveMockupSpec({ id: "auto", exposure: 250 }, {}, 3000, 2000).exposure).toBe(100);
     // A camera that is no longer there is replaced by the photo's own.
     expect(resolveMockupSpec({ id: "gone" }, {}, 2000, 3000).id).toBe(GENERIC_MOCKUPS.portrait);

@@ -217,14 +217,13 @@
     "mockup": {
       "title": "机模",
       "camera": "机型",
-      "photo": "照片",
-      "contain": "黑边",
-      "fill": "铺满",
       "orientation": "方向",
       "landscape": "横拿",
       "portrait": "竖拿",
       "reflection": "反光",
-      "exposure": "曝光"
+      "exposure": "曝光",
+      "missing": "没有 {{camera}} 的机模",
+      "unknown": "认不出拍摄设备"
     }
   },
   "handwriting": {

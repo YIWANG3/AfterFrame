@@ -6,14 +6,21 @@
 
 import { mockupLayout, mockupOutputScale } from "./mockupLayout";
 export { mockupHidesPhoto } from "./mockupLayout";
-import { loadMockupImage, mockupById, resolveMockupSpec } from "../mockups";
+import { loadMockupImage, mockupById, mockupOfMaker, resolveMockupSpec } from "../mockups";
 
 /** A template (built-in or the user's) with its camera mockup settled for a
  *  photo pw×ph ("auto" → the photo's own camera); the template itself when it
- *  has none. */
+ *  has none. On a camera not of the photo's maker (a phone's photo on the
+ *  generic camera, another brand picked by hand) a built-in's signature leaves
+ *  the device's name out, so it doesn't name one camera under another. */
 export function withMockupFor(template, exif, pw, ph) {
   if (!template?.canvas?.mockup) return template;
-  return { ...template, canvas: { ...template.canvas, mockup: resolveMockupSpec(template.canvas.mockup, exif, pw, ph) } };
+  const mockup = resolveMockupSpec(template.canvas.mockup, exif, pw, ph);
+  const ready = { ...template, canvas: { ...template.canvas, mockup } };
+  if (Array.isArray(template.elements) && mockup && !mockupOfMaker(mockup.id, exif)) {
+    ready.elements = template.elements.filter((el) => !(el.type === "text" && String(el.content || "").includes("{camera_model}")));
+  }
+  return ready;
 }
 
 /** withMockupFor, with the camera's picture loaded so a render can draw it. */
@@ -81,9 +88,11 @@ export function drawMockup(ctx, { asset, spec, contentRect, photo, image }) {
   // shows through the soft rim of the punched-out display.
   const bleed = Math.max(1, 1.5 * L.k);
   ctx.save();
-  roundRectPath(ctx, s.x - bleed, s.y - bleed, s.width + 2 * bleed, s.height + 2 * bleed, s.radius ? s.radius + bleed : 0);
+  // The display black to its square edge (the punched-out hole is square);
+  // the photo and the glass's sheen cut to its corners.
   ctx.fillStyle = "#000";
-  ctx.fill();
+  ctx.fillRect(s.x - bleed, s.y - bleed, s.width + 2 * bleed, s.height + 2 * bleed);
+  roundRectPath(ctx, s.x - bleed, s.y - bleed, s.width + 2 * bleed, s.height + 2 * bleed, s.radius ? s.radius + bleed : 0);
   ctx.clip();
   const pw = photo.width || photo.naturalWidth, ph = photo.height || photo.naturalHeight;
   const p = L.photo;

@@ -18,6 +18,7 @@ const BLUE = [40, 90, 200], ORANGE = [210, 120, 30];
 // Must live in e2e/fixtures/: the app's media:// allowlist covers it.
 const FIX = path.join(__dirname, "fixtures", "frame-mockup-1600.jpg");
 const FIX_TALL = path.join(__dirname, "fixtures", "frame-mockup-tall.jpg");
+const FIX_PHONE = path.join(__dirname, "fixtures", "frame-mockup-phone.jpg");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-frame-mockup-"));
 const SHOTS = path.join(__dirname, "..", "test-results", "frame-mockup");
 
@@ -61,7 +62,7 @@ test.describe("Camera mockup frame", () => {
   test.afterAll(async () => {
     await closeApp(app, userDataDir);
     fs.rmSync(tmp, { recursive: true, force: true });
-    for (const f of [FIX, FIX_TALL]) { try { fs.rmSync(f, { force: true }); } catch { /* ignore */ } }
+    for (const f of [FIX, FIX_TALL, FIX_PHONE]) { try { fs.rmSync(f, { force: true }); } catch { /* ignore */ } }
   });
 
   const state = () => window.evaluate(() => window.__afterframeTest.getState());
@@ -92,8 +93,10 @@ test.describe("Camera mockup frame", () => {
     await window.locator('[data-frame-template="camera-screen"] button').first().click();
     // No camera in the photo's EXIF: the generic landscape one.
     await expect.poll(async () => (await state()).canvasMockup).toEqual({
-      id: "hasselblad-907x", fit: "fill", rotation: "auto", layout: "screen", reflection: false, exposure: 0,
+      id: "hasselblad-907x", fit: "fill", rotation: "auto", layout: "screen", reflection: false, exposure: 0, radius: 0,
     });
+    // No camera in the photo's EXIF: the panel says so.
+    await expect(window.locator("[data-frame-mockup-missing]")).toHaveText("Camera not recognised");
     await expect(mockupCanvas("hasselblad-907x")).toBeVisible();
     await expect(window.locator("[data-frame-mockup-controls]")).toBeVisible();
     // The display has its own corners: no photo corner or shadow sliders.
@@ -118,23 +121,6 @@ test.describe("Camera mockup frame", () => {
     expect(near(at(p.x0 + w * 0.02, p.y0 + h * 0.25), BLUE)).toBe(false);
     // Far out from the photo: the frame's light background.
     expect(Math.min(...at(4, 4))).toBeGreaterThan(220);
-  });
-
-  test("letterbox shows the whole photo with black bars, one undo step from fill", async () => {
-    await clearToasts();
-    await window.locator("[data-frame-mockup-controls] button", { hasText: "Letterbox" }).click();
-    await expect.poll(async () => (await state()).canvasMockup?.fit).toBe("contain");
-    const s = await state();
-    const out = await saveTo("letterbox.jpg");
-    const { info, at } = await readPixels(out);
-    const p = photoInExport(s, info);
-    const cx = (p.x0 + p.x1) / 2, h = p.y1 - p.y0;
-    expect(near(at(cx, p.y0 + h * 0.25), BLUE)).toBe(true);
-    // Black bars above and below the photo.
-    expect(dark(at(cx, p.y0 - h * 0.04))).toBe(true);
-    expect(dark(at(cx, p.y1 + h * 0.04))).toBe(true);
-    await window.evaluate(() => window.__afterframeTest.undo());
-    await expect.poll(async () => (await state()).canvasMockup?.fit).toBe("fill");
   });
 
   test("another camera, held upright, with a reflection", async () => {
@@ -177,6 +163,20 @@ test.describe("Camera mockup frame", () => {
     expect(await mean(await saveTo("exposure-60.jpg"))).toBeGreaterThan(plain + 2);
     await window.evaluate(() => window.__afterframeTest.undo());
     await expect.poll(async () => (await state()).canvasMockup?.exposure).toBe(0);
+  });
+
+  test("the display's corners round the photo on it, in one undo step, moving nothing", async () => {
+    await clearToasts();
+    const before = await state();
+    await window.getByTestId("frame-mockup-radius").evaluate((el) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "60");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    });
+    await expect.poll(async () => (await state()).canvasMockup?.radius).toBe(60);
+    expect((await state()).outputRect).toEqual(before.outputRect);
+    await window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(async () => (await state()).canvasMockup?.radius).toBe(0);
   });
 
   test("a canvas ratio widens the margins around the camera", async () => {
@@ -271,11 +271,20 @@ test.describe("Camera mockup frame", () => {
     expect(sig.y).toBeGreaterThan(1.05);
     await window.screenshot({ path: path.join(SHOTS, "canon.png") });
 
+    // Its own camera: no note in the panel.
+    await expect(window.locator("[data-frame-mockup-missing]")).toHaveCount(0);
+
     // A camera chosen by hand lays the frame out again around it.
-    await window.locator("[data-frame-mockup-camera]").selectOption("fujifilm-x100vi");
-    await expect.poll(async () => (await state()).canvasMockup?.id).toBe("fujifilm-x100vi");
+    await window.locator("[data-frame-mockup-camera]").selectOption("canon-eos-r1");
+    await expect.poll(async () => (await state()).canvasMockup?.id).toBe("canon-eos-r1");
     const after = (await state()).layers.find((l) => l.fromPreset && l.text === "Canon EOS R6 Mark II");
     expect(after.y).not.toBeCloseTo(sig.y, 3);
+    // Another maker's camera: the signature leaves the device's name out.
+    await window.locator("[data-frame-mockup-camera]").selectOption("fujifilm-x100vi");
+    await expect.poll(async () => (await state()).canvasMockup?.id).toBe("fujifilm-x100vi");
+    const texts = (await state()).layers.filter((l) => l.fromPreset).map((l) => l.text);
+    expect(texts.length).toBeGreaterThan(0);
+    expect(texts.some((t) => /Canon/.test(t))).toBe(false);
   });
   // Still on the Canon photo: its EXIF gives the template text.
   test("a ratio laid over a template keeps its text on the canvas", async () => {
@@ -296,5 +305,26 @@ test.describe("Camera mockup frame", () => {
       expect(l.y).toBeLessThan(1);
     }
     await window.screenshot({ path: path.join(SHOTS, "ratio-relayout.png") });
+  });
+
+  // A phone's photo: no camera of its own here, so the generic one, a note
+  // in the panel, and no "iPhone" under a Leica.
+  test("a phone's photo gets the generic camera, a note, and no device name", async () => {
+    await window.evaluate(() => window.__afterframeTest.closeEditor());
+    await sharp({ create: { width: 1000, height: 1500, channels: 3, background: { r: BLUE[0], g: BLUE[1], b: BLUE[2] } } })
+      .withExif({ IFD0: { Make: "Apple", Model: "iPhone XS Max" } }).jpeg({ quality: 92 }).toFile(FIX_PHONE);
+    await window.evaluate((p) => window.mediaWorkspace.quickRegister(p, null), FIX_PHONE);
+    await expect.poll(
+      () => window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p).then((d) => d?.asset_id || null), FIX_PHONE),
+      { timeout: 20_000 },
+    ).toBeTruthy();
+    const detail = await window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), FIX_PHONE);
+    await openEditorOn(window, detail, "frame");
+    await expect.poll(async () => {
+      await window.evaluate(() => window.__afterframeTest.applyFramePreset("camera-screen"));
+      return (await state()).canvasMockup?.id;
+    }, { timeout: 30_000 }).toBe("leica-m11-p");
+    await expect(window.locator("[data-frame-mockup-missing]")).toHaveText("No camera picture for iPhone XS Max");
+    expect((await state()).layers.some((l) => /iPhone/.test(l.text || ""))).toBe(false);
   });
 });

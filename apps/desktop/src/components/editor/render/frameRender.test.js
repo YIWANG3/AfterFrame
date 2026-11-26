@@ -160,6 +160,18 @@ describe("camera mockup frame", () => {
     }
   });
 
+  it("names the device only under a camera of its own maker", () => {
+    const named = (t) => t.elements.some((el) => String(el.content || "").includes("{camera_model}"));
+    expect(named(settled)).toBe(true);
+    const phone = withMockupFor(tpl, { make: "Apple", camera_model: "iPhone XS Max" }, 1500, 2000);
+    expect(phone.canvas.mockup.id).toBe("leica-m11-p");
+    expect(named(phone)).toBe(false);
+    expect(phone.elements.length).toBe(tpl.elements.length - 1);
+    const picked = withMockupFor({ ...tpl, canvas: { ...tpl.canvas, mockup: { ...tpl.canvas.mockup, id: "fujifilm-x100vi" } } },
+      { make: "Canon", camera_model: "Canon EOS R5" }, photo.width, photo.height);
+    expect(named(picked)).toBe(false);
+  });
+
   it("lays the canvas out as the editor does", () => {
     const g = geometry(photo, settled, { text: 1, margin: 1 });
     const short = Math.min(photo.width, photo.height);

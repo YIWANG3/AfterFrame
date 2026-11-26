@@ -16,7 +16,8 @@
 // with the display as fractions of the picture and its corner radius as a
 // fraction of the display's short side. `spec` is canvas.mockup:
 // { id, fit: "contain" | "fill", rotation: "auto" | 0 | -90 | 90, layout, reflection,
-//   exposure: -100..100, the camera picture's, a stop at either end }.
+//   exposure: -100..100, the camera picture's, a stop at either end,
+//   radius: 0..100, the display's corners (else the picture's own) }.
 
 // The camera picture is never blown up past this: an export of a big photo is
 // drawn smaller instead (mockupOutputScale).
@@ -43,6 +44,14 @@ function fitRect(cw, ch, box, fill) {
 }
 
 const LEAN = 1.02; // a shape counts as landscape or portrait past this ratio
+
+// 100 on the corner slider: a radius of 12% of the display's short side.
+const RADIUS_AT_100 = 0.12;
+
+/** The display's corner radius, a fraction of its short side. */
+export function mockupScreenRadius(asset, spec) {
+  return spec?.radius > 0 ? (Math.min(100, spec.radius) / 100) * RADIUS_AT_100 : asset.screen.radius || 0;
+}
 
 /** The quarter turn a mockup gets (degrees, clockwise): the spec's own, or for
  *  "auto" a turn to the left when the photo's orientation is not the
@@ -94,7 +103,7 @@ export function mockupLayout(asset, spec, content) {
   const sw = t.screen.w * k, sh = t.screen.h * k;
   const screen = {
     x: camX + t.screen.x * k, y: camY + t.screen.y * k, width: sw, height: sh,
-    radius: (asset.screen.radius || 0) * Math.min(sw, sh),
+    radius: mockupScreenRadius(asset, spec) * Math.min(sw, sh),
   };
   return {
     rotation, k,

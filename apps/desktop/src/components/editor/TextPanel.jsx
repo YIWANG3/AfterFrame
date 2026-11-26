@@ -118,6 +118,7 @@ export default function TextPanel({
   // on this photo, and a change to it.
   canvasMockup = null,
   mockupRotation = 0,
+  mockupMissing = null,
   onCanvasMockup,
 }) {
   const { t } = useTranslation("editor");
@@ -326,7 +327,7 @@ export default function TextPanel({
             </Section>
             {canvasMockup && (
               <Section label={t("border.mockup.title")}>
-                <MockupControls mockup={canvasMockup} rotation={mockupRotation} onChange={onCanvasMockup} />
+                <MockupControls mockup={canvasMockup} rotation={mockupRotation} missing={mockupMissing} onChange={onCanvasMockup} />
               </Section>
             )}
             <Section label={t("frame.canvas")}>

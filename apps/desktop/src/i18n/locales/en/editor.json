@@ -217,14 +217,13 @@
     "mockup": {
       "title": "Camera",
       "camera": "Model",
-      "photo": "Photo",
-      "contain": "Letterbox",
-      "fill": "Fill",
       "orientation": "Holding",
       "landscape": "Level",
       "portrait": "Upright",
       "reflection": "Reflection",
-      "exposure": "Exposure"
+      "exposure": "Exposure",
+      "missing": "No camera picture for {{camera}}",
+      "unknown": "Camera not recognised"
     }
   },
   "handwriting": {

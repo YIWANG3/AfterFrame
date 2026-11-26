@@ -66,19 +66,35 @@ function keysOf(m) {
   return keysCache.get(m);
 }
 
+function ownMockup(exif, list) {
+  const brand = mockupBrandOf(exif);
+  const keys = [exif?.camera_model, exif?.camera_label].map(modelKey).filter(Boolean);
+  return keys.length ? list.find((m) => (!brand || m.brand === brand) && keys.some((k) => keysOf(m).has(k))) || null : null;
+}
+
+function makersMockup(exif, list) {
+  const brand = mockupBrandOf(exif);
+  return brand ? list.find((m) => m.brand === brand && m.brandDefault) || list.find((m) => m.brand === brand) || null : null;
+}
+
+/** How a photo's camera is matched: "model" (its own), "brand" (its maker's
+ *  usual one), or "none" (a phone, a maker with no camera here, no EXIF). */
+export function mockupMatchFor(exif, list = MOCKUPS) {
+  if (ownMockup(exif, list)) return "model";
+  return makersMockup(exif, list) ? "brand" : "none";
+}
+
+/** Is the camera `id` of the photo's own maker? */
+export function mockupOfMaker(id, exif) {
+  const brand = mockupBrandOf(exif);
+  return !!brand && byId.get(id)?.brand === brand;
+}
+
 /** The camera for a photo: its own model, else its maker's usual camera,
  *  else the generic one for its orientation. */
 export function pickMockupId(exif, { portrait = false, list = MOCKUPS, generic = GENERIC_MOCKUPS } = {}) {
-  const brand = mockupBrandOf(exif);
-  const keys = [exif?.camera_model, exif?.camera_label].map(modelKey).filter(Boolean);
-  if (keys.length) {
-    const own = list.find((m) => (!brand || m.brand === brand) && keys.some((k) => keysOf(m).has(k)));
-    if (own) return own.id;
-  }
-  if (brand) {
-    const usual = list.find((m) => m.brand === brand && m.brandDefault) || list.find((m) => m.brand === brand);
-    if (usual) return usual.id;
-  }
+  const found = ownMockup(exif, list) || makersMockup(exif, list);
+  if (found) return found.id;
   const g = portrait ? generic.portrait : generic.landscape;
   return list.some((m) => m.id === g) ? g : list[0]?.id ?? null;
 }
@@ -98,6 +114,7 @@ export function resolveMockupSpec(spec, exif, contentW, contentH) {
     layout: spec.layout === "stack" ? "stack" : "screen",
     reflection: !!spec.reflection,
     exposure: Math.max(-100, Math.min(100, Math.round(Number(spec.exposure) || 0))),
+    radius: Math.max(0, Math.min(100, Math.round(Number(spec.radius) || 0))),
   };
 }
 

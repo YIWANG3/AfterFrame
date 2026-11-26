@@ -1,7 +1,7 @@
-// The camera of a camera-mockup frame (frame-mockups/): which camera, the
-// photo with black bars or filling the display, the camera held level or
-// upright, the camera's exposure and a reflection on its glass. Shown while
-// the frame has a camera.
+// The camera of a camera-mockup frame (frame-mockups/): which camera (with a
+// note when the photo's own has no picture here), the camera held level or
+// upright, the display's corners, the camera's exposure and a reflection on
+// its glass. Shown while the frame has a camera.
 
 import { useTranslation } from "react-i18next";
 import { Select, SliderRow, Toggle } from "../../../ui";
@@ -38,10 +38,12 @@ function Row({ label, children }) {
  * @param {object} props
  * @param {object} props.mockup    canvas.mockup
  * @param {number} props.rotation  the quarter turn it has on this photo now
+ * @param {{ camera: string|null }|null} [props.missing]  the photo's camera has
+ *   no picture here (camera: its name, null when the photo doesn't say)
  * @param {(patch: object, opts?: { live?: boolean }) => void} props.onChange
  *   `live`: a slider mid-drag, recorded on release
  */
-export default function MockupControls({ mockup, rotation, onChange }) {
+export default function MockupControls({ mockup, rotation, missing = null, onChange }) {
   const { t } = useTranslation("editor");
   if (!mockup) return null;
   const choice = (key, label, active, patch) => ({ key, label, active, onClick: () => onChange(patch) });
@@ -56,15 +58,11 @@ export default function MockupControls({ mockup, rotation, onChange }) {
           data-frame-mockup-camera="true"
         />
       </Row>
-      <Row label={t("border.mockup.photo")}>
-        <SegGroup
-          className="flex-1"
-          options={[
-            choice("contain", t("border.mockup.contain"), mockup.fit !== "fill", { fit: "contain" }),
-            choice("fill", t("border.mockup.fill"), mockup.fit === "fill", { fit: "fill" }),
-          ]}
-        />
-      </Row>
+      {missing && (
+        <div className="-mt-1 pl-[56px] text-[10px] text-muted2" data-frame-mockup-missing="true">
+          {missing.camera ? t("border.mockup.missing", { camera: missing.camera }) : t("border.mockup.unknown")}
+        </div>
+      )}
       <Row label={t("border.mockup.orientation")}>
         <SegGroup
           className="flex-1"
@@ -74,6 +72,15 @@ export default function MockupControls({ mockup, rotation, onChange }) {
           ]}
         />
       </Row>
+      <SliderRow
+        compact
+        label={t("border.radius")}
+        min={0} max={100} resetValue={0}
+        value={mockup.radius || 0}
+        onChange={(v) => onChange({ radius: v }, { live: true })}
+        onCommit={(v) => onChange({ radius: v })}
+        testId="frame-mockup-radius"
+      />
       <SliderRow
         compact
         label={t("border.mockup.exposure")}

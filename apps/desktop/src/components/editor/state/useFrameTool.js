@@ -19,7 +19,7 @@ import {
 import { localFileUrl } from "../../../utils/format";
 import { ensurePersonalLogos, isPersonalLogoRef, personalLogoKey } from "../render/personalLogos";
 import { prepareMockup } from "../render/mockupRender";
-import { pickMockupId } from "../mockups";
+import { mockupMatchFor, pickMockupId } from "../mockups";
 
 // The choices a registry was read with (or a profile holds): logos per brand
 // and model, and the user's camera names.
@@ -552,6 +552,14 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     };
   }
 
+  // The photo's camera has no mockup picture (a phone, a maker not here, no
+  // EXIF): the Frame panel says so. { camera: its name or null } or null.
+  const mockupMissing = useMemo(() => {
+    const labelled = labelledExif(exif, logos);
+    if (mockupMatchFor(labelled) !== "none") return null;
+    return { camera: labelled.camera_label || labelled.camera_model || null };
+  }, [exifKey, logos]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // The user's own templates first, then the built-ins.
   const templates = useMemo(() => [...userTemplates, ...FRAME_TEMPLATES], [userTemplates]);
 
@@ -600,6 +608,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     resolveSource: (source) => resolveSource(source, labelledExif(exif, logos), profile),
     logosReady: !!logos,
     cameraLogo, brandLogoFor, cameraLogoLabel, setCameraLogo,
+    mockupMissing,
     // Which of my logos cameras use ({ brand or brand#model: logo id }).
     brandLogos: logos?.brandLogos || null,
   };

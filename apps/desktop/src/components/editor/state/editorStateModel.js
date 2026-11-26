@@ -97,7 +97,7 @@ function mockupEquals(a, b) {
   if (!a || !b) return (a ?? null) === (b ?? null);
   return a.id === b.id && a.fit === b.fit && a.rotation === b.rotation &&
     (a.layout || "screen") === (b.layout || "screen") && !!a.reflection === !!b.reflection &&
-    (a.exposure || 0) === (b.exposure || 0);
+    (a.exposure || 0) === (b.exposure || 0) && (a.radius || 0) === (b.radius || 0);
 }
 
 function canvasEquals(a, b) {

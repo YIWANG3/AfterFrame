@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  MOCKUP_MAX_UPSCALE, mockupBodyPad, mockupHidesPhoto, mockupLayout, mockupOutputScale, mockupRotation, turnedAsset,
+  MOCKUP_MAX_UPSCALE, mockupBodyPad, mockupHidesPhoto, mockupLayout, mockupOutputScale, mockupRotation, mockupScreenRadius, turnedAsset,
 } from "./mockupLayout";
 
 // A 1000×600 camera picture with a 4:3 display (400×300) at (100, 150).
@@ -98,6 +98,12 @@ describe("mockup layout", () => {
     expect([pad.left, pad.right, pad.bottom]).toEqual([0, 0, 0]);
     expect(mockupHidesPhoto(stack)).toBe(false);
     expect(mockupHidesPhoto(contain)).toBe(true);
+  });
+
+  it("rounds the display's corners as asked, else as the picture has them", () => {
+    expect(mockupScreenRadius(CAMERA, contain)).toBeCloseTo(0.05);
+    expect(mockupScreenRadius(CAMERA, { ...contain, radius: 50 })).toBeCloseTo(0.06);
+    expect(mockupScreenRadius(CAMERA, { ...contain, radius: 100 })).toBeCloseTo(0.12);
   });
 
   it("draws a big photo smaller rather than blowing the camera up", () => {
