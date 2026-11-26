@@ -213,6 +213,17 @@
       "empty_image": "There is no mark in that image",
       "too_many": "You already have 50 logos; delete some first",
       "failed": "Import failed: {{message}}"
+    },
+    "mockup": {
+      "title": "Camera",
+      "camera": "Model",
+      "photo": "Photo",
+      "contain": "Letterbox",
+      "fill": "Fill",
+      "orientation": "Holding",
+      "landscape": "Level",
+      "portrait": "Upright",
+      "reflection": "Reflection"
     }
   },
   "handwriting": {

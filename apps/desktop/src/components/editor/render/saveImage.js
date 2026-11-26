@@ -12,8 +12,11 @@ import {
   inferMimeType,
   releaseCanvasImage,
 } from "./canvasHelpers";
-import { canvasActive, getOutputDimensions, resolveCanvasPad } from "../imageMath";
+import { canvasActive, canvasMockupAsset, getOutputDimensions, resolveCanvasPad } from "../imageMath";
 import { clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./frameBackdrop";
+import { loadMockupImage } from "../mockups";
+import { mockupOutputScale } from "./mockupLayout";
+import { drawMockup } from "./mockupRender";
 
 // Catalog registration is a nice-to-have — if it fails (no catalog loaded,
 // sidecar down) we still consider the save successful.
@@ -53,6 +56,7 @@ export async function saveEditedImage(ctx) {
     canvasScrim,
     canvasAspect = null,
     canvasPhoto = null,
+    canvasMockup = null,
     layers,
     depthFieldCanvas,
     depthFeather,
@@ -63,7 +67,8 @@ export async function saveEditedImage(ctx) {
     gradeContent = null,
   } = ctx;
 
-  const padActive = canvasActive({ pad: canvasPad, aspect: canvasAspect });
+  const padActive = canvasActive({ pad: canvasPad, aspect: canvasAspect, mockup: canvasMockup });
+  const mockupAsset = canvasMockupAsset({ mockup: canvasMockup });
 
   // Native sharp fast-path: full source resolution, no canvas overhead. Only
   // valid when there are zero overlay layers AND no canvas margin/scrim (sharp
@@ -130,42 +135,53 @@ export async function saveEditedImage(ctx) {
   // them into whichever output shape this is — no per-shape branching.
   const outputCanvas = document.createElement("canvas");
   let compW, compH, outCtx, contentRect;
+  // The output's px per photo px: 1, except around a camera, where a big
+  // photo plays back at the camera picture's resolution (mockupOutputScale).
+  let outScale = 1;
 
   if (padActive) {
     const short = Math.min(contentSrc.width, contentSrc.height);
     // The user's margins, widened to the canvas ratio when one is set.
     const userPad = { top: 0, right: 0, bottom: 0, left: 0, ...(canvasPad || {}) };
-    const pad = resolveCanvasPad({ pad: userPad, aspect: canvasAspect }, contentSrc.width, contentSrc.height);
+    const pad = resolveCanvasPad({ pad: userPad, aspect: canvasAspect, mockup: canvasMockup }, contentSrc.width, contentSrc.height);
     const dims = getOutputDimensions({ width: fullW, height: fullH }, pad, normalizedCrop);
-    compW = dims.width;
-    compH = dims.height;
+    if (mockupAsset) outScale = mockupOutputScale(mockupAsset, canvasMockup, contentSrc.width, contentSrc.height);
+    compW = Math.max(1, Math.round(dims.width * outScale));
+    compH = Math.max(1, Math.round(dims.height * outScale));
     contentRect = {
-      x: pad.left * short,
-      y: pad.top * short,
-      width: contentSrc.width,
-      height: contentSrc.height,
+      x: pad.left * short * outScale,
+      y: pad.top * short * outScale,
+      width: contentSrc.width * outScale,
+      height: contentSrc.height * outScale,
     };
     outputCanvas.width = compW;
     outputCanvas.height = compH;
     outCtx = outputCanvas.getContext("2d");
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
+    const outShort = short * outScale;
     drawCanvasBackground(outCtx, canvasBg, {
-      W: compW, H: compH, source: content, contentRect, short, photoStyle: canvasPhoto,
+      W: compW, H: compH, source: content, contentRect, short: outShort, photoStyle: canvasPhoto,
       userPadPx: {
-        top: userPad.top * short, right: userPad.right * short,
-        bottom: userPad.bottom * short, left: userPad.left * short,
+        top: userPad.top * outShort, right: userPad.right * outShort,
+        bottom: userPad.bottom * outShort, left: userPad.left * outShort,
       },
     });
-    drawPhotoShadow(outCtx, contentRect, canvasPhoto, short);
-    outCtx.save();
-    clipToPhoto(outCtx, contentRect, canvasPhoto, short);
-    outCtx.drawImage(
-      content,
-      0, 0, content.width, content.height,
-      contentRect.x, contentRect.y, contentRect.width, contentRect.height,
-    );
-    outCtx.restore();
+    if (mockupAsset) {
+      // The photo plays back on the camera's display.
+      const image = await loadMockupImage(canvasMockup.id);
+      drawMockup(outCtx, { asset: mockupAsset, spec: canvasMockup, contentRect, photo: content, image });
+    } else {
+      drawPhotoShadow(outCtx, contentRect, canvasPhoto, short);
+      outCtx.save();
+      clipToPhoto(outCtx, contentRect, canvasPhoto, short);
+      outCtx.drawImage(
+        content,
+        0, 0, content.width, content.height,
+        contentRect.x, contentRect.y, contentRect.width, contentRect.height,
+      );
+      outCtx.restore();
+    }
   } else {
     compW = contentSrc.width;
     compH = contentSrc.height;
@@ -197,7 +213,7 @@ export async function saveEditedImage(ctx) {
     }
     const X = layer.x * fullW;
     const Y = layer.y * fullH;
-    const k = fullW / compW;
+    const k = (fullW * outScale) / compW;
     const resize = isSticker(layer)
       ? { scale: (layer.scale ?? 0.4) * k }
       : {
@@ -209,8 +225,8 @@ export async function saveEditedImage(ctx) {
         };
     return {
       ...layer,
-      x: (contentRect.x + X - contentSrc.x) / compW,
-      y: (contentRect.y + Y - contentSrc.y) / compH,
+      x: (contentRect.x + (X - contentSrc.x) * outScale) / compW,
+      y: (contentRect.y + (Y - contentSrc.y) * outScale) / compH,
       ...resize,
     };
   };

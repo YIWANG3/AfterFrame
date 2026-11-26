@@ -1,0 +1,214 @@
+// The camera-mockup frame: the photo played back on a camera's display
+// (frame-mockups/). Picking the template gives the photo its own camera (by
+// EXIF) or the generic one, black bars on the rest of the display; the camera,
+// the fit, the way it is held and the reflection change in the panel; the
+// export has the photo on the display. The fixture has a blue top half and an
+// orange bottom half, so the photo, the bars and the camera around them can be
+// told apart in the saved file.
+
+const { test, expect } = require("@playwright/test");
+const path = require("node:path");
+const fs = require("node:fs");
+const os = require("node:os");
+const sharp = require("sharp");
+const { launchApp, closeApp, waitForEditor, openEditorOn } = require("./helpers/app");
+
+const SRC_W = 1600, SRC_H = 1000;
+const BLUE = [40, 90, 200], ORANGE = [210, 120, 30];
+// Must live in e2e/fixtures/: the app's media:// allowlist covers it.
+const FIX = path.join(__dirname, "fixtures", "frame-mockup-1600.jpg");
+const FIX_TALL = path.join(__dirname, "fixtures", "frame-mockup-tall.jpg");
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-frame-mockup-"));
+const SHOTS = path.join(__dirname, "..", "test-results", "frame-mockup");
+
+async function makeFixture(file, w, h) {
+  const raw = Buffer.alloc(w * h * 3);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 3;
+      const c = y < h / 2 ? BLUE : ORANGE;
+      raw[i] = c[0]; raw[i + 1] = c[1]; raw[i + 2] = c[2];
+    }
+  }
+  await sharp(raw, { raw: { width: w, height: h, channels: 3 } }).jpeg({ quality: 95 }).toFile(file);
+}
+
+async function readPixels(file) {
+  const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
+  const at = (x, y) => {
+    const i = (Math.round(y) * info.width + Math.round(x)) * info.channels;
+    return [data[i], data[i + 1], data[i + 2]];
+  };
+  return { info, at };
+}
+const near = (c, ref, tol = 40) => c.every((v, i) => Math.abs(v - ref[i]) <= tol);
+const dark = (c) => Math.max(...c) < 40;
+
+test.describe("Camera mockup frame", () => {
+  let app, window, userDataDir;
+
+  test.beforeAll(async () => {
+    await makeFixture(FIX, SRC_W, SRC_H);
+    await makeFixture(FIX_TALL, SRC_H, SRC_W);
+    fs.mkdirSync(SHOTS, { recursive: true });
+    ({ app, window, userDataDir } = await launchApp({ testName: "frame-mockup" }));
+    await window.evaluate((p) => window.__afterframeTest.openEditor(p), FIX);
+    await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await waitForEditor(window, { preview: true });
+    await window.evaluate(() => window.__afterframeTest.setTool("frame"));
+    await expect(window.locator("[data-frame-templates]")).toBeVisible();
+  });
+  test.afterAll(async () => {
+    await closeApp(app, userDataDir);
+    fs.rmSync(tmp, { recursive: true, force: true });
+    for (const f of [FIX, FIX_TALL]) { try { fs.rmSync(f, { force: true }); } catch { /* ignore */ } }
+  });
+
+  const state = () => window.evaluate(() => window.__afterframeTest.getState());
+  const saveTo = async (name) => {
+    const p = path.join(tmp, name);
+    await window.evaluate(async (x) => { await window.__afterframeTest.saveAs(x); }, p);
+    expect(fs.existsSync(p)).toBe(true);
+    return p;
+  };
+  const clearToasts = async () => {
+    const toasts = window.getByTestId("toast-card");
+    for (let n = await toasts.count(); n > 0; n = await toasts.count()) {
+      await toasts.first().getByRole("button", { name: "Dismiss" }).click();
+    }
+  };
+  // Where the photo is in the saved file, from where the preview has it.
+  const photoInExport = (s, info) => {
+    const o = s.outputRect, c = s.outputContentRect;
+    const fx = (x) => ((x - o.x) / o.width) * info.width;
+    const fy = (y) => ((y - o.y) / o.height) * info.height;
+    return { x0: fx(c.x), y0: fy(c.y), x1: fx(c.x + c.width), y1: fy(c.y + c.height) };
+  };
+  const mockupCanvas = (id) => window.locator(`[data-frame-mockup="${id}"][data-mockup-ready="true"]`);
+
+  test("the template plays the photo back on the generic camera, with black bars, in the preview and the export", async () => {
+    // Its thumbnail renders, camera included.
+    await expect(window.locator('[data-frame-template="camera-screen"] img')).toBeVisible({ timeout: 15_000 });
+    await window.locator('[data-frame-template="camera-screen"] button').first().click();
+    // No camera in the photo's EXIF: the generic landscape one.
+    await expect.poll(async () => (await state()).canvasMockup).toEqual({
+      id: "hasselblad-907x", fit: "contain", rotation: "auto", reflection: false,
+    });
+    await expect(mockupCanvas("hasselblad-907x")).toBeVisible();
+    await expect(window.locator("[data-frame-mockup-controls]")).toBeVisible();
+    // The display has its own corners: no photo corner or shadow sliders.
+    await expect(window.locator("[data-frame-photo-style]")).toHaveCount(0);
+    await window.screenshot({ path: path.join(SHOTS, "generic.png") });
+
+    const s = await state();
+    // The camera is margin around the photo, on every side.
+    const o = s.outputRect, c = s.outputContentRect;
+    expect(c.x).toBeGreaterThan(o.x);
+    expect(c.y).toBeGreaterThan(o.y);
+    expect(c.x + c.width).toBeLessThan(o.x + o.width);
+    expect(c.y + c.height).toBeLessThan(o.y + o.height);
+    const out = await saveTo("generic.jpg");
+    const { info, at } = await readPixels(out);
+    const p = photoInExport(s, info);
+    const cx = (p.x0 + p.x1) / 2, h = p.y1 - p.y0;
+    expect(near(at(cx, p.y0 + h * 0.25), BLUE)).toBe(true);
+    expect(near(at(cx, p.y1 - h * 0.25), ORANGE)).toBe(true);
+    // A 16:10 photo on a 4:3 display: black bars above and below it.
+    expect(dark(at(cx, p.y0 - h * 0.04))).toBe(true);
+    expect(dark(at(cx, p.y1 + h * 0.04))).toBe(true);
+    // Far out from the photo: the frame's light background.
+    expect(Math.min(...at(4, 4))).toBeGreaterThan(220);
+  });
+
+  test("fill covers the display, the camera cuts the photo's overflow", async () => {
+    await clearToasts();
+    await window.locator("[data-frame-mockup-controls] button", { hasText: "Fill" }).click();
+    await expect.poll(async () => (await state()).canvasMockup?.fit).toBe("fill");
+    const s = await state();
+    const out = await saveTo("fill.jpg");
+    const { info, at } = await readPixels(out);
+    const p = photoInExport(s, info);
+    const cx = (p.x0 + p.x1) / 2, w = p.x1 - p.x0, h = p.y1 - p.y0;
+    // The display is filled to its top: photo where the bar was.
+    expect(near(at(cx, p.y0 + h * 0.03), BLUE)).toBe(true);
+    // The photo is wider than the display: its sides are under the camera.
+    expect(near(at(p.x0 + w * 0.02, p.y0 + h * 0.25), BLUE)).toBe(false);
+    // One undo step back to the bars.
+    await window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(async () => (await state()).canvasMockup?.fit).toBe("contain");
+  });
+
+  test("another camera, held upright, with a reflection", async () => {
+    await clearToasts();
+    await window.locator("[data-frame-mockup-camera]").selectOption("sony-a7-iv");
+    await expect.poll(async () => (await state()).canvasMockup?.id).toBe("sony-a7-iv");
+    await expect(mockupCanvas("sony-a7-iv")).toBeVisible();
+    const level = (await state()).outputRect;
+    expect(level.width).toBeGreaterThan(level.height);
+
+    await window.locator("[data-frame-mockup-controls] button", { hasText: "Upright" }).click();
+    await expect.poll(async () => (await state()).canvasMockup?.rotation).toBe(-90);
+    const upright = (await state()).outputRect;
+    expect(upright.height).toBeGreaterThan(upright.width);
+
+    await window.locator("[data-frame-mockup-reflection] [role=switch]").click();
+    await expect.poll(async () => (await state()).canvasMockup?.reflection).toBe(true);
+    await window.screenshot({ path: path.join(SHOTS, "upright-reflection.png") });
+  });
+
+  test("a canvas ratio widens the margins around the camera", async () => {
+    await clearToasts();
+    await window.locator("[data-frame-aspect]").getByRole("button", { name: "3:4" }).click();
+    await expect.poll(async () => (await state()).canvasAspect).toBe("3:4");
+    const out = await saveTo("ratio.jpg");
+    const { info } = await readPixels(out);
+    expect(info.width / info.height).toBeCloseTo(3 / 4, 2);
+    // A big photo is drawn at the camera picture's resolution, not blown up around it.
+    expect(Math.max(info.width, info.height)).toBeLessThan(4000);
+  });
+
+  test("another template takes the camera away", async () => {
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
+    await expect.poll(async () => (await state()).canvasMockup).toBe(null);
+    await expect(window.locator("[data-frame-mockup]")).toHaveCount(0);
+    await expect(window.locator("[data-frame-mockup-controls]")).toHaveCount(0);
+  });
+
+  test("a portrait photo gets the camera held upright", async () => {
+    await window.evaluate(() => window.__afterframeTest.closeEditor());
+    await window.evaluate((p) => window.__afterframeTest.openEditor(p), FIX_TALL);
+    await waitForEditor(window, { preview: true });
+    await window.evaluate(() => window.__afterframeTest.setTool("frame"));
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("camera-screen"));
+    await expect.poll(async () => (await state()).canvasMockup?.id).toBe("leica-m11-p");
+    await expect(mockupCanvas("leica-m11-p")).toBeVisible();
+    const s = await state();
+    expect(s.canvasMockup.rotation).toBe("auto");
+    expect(s.outputRect.height).toBeGreaterThan(s.outputRect.width);
+    await expect(window.locator("[data-frame-mockup-controls] button", { hasText: "Upright" })).toHaveAttribute("aria-pressed", "true");
+    await window.screenshot({ path: path.join(SHOTS, "portrait.png") });
+  });
+
+  test("a photo gets its own camera by EXIF, the signature under it", async () => {
+    await window.evaluate(() => window.__afterframeTest.closeEditor());
+    const row = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 })
+      .then((rows) => rows.find((r) => r.stem === "0Y1A6707-9"))); // Canon R6 Mark II, 2400×1600
+    await openEditorOn(window, row, "frame");
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("camera-screen"));
+    await expect.poll(async () => (await state()).canvasMockup?.id).toBe("canon-eos-r6-ii");
+    await expect(mockupCanvas("canon-eos-r6-ii")).toBeVisible();
+    const s = await state();
+    const sig = s.layers.find((l) => l.fromPreset && l.text === "Canon EOS R6 Mark II");
+    expect(sig).toBeTruthy();
+    // Layers are in the photo's coordinates: the signature is below the photo,
+    // under the camera's body.
+    expect(sig.y).toBeGreaterThan(1.05);
+    await window.screenshot({ path: path.join(SHOTS, "canon.png") });
+
+    // A camera chosen by hand lays the frame out again around it.
+    await window.locator("[data-frame-mockup-camera]").selectOption("fujifilm-x100vi");
+    await expect.poll(async () => (await state()).canvasMockup?.id).toBe("fujifilm-x100vi");
+    const after = (await state()).layers.find((l) => l.fromPreset && l.text === "Canon EOS R6 Mark II");
+    expect(after.y).not.toBeCloseTo(sig.y, 3);
+  });
+});

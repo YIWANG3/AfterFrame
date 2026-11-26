@@ -24,6 +24,10 @@ import {
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
 import { bgUsesPhoto, photoPalette, photoStyleCss } from "./editor/render/frameBackdrop";
 import FrameBackgroundCanvas from "./editor/components/FrameBackgroundCanvas";
+import MockupCanvas from "./editor/components/MockupCanvas";
+import { mockupRotation } from "./editor/render/mockupLayout";
+import { layoutRef } from "./editor/render/frameRender";
+import { isUserTemplate } from "./editor/frameUserTemplates";
 import { createOverlayLayer } from "./editor/textState";
 import { isFrameLayer } from "./editor/layerStack";
 import { bakeCrop } from "./editor/render/bakeCrop";
@@ -73,6 +77,7 @@ import {
   getOutputView,
   clampImagePlacement,
   canvasActive,
+  canvasMockupAsset,
   effectiveCanvasPad,
   hasPad,
   layersToDisplay,
@@ -96,7 +101,8 @@ function padEquals(a, b) {
 
 // Margins and ratio: what changes the framed canvas's shape (and so the fit).
 function canvasShapeEquals(a, b) {
-  return padEquals(a?.pad, b?.pad) && (a?.aspect ?? null) === (b?.aspect ?? null);
+  const m = (c) => (c?.mockup ? `${c.mockup.id}|${c.mockup.fit}|${c.mockup.rotation}` : null);
+  return padEquals(a?.pad, b?.pad) && (a?.aspect ?? null) === (b?.aspect ?? null) && m(a) === m(b);
 }
 
 const SPLIT_DIR_PREF = "split.outputDir";
@@ -666,6 +672,8 @@ export default function EditorOverlay({
   // crop-space photo. The canvas element remounts when the mode flips, so the
   // draw effect keys on it too.
   const padActive = canvasActive(editorState.canvas);
+  // The camera the photo plays back on, when the frame has one.
+  const mockupAsset = canvasMockupAsset(editorState.canvas);
   const screenOutputView = layerTool ? transformOutputView(outputView, viewTransform) : outputView;
   const screenOutputRect = screenOutputView?.rect ?? null;
   const screenImageRect = tool === "split"
@@ -772,6 +780,7 @@ export default function EditorOverlay({
     canvasScrim: editorState.canvas?.scrim,
     canvasAspect: editorState.canvas?.aspect ?? null,
     canvasPhoto: editorState.canvas?.photo ?? null,
+    canvasMockup: editorState.canvas?.mockup ?? null,
     layers,
     depthFieldCanvas: depthFieldCanvasRef.current,
     depthFeather,
@@ -853,8 +862,8 @@ export default function EditorOverlay({
     const s = editorStateRef.current;
     const nextPad = res ? res.pad : { top: 0, right: 0, bottom: 0, left: 0 };
     const nextState = res
-      ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: null, aspect: keptCanvas(res, "aspect"), photo: keptCanvas(res, "photo") } }
-      : { ...s, canvas: { ...s.canvas, pad: nextPad, bg: null, scrim: null, aspect: null, photo: null } };
+      ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: null, aspect: keptCanvas(res, "aspect"), photo: keptCanvas(res, "photo"), mockup: res.mockup ?? null } }
+      : { ...s, canvas: { ...s.canvas, pad: nextPad, bg: null, scrim: null, aspect: null, photo: null, mockup: null } };
     presetCanvasRef.current = res
       ? Object.fromEntries(PRESET_CANVAS_KEYS.filter((k) => res[k] !== undefined).map((k) => [k, res[k]]))
       : {};
@@ -878,20 +887,48 @@ export default function EditorOverlay({
     setTool("frame");
   }
 
+  // The template last applied: a change to its camera lays it out again.
+  const lastPresetRef = useRef(null);
+
   async function applyFramePreset(tpl) {
     const res = await frameToolRef.current?.generatePresetLayers?.(tpl);
     if (!res) return;
+    lastPresetRef.current = tpl;
     // The template's colours, where they would not read on its background
     // (a saved template's dark text on a dark blurred photo), as one step
     // with the template.
     const adapted = await adaptFrameColors(res.layers, {
-      pad: res.pad, bg: res.bg, aspect: keptCanvas(res, "aspect"), photo: keptCanvas(res, "photo"),
+      pad: res.pad, bg: res.bg, aspect: keptCanvas(res, "aspect"), photo: keptCanvas(res, "photo"), mockup: res.mockup ?? null,
     });
     setCanvasPreset(adapted ? { ...res, layers: adapted } : res);
   }
 
   function clearFramePreset() {
+    lastPresetRef.current = null;
     setCanvasPreset(null);
+  }
+
+  // Another camera, fit, way of holding it or reflection. The camera's body
+  // decides where the frame's text goes, so the template is laid out again
+  // around it, with the margins and background as they are now.
+  async function changeMockup(patch) {
+    const s = editorStateRef.current;
+    const cur = s.canvas?.mockup;
+    if (!cur) return;
+    const mockup = { ...cur, ...patch };
+    const tpl = lastPresetRef.current;
+    if (!tpl?.canvas?.mockup) {
+      recordCanvas({ mockup });
+      return;
+    }
+    // A built-in template's margins are in its own layout unit, a saved one's
+    // in the editor's (the photo's short edge).
+    const unit = isUserTemplate(tpl) ? 1 : layoutRef(1, 1);
+    const pad = Object.fromEntries(Object.entries(s.canvas?.pad || {}).map(([edge, v]) => [edge, (v || 0) / unit]));
+    const res = await frameToolRef.current?.generatePresetLayers?.({
+      ...tpl, canvas: { ...tpl.canvas, mockup, pad, ...(s.canvas?.bg ? { bg: s.canvas.bg } : {}) },
+    });
+    if (res) setCanvasPreset(res);
   }
 
   const {
@@ -1125,6 +1162,8 @@ export default function EditorOverlay({
                     left: `${composedView.contentRect.x}px`, top: `${composedView.contentRect.y}px`,
                     width: `${composedView.contentRect.width}px`, height: `${composedView.contentRect.height}px`,
                     ...photoStyleCss(editorState.canvas?.photo, Math.min(composedView.contentRect.width, composedView.contentRect.height)),
+                    // On a camera the mockup draws the photo, on its display.
+                    ...(mockupAsset ? { visibility: "hidden" } : {}),
                   }}
                 >
                   <div
@@ -1156,6 +1195,16 @@ export default function EditorOverlay({
                     )}
                   </div>
                 </div>
+                {mockupAsset && (
+                  <MockupCanvas
+                    rect={composedView.rect}
+                    contentRect={composedView.contentRect}
+                    spec={editorState.canvas.mockup}
+                    source={transformedPreview}
+                    srcRect={previewContentRect}
+                    freeAngle={freeAngle}
+                  />
+                )}
               </>
             ) : (
               /* Rotating image layer — only the image rotates */
@@ -1371,6 +1420,11 @@ export default function EditorOverlay({
                 onCanvasAspect={(aspect) => recordCanvas({ aspect })}
                 onCanvasPhoto={applyCanvasPhoto}
                 onCanvasPhotoCommit={() => recordState(editorStateRef.current)}
+                canvasMockup={mockupAsset ? editorState.canvas.mockup : null}
+                mockupRotation={mockupAsset && previewContentRect
+                  ? mockupRotation(mockupAsset, editorState.canvas.mockup, previewContentRect.width, previewContentRect.height)
+                  : 0}
+                onCanvasMockup={changeMockup}
               />
             ) : tool === "split" ? (
               <SplitPanel

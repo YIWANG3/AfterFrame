@@ -316,7 +316,7 @@ export function useFramePlacement({
       // Only the frame: what is written on the photo stays with the photo.
       const res = await frameToolRef.current?.saveTemplate?.(name, {
         layers: layersRef.current.filter(isFrameLayer), pad: s.canvas?.pad || {}, bg: s.canvas?.bg || null,
-        aspect: s.canvas?.aspect ?? null, photo: s.canvas?.photo ?? null,
+        aspect: s.canvas?.aspect ?? null, photo: s.canvas?.photo ?? null, mockup: s.canvas?.mockup ?? null,
       });
       if (!res) return;
       pushToast?.({

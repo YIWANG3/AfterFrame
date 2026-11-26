@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { coveredFieldsFromLogoVariants, fitLogoBounds, geometry, layoutRef, onPhotoPixels, resolveTokens } from "./frameRender";
-import { FRAME_TEMPLATES } from "../frameTemplates";
+import { FRAME_TEMPLATES, MOCKUP_TEMPLATE_ID } from "../frameTemplates";
+import { mockupById } from "../mockups";
+import { resolveCanvasPad } from "../imageMath";
+import { mockupBodyPad } from "./mockupLayout";
+import { withMockupFor } from "./mockupRender";
 
 describe("frame logo bounds", () => {
   it("moves a rotated wordmark down when its top edge would be clipped", () => {
@@ -135,5 +139,33 @@ describe("text over photo pixels", () => {
 
   it("keeps the first built-in (the default an agent gets) as it was", () => {
     expect(FRAME_TEMPLATES[0].id).toBe("bar-id");
+  });
+});
+
+describe("camera mockup frame", () => {
+  const tpl = FRAME_TEMPLATES.find((t) => t.id === MOCKUP_TEMPLATE_ID);
+  const photo = { width: 3000, height: 2000 };
+  const settled = withMockupFor(tpl, { make: "Canon", camera_model: "Canon EOS R5" }, photo.width, photo.height);
+
+  it("settles the photo's own camera", () => {
+    expect(settled.canvas.mockup.id).toBe("canon-eos-r5");
+  });
+
+  it("puts the template's margins around the camera, not the photo", () => {
+    const g = geometry(photo, settled, { text: 1, margin: 1 });
+    const body = mockupBodyPad(mockupById("canon-eos-r5"), settled.canvas.mockup, photo.width, photo.height);
+    for (const edge of ["top", "right", "bottom", "left"]) {
+      expect(g.bandPx[edge]).toBeCloseTo((tpl.canvas.pad[edge] || 0) * g.wref);
+      expect(g.padPx[edge]).toBeCloseTo(g.bandPx[edge] + body[edge]);
+    }
+  });
+
+  it("lays the canvas out as the editor does", () => {
+    const g = geometry(photo, settled, { text: 1, margin: 1 });
+    const short = Math.min(photo.width, photo.height);
+    const k = g.wref / short;
+    const userPad = Object.fromEntries(Object.entries(tpl.canvas.pad).map(([edge, v]) => [edge, v * k]));
+    const editor = resolveCanvasPad({ pad: userPad, mockup: settled.canvas.mockup }, photo.width, photo.height);
+    for (const edge of ["top", "right", "bottom", "left"]) expect(editor[edge] * short).toBeCloseTo(g.padPx[edge]);
   });
 });

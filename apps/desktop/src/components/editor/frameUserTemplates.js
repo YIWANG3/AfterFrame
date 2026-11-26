@@ -19,6 +19,8 @@ import { formatExif, resolveTokens } from "./render/frameRender";
 import { drawLayersOnCanvas } from "./render/drawLayers";
 import { clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./render/frameBackdrop";
 import { resolveCanvasPad } from "./imageMath";
+import { mockupById, mockupImageIfLoaded } from "./mockups";
+import { drawMockup, photoForMockup, withMockupFor } from "./render/mockupRender";
 
 export const USER_TEMPLATE_PREFIX = "user:";
 const USER_TEMPLATE_VERSION = 1;
@@ -133,7 +135,7 @@ function textBox(layer, fontPx, measure) {
  * @returns {{ template: object, skipped: number }} skipped: stickers that exist only as
  *   pixels in a data: URL (a handwriting sticker) and cannot travel in a template
  */
-export function templateFromLayers({ id, name, layers, geom, pad, bg, aspect = null, photo = null, measure }) {
+export function templateFromLayers({ id, name, layers, geom, pad, bg, aspect = null, photo = null, mockup = null, measure }) {
   const g = geom;
   const saved = [];
   let skipped = 0;
@@ -186,6 +188,7 @@ export function templateFromLayers({ id, name, layers, geom, pad, bg, aspect = n
         bg: bg ? JSON.parse(JSON.stringify(bg)) : null,
         aspect: aspect ?? null,
         photo: photo ? { ...photo } : null,
+        ...(mockup ? { mockup: { ...mockup } } : {}),
       },
       layers: saved,
     },
@@ -251,7 +254,11 @@ export function layersFromTemplate(tpl, { geom, exif, profile, measure, logoFor 
  * stickers must already be in `stickerImages` (keyed by path); logos are added
  * as logoFor returns them.
  */
-export function renderUserTemplate({ photo, template, exif, profile, measure, logoFor, stickerImages = new Map() }) {
+export function renderUserTemplate({ photo: given, template: asGiven, exif, profile, measure, logoFor, stickerImages = new Map() }) {
+  // A camera mockup: settled for this photo, its picture loaded beforehand
+  // (prepareMockup), a big photo brought down to the camera's resolution.
+  const template = withMockupFor(asGiven, exif, given.naturalWidth || given.width, given.naturalHeight || given.height);
+  const photo = photoForMockup(template, given);
   const fullW = photo.naturalWidth || photo.width;
   const fullH = photo.naturalHeight || photo.height;
   // The template's margins, widened to its ratio when it has one.
@@ -272,11 +279,17 @@ export function renderUserTemplate({ photo, template, exif, profile, measure, lo
       bottom: userPad.bottom * g.short, left: userPad.left * g.short,
     },
   });
-  drawPhotoShadow(ctx, contentRect, photoStyle, g.short);
-  ctx.save();
-  clipToPhoto(ctx, contentRect, photoStyle, g.short);
-  ctx.drawImage(photo, g.left, g.top, g.contentW, g.contentH);
-  ctx.restore();
+  const mockup = template.canvas?.mockup;
+  const asset = mockup ? mockupById(mockup.id) : null;
+  if (asset) {
+    drawMockup(ctx, { asset, spec: mockup, contentRect, photo, image: mockupImageIfLoaded(mockup.id) });
+  } else {
+    drawPhotoShadow(ctx, contentRect, photoStyle, g.short);
+    ctx.save();
+    clipToPhoto(ctx, contentRect, photoStyle, g.short);
+    ctx.drawImage(photo, g.left, g.top, g.contentW, g.contentH);
+    ctx.restore();
+  }
   const images = new Map(stickerImages);
   const layers = layersFromTemplate(template, {
     geom: g, exif, profile, measure,

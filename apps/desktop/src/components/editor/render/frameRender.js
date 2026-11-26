@@ -14,6 +14,9 @@ import { FRAME_FONTS } from "../frameTemplates";
 import { brandIdForExif, logoHeightFor, pickVariant } from "./frameLogos";
 import { bgUsesPhoto, clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./frameBackdrop";
 import { resolveCanvasPad } from "../imageMath";
+import { mockupById, mockupImageIfLoaded } from "../mockups";
+import { mockupBodyPad } from "./mockupLayout";
+import { drawMockup, photoForMockup, withMockupFor } from "./mockupRender";
 import {
   formatAperture, formatShutterSpeed, formatFocalLength, formatISO,
 } from "../../../utils/format";
@@ -93,7 +96,10 @@ export function coveredFieldsFromLogoVariants(variants) {
 // align. `region` selects which padding band; h/v place within it; inset is a
 // margin from the edges; dy nudges vertically. All fractions are of WREF.
 function resolveAnchor(anchor, geom, adjust) {
-  const { outW, outH, padPx, wref } = geom;
+  const { outW, outH, wref } = geom;
+  // Around a camera mockup the bands are the margins outside the camera, not
+  // the camera's own body around the photo.
+  const padPx = geom.bandPx || geom.padPx;
   const m = adjust?.margin ?? 1; // offsets scale with the band so layout stays proportional
   const inset = (anchor.inset ?? 0.05) * wref * m;
   const dy = (anchor.dy ?? 0) * wref * m;
@@ -232,6 +238,18 @@ export function geometry(photo, template, adjust) {
     bottom: (pad.bottom || 0) * wref * m,
     left: (pad.left || 0) * wref * m,
   };
+  // A camera mockup: the template's margins go around the camera, whose body
+  // reaches out from the photo by its own margins (the same ones the editor
+  // adds in resolveCanvasPad).
+  const mockup = template.canvas?.mockup;
+  const asset = mockup ? mockupById(mockup.id) : null;
+  const body = asset ? mockupBodyPad(asset, mockup, photoW, href) : null;
+  if (body) {
+    padPx = {
+      top: padPx.top + body.top, right: padPx.right + body.right,
+      bottom: padPx.bottom + body.bottom, left: padPx.left + body.left,
+    };
+  }
   // A template with a canvas ratio (a 9:16 story): the margins widen on the
   // narrow axis, the same way the editor lays a ratio out (resolveCanvasPad),
   // and the elements anchor in the widened bands.
@@ -245,7 +263,11 @@ export function geometry(photo, template, adjust) {
   }
   const outW = Math.round(photoW + padPx.left + padPx.right);
   const outH = Math.round(href + padPx.top + padPx.bottom);
-  return { wref, photoW, href, padPx, outW, outH };
+  const bandPx = body ? {
+    top: padPx.top - body.top, right: padPx.right - body.right,
+    bottom: padPx.bottom - body.bottom, left: padPx.left - body.left,
+  } : null;
+  return { wref, photoW, href, padPx, outW, outH, bandPx };
 }
 
 /** Is the template's text drawn over photo pixels: on the photo itself (the
@@ -264,6 +286,13 @@ export function drawFrameBase(ctx, template, photo, g) {
   const rect = { x: g.padPx.left, y: g.padPx.top, width: g.photoW, height: g.href };
   const photoStyle = template.canvas?.photo;
   drawCanvasBackground(ctx, template.canvas?.bg, { W: g.outW, H: g.outH, source: photo, short });
+  const mockup = template.canvas?.mockup;
+  const asset = mockup ? mockupById(mockup.id) : null;
+  if (asset) {
+    // The photo plays back on the camera's display instead.
+    drawMockup(ctx, { asset, spec: mockup, contentRect: rect, photo, image: mockupImageIfLoaded(mockup.id) });
+    return;
+  }
   drawPhotoShadow(ctx, rect, photoStyle, short);
   ctx.save();
   clipToPhoto(ctx, rect, photoStyle, short);
@@ -512,7 +541,12 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
  * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
  * @returns {HTMLCanvasElement}
  */
-export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor }) {
+export function renderFrame({ photo: given, exif = {}, profile = {}, template: asGiven, registry, logoImages = new Map(), adjust, logoColor }) {
+  // A camera mockup: the camera settled for this photo (its picture must have
+  // been loaded: prepareMockup), and a big photo brought down to the camera's
+  // resolution instead of the camera blown up.
+  const template = withMockupFor(asGiven, exif, given.naturalWidth || given.width, given.naturalHeight || given.height);
+  const photo = photoForMockup(template, given);
   const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
   const g = geometry(photo, template, adj);
   const { wref, outW, outH } = g;

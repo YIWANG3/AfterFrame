@@ -16,7 +16,33 @@
 // logo: `variant` picks symbol|wordmark; `strict` skips (vs. falls back) when a
 //   brand lacks that variant; `color` tints a mono mark; `rotation` for side text.
 
+import { mockupsAvailable } from "./mockups";
+
 const INK = "#1a1a1a", SUB = "#9a9a9a", WHITE = "#f4f4f4";
+
+export const MOCKUP_TEMPLATE_ID = "camera-screen";
+
+// ───────────────────────── 机模 Camera screen ─────────────────────────
+// The photo played back on a camera's display (frame-mockups/): the photo's
+// own camera when there is a picture of it, black bars on the rest of the
+// display, a small signature line under the camera. The margins go around
+// the camera; its body around the photo is added by the mockup itself.
+const MOCKUP_TEMPLATE = {
+  id: MOCKUP_TEMPLATE_ID, name: "机模 · 相机屏幕", family: "mockup",
+  canvas: {
+    mockup: { id: "auto", fit: "contain", rotation: "auto", reflection: false },
+    pad: { top: 0.1, left: 0.1, right: 0.1, bottom: 0.2 },
+    bg: { type: "solid", color: "#f4f3ef" },
+  },
+  elements: [
+    { type: "text", content: "{camera_model}", group: "sig",
+      anchor: { region: "bottom", h: "center", v: "center" },
+      style: { font: "grotesk", weight: 500, size: 0.028, color: INK, tracking: 0.02 } },
+    { type: "exif", fields: ["focal", "aperture", "shutter", "iso"], group: "sig",
+      anchor: { region: "bottom", h: "center", v: "center" },
+      style: { font: "grotesk", weight: 400, size: 0.02, color: SUB, tracking: 0.04 } },
+  ],
+};
 
 export const FRAME_TEMPLATES = [
   // ───────────────────────── 信息条 Bar ─────────────────────────
@@ -80,6 +106,9 @@ export const FRAME_TEMPLATES = [
         style: { font: "grotesk", weight: 400, size: 0.0145, color: "#8a8a8a" } },
     ],
   },
+
+  // Without frame-mockups/ (deleted) there is no camera to offer.
+  ...(mockupsAvailable ? [MOCKUP_TEMPLATE] : []),
 
   // ───────────────────────── 照片底色 Photo backgrounds ─────────────────────────
   // The margin is the photo blurred or the photo's own colours (bg in the

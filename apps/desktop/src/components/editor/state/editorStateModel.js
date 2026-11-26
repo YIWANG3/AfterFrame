@@ -21,7 +21,10 @@ export const BASE_STATE = {
   // `aspect` ("9:16"…, null = the photo's shape) widens the margins until the
   // output has that ratio; `photo` rounds the photo's corners and gives it a
   // drop shadow ({ radius, shadow }, 0..100 each; null = neither).
-  canvas: { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null, aspect: null, photo: null },
+  // `mockup` plays the photo back on a camera's display ({ id, fit, rotation,
+  // reflection }, see render/mockupLayout.js; null = no camera): the camera's
+  // body is margin the pad goes around.
+  canvas: { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null, aspect: null, photo: null, mockup: null },
   // Seamless split (docs/split-carousel-plan.md): panel aspect preset, panel
   // count (null = automatic from the photo's shape) and the covered region as
   // FRACTIONS of the transformed photo, so it survives viewport resizes.
@@ -90,15 +93,20 @@ function scrimEquals(a, b) {
     gradientEquals(a.gradient ?? null, b.gradient ?? null);
 }
 
+function mockupEquals(a, b) {
+  if (!a || !b) return (a ?? null) === (b ?? null);
+  return a.id === b.id && a.fit === b.fit && a.rotation === b.rotation && !!a.reflection === !!b.reflection;
+}
+
 function canvasEquals(a, b) {
   if (!a || !b) return a === b;
   return bgEquals(a.bg ?? null, b.bg ?? null) && padEquals(a.pad, b.pad) &&
     scrimEquals(a.scrim ?? null, b.scrim ?? null) && (a.aspect ?? null) === (b.aspect ?? null) &&
-    photoStyleEquals(a.photo ?? null, b.photo ?? null);
+    photoStyleEquals(a.photo ?? null, b.photo ?? null) && mockupEquals(a.mockup ?? null, b.mockup ?? null);
 }
 
 function cloneCanvas(canvas) {
-  if (!canvas) return { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null, aspect: null, photo: null };
+  if (!canvas) return { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null, aspect: null, photo: null, mockup: null };
   const cloneGradient = (g) => (g ? { ...g, ...(g.stops ? { stops: g.stops.map((s) => ({ ...s })) } : {}) } : g);
   const bg = canvas.bg
     ? { ...canvas.bg, ...(canvas.bg.gradient ? { gradient: cloneGradient(canvas.bg.gradient) } : {}) }
@@ -109,6 +117,7 @@ function cloneCanvas(canvas) {
   return {
     pad: { ...canvas.pad }, bg, scrim, aspect: canvas.aspect ?? null,
     photo: canvas.photo ? { ...canvas.photo } : null,
+    mockup: canvas.mockup ? { ...canvas.mockup } : null,
   };
 }
 
