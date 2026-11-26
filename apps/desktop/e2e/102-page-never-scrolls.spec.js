@@ -19,8 +19,7 @@ const BIG = Array.from({ length: 10 }, (_, i) => `zz-big-${String(i + 1).padStar
 let ctx;
 
 test.beforeAll(async () => {
-  // A 2400px photo, ten times: with the 14 seeded files that is a filmstrip
-  // short enough to fit the window, so the strip itself cannot scroll.
+  // A 2400px photo, ten times.
   ctx = await launchApp({
     testName: "page-never-scrolls",
     prepareCatalog: (dir) => cloneAssets(dir, BIG, { source: "0Y1A6707-9" }),
@@ -34,12 +33,10 @@ test.afterAll(async () => {
 
 test("opening a big photo at the right end of a short filmstrip leaves the app where it is", async () => {
   const { window } = ctx;
-  // Oldest first, so the clones (imported last) take the strip's right end.
-  const sortButton = window.getByRole("button", { name: /^(Imported|Captured|Added|Name|Rating)/ }).first();
-  await sortButton.click();
-  await window.getByRole("button", { name: "Imported ↑", exact: true }).click();
-  await expect(sortButton).toHaveText("Imported ↑");
-  await expect(galleryCards(window).last()).toHaveAttribute("data-asset-id", /^image_zz_big_/);
+  // Only the ten: a filmstrip that fits the window with room to spare, so the
+  // strip itself cannot scroll and its last thumbnails sit right of the middle.
+  await window.getByPlaceholder("Search", { exact: true }).fill("zz-big");
+  await expect(galleryCards(window)).toHaveCount(BIG.length);
 
   // Every scroll of the page itself, and #root's left edge on every frame.
   await window.evaluate(() => {
@@ -65,7 +62,9 @@ test("opening a big photo at the right end of a short filmstrip leaves the app w
     await expect(card).toHaveAttribute("data-asset-id", /^image_zz_big_/);
     await card.dblclick();
     await expect(viewport).toBeVisible();
-    await expect(window.locator("[data-lightbox-control='bottom'] [data-on='true']")).toBeVisible();
+    // The strip may be hidden until the pointer comes near; it is laid out
+    // and centres its thumbnail all the same.
+    await expect(window.locator("[data-lightbox-control='bottom'] [data-on='true']")).toHaveCount(1);
     // The full-size layer has replaced the preview, and the strip's smooth
     // scroll has had time to run.
     await expect(viewport.locator("[data-lightbox-layer='detail']")).toHaveCSS("visibility", "visible", { timeout: 10_000 });
