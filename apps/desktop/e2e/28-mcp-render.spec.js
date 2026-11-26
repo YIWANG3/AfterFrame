@@ -139,6 +139,20 @@ test.describe("MCP render bridge tools", () => {
     expect(derived.version_kind).toBe("derived");
   });
 
+  test("apply_frame: the camera-screen template plays the photo back on a camera", async () => {
+    const caps = await callToolOk(ctx.mcpPort, "get_editor_capabilities", {});
+    expect(caps.frame_templates.map((t) => t.id)).toContain("camera-screen");
+    const srcId = photoIds[1];
+    const out = await callToolOk(ctx.mcpPort, "apply_frame", { asset_ids: [srcId], template: "camera-screen" });
+    const result = out.results[0];
+    expect(result.error, JSON.stringify(out)).toBeUndefined();
+    const meta = await imageMeta(result.path);
+    // Drawn at the camera picture's resolution: the camera and its margins
+    // around the photo, not the photo blown up to full size.
+    expect(meta.width).toBeGreaterThan(300);
+    expect(Math.max(meta.width, meta.height)).toBeLessThan(4000);
+  });
+
   test("apply_frame rejects an unknown template with the valid ids", async () => {
     const out = await callToolOk(ctx.mcpPort, "apply_frame", { asset_ids: [photoIds[0]], template: "nope" });
     expect(out.results[0].error).toContain("unknown frame template");

@@ -20,6 +20,7 @@ import { labelledExif, loadLogoRegistry, prepareLogoNeed } from "../components/e
 import { renderFrame, collectLogoNeeds } from "../components/editor/render/frameRender";
 import { exifFromItem } from "../components/editor/state/useFrameTool";
 import { isUserTemplate, logoElementOf, renderUserTemplate } from "../components/editor/frameUserTemplates";
+import { prepareMockup } from "../components/editor/render/mockupRender";
 import { ensurePersonalLogos, isPersonalLogoRef, personalLogoKey } from "../components/editor/render/personalLogos";
 import api from "../api";
 
@@ -203,8 +204,8 @@ const userFrameTemplates = async () => (await api.listFrameTemplates?.().catch((
 async function handleFrame(payload) {
   const { imagePath, templateId, exifItem, savePath } = payload;
   const mine = await userFrameTemplates();
-  const template = FRAME_TEMPLATES.find((t) => t.id === templateId) || mine.find((t) => t.id === templateId);
-  if (!template) {
+  const found = FRAME_TEMPLATES.find((t) => t.id === templateId) || mine.find((t) => t.id === templateId);
+  if (!found) {
     const valid = [...FRAME_TEMPLATES, ...mine].map((t) => t.id).join(", ");
     throw new Error(`unknown frame template '${templateId}' — valid: ${valid}`);
   }
@@ -215,6 +216,8 @@ async function handleFrame(payload) {
   const logos = await loadLogoRegistry();
   const { registry, svgs } = logos;
   const exif = labelledExif(exifFromItem(exifItem || {}), logos);
+  // A camera mockup: the photo's own camera, its picture loaded.
+  const template = await prepareMockup(found, exif, photo.naturalWidth, photo.naturalHeight);
   const logoImages = new Map();
   if (typeof document !== "undefined" && document.fonts?.ready) {
     try { await document.fonts.ready; } catch { /* fonts are best-effort */ }

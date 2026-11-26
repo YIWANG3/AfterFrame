@@ -8,6 +8,8 @@ import {
 import HandwritingModal from "./handwriting/HandwritingModal";
 import { SliderRow, TextArea, Toggle } from "../../ui";
 import BorderControls from "./components/BorderControls";
+import MockupControls from "./components/MockupControls";
+import { mockupHidesPhoto } from "./render/mockupLayout";
 import FooterButton from "./components/FooterButton";
 import MyLogosRow from "./components/MyLogosRow";
 import CameraLogosBlock from "./components/CameraLogosBlock";
@@ -112,6 +114,12 @@ export default function TextPanel({
   onCanvasPhoto,
   onCanvasPhotoCommit,
   bgPalette,
+  // The camera the photo plays back on (null: none), the quarter turn it has
+  // on this photo, and a change to it.
+  canvasMockup = null,
+  mockupRotation = 0,
+  mockupMissing = null,
+  onCanvasMockup,
 }) {
   const { t } = useTranslation("editor");
   const frameMode = mode === "frame";
@@ -317,11 +325,17 @@ export default function TextPanel({
                 onDeleteTemplate={onDeleteTemplate}
               />
             </Section>
+            {canvasMockup && (
+              <Section label={t("border.mockup.title")}>
+                <MockupControls mockup={canvasMockup} rotation={mockupRotation} missing={mockupMissing} onChange={onCanvasMockup} />
+              </Section>
+            )}
             <Section label={t("frame.canvas")}>
               <BorderControls
                 part="canvas" pad={canvasPad} onPad={onCanvasPad} onPadCommit={onCanvasPadCommit} bg={canvasBg} onBg={onCanvasBg}
                 aspect={canvasAspect} onAspect={onCanvasAspect}
-                photo={canvasPhoto} onPhoto={onCanvasPhoto} onPhotoCommit={onCanvasPhotoCommit}
+                // On a camera's display the photo has the display's corners.
+                photo={canvasPhoto} onPhoto={canvasMockup && mockupHidesPhoto(canvasMockup) ? undefined : onCanvasPhoto} onPhotoCommit={onCanvasPhotoCommit}
                 palette={bgPalette}
               />
             </Section>

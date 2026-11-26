@@ -18,6 +18,8 @@ import {
 } from "../frameUserTemplates";
 import { localFileUrl } from "../../../utils/format";
 import { ensurePersonalLogos, isPersonalLogoRef, personalLogoKey } from "../render/personalLogos";
+import { prepareMockup } from "../render/mockupRender";
+import { mockupMatchFor, pickMockupId } from "../mockups";
 
 // The choices a registry was read with (or a profile holds): logos per brand
 // and model, and the user's camera names.
@@ -329,8 +331,9 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       let repAspect = small.width / small.height;
       for (const tpl of FRAME_TEMPLATES) {
         await ensureLogos(logos, tpl, small.height);
+        const ready = await prepareMockup(tpl, labelledExif(exif, logos), small.width, small.height);
         if (!alive) return;
-        const framed = renderFrame({ photo: small, exif: labelledExif(exif, logos), profile, template: tpl, registry: logos.registry, logoImages: logoCacheRef.current });
+        const framed = renderFrame({ photo: small, exif: labelledExif(exif, logos), profile, template: ready, registry: logos.registry, logoImages: logoCacheRef.current });
         // Size uniform cells to the first (dominant "bar") template's actual
         // output, so cells adapt to the photo orientation and waste little space.
         if (tpl.id === FRAME_TEMPLATES[0].id) repAspect = framed.width / framed.height;
@@ -340,9 +343,10 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
         await ensureLogos(logos, userLogoTemplate(tpl), small.height);
         await loadTemplateStickers(tpl);
         const personal = await personalLogosOf(tpl);
+        const ready = await prepareMockup(tpl, labelledExif(exif, logos), small.width, small.height);
         if (!alive) return;
         const framed = renderUserTemplate({
-          photo: small, template: tpl, exif: labelledExif(exif, logos), profile, measure: measureTextWidthDOM,
+          photo: small, template: ready, exif: labelledExif(exif, logos), profile, measure: measureTextWidthDOM,
           logoFor: (ref) => logoFor(logos, ref, personal), stickerImages: stickerCacheRef.current,
         });
         next.set(tpl.id, framed.toDataURL("image/jpeg", 0.82));
@@ -361,7 +365,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   // Everything is computed on the CROPPED base, matching the composed output
   // basis (content + margins) that TextCanvas positions against and saveImage
   // renders.
-  async function generatePresetLayers(tpl) {
+  async function generatePresetLayers(asGiven) {
     if (!transformedPreview) return null;
     let lg = await loadLogos(); // waits out the registry IPC — no dropped logos
     const { profile: currentProfile } = await loadUserData();
@@ -373,7 +377,10 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     }
     await ensureFrameFontsLoaded(); // box.cx is measured below — needs Outfit, not a fallback
     const base = buildBaseCanvas(transformedPreview, normalizedCrop);
-    if (isUserTemplate(tpl)) return placeLayers(await userTemplateLayers(tpl, lg, base, currentProfile));
+    // A camera mockup: the photo's own camera (or the one asked for), its
+    // picture loaded for the preview.
+    const tpl = await prepareMockup(asGiven, labelledExif(exif, lg), base.width, base.height);
+    if (isUserTemplate(tpl)) return placeLayers({ ...(await userTemplateLayers(tpl, lg, base, currentProfile)), presetId: tpl.id });
     await ensureLogos(lg, tpl, base.height || 1200);
     const g = geometry(base, tpl, ADJUST);
     const isOverlay = onPhotoPixels(tpl);
@@ -420,6 +427,8 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     const aspect = tpl.canvas && "aspect" in tpl.canvas ? tpl.canvas.aspect ?? null : undefined;
     const photo = tpl.canvas && "photo" in tpl.canvas ? (tpl.canvas.photo ? { ...tpl.canvas.photo } : null) : undefined;
     const scrim = tpl.canvas?.scrim ? { ...tpl.canvas.scrim } : null;
+    // A preset with no camera takes the camera away.
+    const mockup = tpl.canvas?.mockup ? { ...tpl.canvas.mockup } : null;
     // Convert generated elements to real editable layers. TextCanvas centers
     // layers at x/y (ignores align), so anchor everything at the element's
     // VISUAL center (box.cx/cy). Logos become sticker layers whose stickerPath
@@ -472,7 +481,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       }
       return null;
     }).filter(Boolean);
-    return placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, stickerImages, layers });
+    return placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, mockup, stickerImages, layers, presetId: tpl.id });
   }
 
   // A user template's layers on this photo, as generatePresetLayers returns
@@ -486,7 +495,8 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     // key: undefined leaves the editor's own settings alone.
     const aspect = tpl.canvas && "aspect" in tpl.canvas ? tpl.canvas.aspect ?? null : undefined;
     const photo = tpl.canvas && "photo" in tpl.canvas ? tpl.canvas.photo ?? null : undefined;
-    const layoutPad = resolveCanvasPad({ pad, aspect }, base.width, base.height);
+    const mockup = tpl.canvas?.mockup ? { ...tpl.canvas.mockup } : null;
+    const layoutPad = resolveCanvasPad({ pad, aspect, mockup }, base.width, base.height);
     const stickerImages = new Map();
     const geom = outputGeometry({ fullW: base.width, fullH: base.height, pad: layoutPad });
     const layers = layersFromTemplate(tpl, {
@@ -505,12 +515,14 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       }
       return { ...createDefaultLayer({}), ...l, fromPreset: true };
     });
-    return { pad, layoutPad, bg, aspect, photo, scrim: null, stickerImages, layers };
+    return { pad, layoutPad, bg, aspect, photo, scrim: null, mockup, stickerImages, layers };
   }
 
   // Generated layers → STORED layers, plus the canvas treatment. `layoutPad`
   // is the margin the layers were laid out in when a ratio widened it.
-  function placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, stickerImages, layers }) {
+  // `presetId`: the template, kept on each layer so the frame can be laid out
+  // again when the canvas changes shape (EditorOverlay.relayoutCanvas).
+  function placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, mockup = null, stickerImages, layers, presetId = null }) {
     const lp = layoutPad || pad;
     // Layers are STORED in full-photo coords. The elements above were computed on
     // the cropped base:
@@ -535,10 +547,18 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       }
     }
     return {
-      pad, bg, aspect, photo, scrim, stickerImages,
-      layers: layersFromDisplay(layers, transformedPreview, normalizedCrop, lp),
+      pad, bg, aspect, photo, scrim, mockup, stickerImages,
+      layers: layersFromDisplay(layers, transformedPreview, normalizedCrop, lp).map((l) => (presetId ? { ...l, presetId } : l)),
     };
   }
+
+  // The photo's camera has no mockup picture (a phone, a maker not here, no
+  // EXIF): the Frame panel says so. { camera: its name or null } or null.
+  const mockupMissing = useMemo(() => {
+    const labelled = labelledExif(exif, logos);
+    if (mockupMatchFor(labelled) !== "none") return null;
+    return { camera: labelled.camera_label || labelled.camera_model || null };
+  }, [exifKey, logos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The user's own templates first, then the built-ins.
   const templates = useMemo(() => [...userTemplates, ...FRAME_TEMPLATES], [userTemplates]);
@@ -549,17 +569,22 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   }
   // The editor's current look as a new template. `layers` are the STORED
   // layers; pad/bg the canvas. Returns how many layers could not be kept.
-  async function saveTemplate(name, { layers, pad, bg, aspect = null, photo = null }) {
+  async function saveTemplate(name, { layers, pad, bg, aspect = null, photo = null, mockup = null }) {
     if (!transformedPreview) return null;
     // Layers are pinned to the edges of the canvas as laid out (a ratio
-    // widens the margins); the template keeps the user's margins and ratio.
+    // widens the margins, a camera's body too); the template keeps the user's
+    // margins, ratio and camera.
     const geom = outputGeometry({
       fullW: transformedPreview.width || transformedPreview.naturalWidth,
       fullH: transformedPreview.height || transformedPreview.naturalHeight,
-      crop: normalizedCrop, pad: effectiveCanvasPad({ pad, aspect }, transformedPreview, normalizedCrop),
+      crop: normalizedCrop, pad: effectiveCanvasPad({ pad, aspect, mockup }, transformedPreview, normalizedCrop),
     });
+    // The photo's own camera is saved as "auto", so the template gives each
+    // photo its own camera; a camera picked by hand stays that camera.
+    const own = mockup && pickMockupId(labelledExif(exif, logos), { portrait: geom.contentH > geom.contentW * 1.02 });
+    const savedMockup = mockup ? { ...mockup, id: mockup.id === own ? "auto" : mockup.id } : null;
     const id = `${USER_TEMPLATE_PREFIX}${crypto.randomUUID()}`;
-    const { template, skipped } = templateFromLayers({ id, name, layers, geom, pad, bg, aspect, photo, measure: measureTextWidthDOM });
+    const { template, skipped } = templateFromLayers({ id, name, layers, geom, pad, bg, aspect, photo, mockup: savedMockup, measure: measureTextWidthDOM });
     await persistTemplates([template, ...userTemplates]);
     return { template, skipped };
   }
@@ -583,6 +608,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     resolveSource: (source) => resolveSource(source, labelledExif(exif, logos), profile),
     logosReady: !!logos,
     cameraLogo, brandLogoFor, cameraLogoLabel, setCameraLogo,
+    mockupMissing,
     // Which of my logos cameras use ({ brand or brand#model: logo id }).
     brandLogos: logos?.brandLogos || null,
   };

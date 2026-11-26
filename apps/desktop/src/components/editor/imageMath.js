@@ -3,6 +3,8 @@
 // pan/zoom so the crop frame stays fully covered.
 
 import { clamp } from "../../utils/math";
+import { mockupById } from "./mockups";
+import { mockupBodyPad } from "./render/mockupLayout";
 
 export const PANEL_WIDTH = 320;
 export const PANEL_GAP = 24;
@@ -24,7 +26,7 @@ export function hasPad(pad) {
 }
 
 // Canvas ratios the frame can be set to (null = the photo's own shape).
-export const CANVAS_ASPECTS = ["1:1", "4:5", "9:16"];
+export const CANVAS_ASPECTS = ["1:1", "4:5", "3:4", "9:16"];
 
 export function aspectRatioOf(aspect) {
   const m = typeof aspect === "string" && aspect.match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
@@ -33,17 +35,30 @@ export function aspectRatioOf(aspect) {
   return w > 0 && h > 0 ? w / h : null;
 }
 
-// Is the photo inside a larger output canvas — margins, or a ratio to fill?
+// The camera of canvas.mockup, when there is one to draw.
+export function canvasMockupAsset(canvas) {
+  return canvas?.mockup ? mockupById(canvas.mockup.id) : null;
+}
+
+// Is the photo inside a larger output canvas — margins, a ratio to fill, or a
+// camera around it?
 export function canvasActive(canvas) {
-  return hasPad(canvas?.pad) || aspectRatioOf(canvas?.aspect) != null;
+  return hasPad(canvas?.pad) || aspectRatioOf(canvas?.aspect) != null || !!canvasMockupAsset(canvas);
 }
 
 // The margins actually laid out around content of contentW×contentH: the
-// user's own, widened evenly on the narrow axis until the output has the
-// canvas's ratio. A ratio is extra margin, so every consumer of pad (preview,
-// layer basis, export) gets it by resolving here.
+// user's own, out from the camera's body when the photo plays back on a camera
+// mockup, widened evenly on the narrow axis until the output has the canvas's
+// ratio. The camera and a ratio are extra margin, so every consumer of pad
+// (preview, layer basis, export) gets them by resolving here.
 export function resolveCanvasPad(canvas, contentW, contentH) {
   const p = { top: 0, right: 0, bottom: 0, left: 0, ...(canvas?.pad || {}) };
+  const asset = canvasMockupAsset(canvas);
+  if (asset && contentW > 0 && contentH > 0) {
+    const s = Math.min(contentW, contentH);
+    const body = mockupBodyPad(asset, canvas.mockup, contentW, contentH);
+    for (const edge of ["top", "right", "bottom", "left"]) p[edge] += body[edge] / s;
+  }
   const ratio = aspectRatioOf(canvas?.aspect);
   if (!ratio || !(contentW > 0) || !(contentH > 0)) return p;
   const s = Math.min(contentW, contentH);

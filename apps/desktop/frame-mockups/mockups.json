@@ -1,0 +1,1656 @@
+{
+  "version": 1,
+  "about": "Camera mockups for the frame tool. Built by scripts/build-frame-mockups.mjs; see TRADEMARKS.md.",
+  "generic": {
+    "landscape": "hasselblad-907x",
+    "portrait": "leica-m11-p"
+  },
+  "mockups": [
+    {
+      "id": "hasselblad-907x",
+      "brand": "hasselblad",
+      "name": "Hasselblad 907X & CFV 100C",
+      "match": [
+        "CFV 100C/907X",
+        "CFV 100C",
+        "907X",
+        "CFV II 50C/907X",
+        "CFV II 50C",
+        "CFV 50C/907X"
+      ],
+      "brandDefault": true,
+      "file": "images/hasselblad-907x.webp",
+      "size": [
+        750,
+        724
+      ],
+      "screen": {
+        "x": 0.1363,
+        "y": 0.25953,
+        "w": 0.67,
+        "h": 0.5192,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1803225-REG/hasselblad_cphb0000086601_hasselblad_907x_cfv_100c.html"
+    },
+    {
+      "id": "hasselblad-x2d-ii",
+      "brand": "hasselblad",
+      "name": "Hasselblad X2D II 100C",
+      "match": [
+        "X2D II 100C"
+      ],
+      "file": "images/hasselblad-x2d-ii.webp",
+      "size": [
+        1143,
+        849
+      ],
+      "screen": {
+        "x": 0.08749,
+        "y": 0.3404,
+        "w": 0.49956,
+        "h": 0.50295,
+        "radius": 0
+      },
+      "source": "https://store-na.hasselblad.com/products/x2d-ii-100c"
+    },
+    {
+      "id": "hasselblad-x2d",
+      "brand": "hasselblad",
+      "name": "Hasselblad X2D 100C",
+      "match": [
+        "X2D 100C"
+      ],
+      "file": "images/hasselblad-x2d.webp",
+      "size": [
+        1500,
+        1086
+      ],
+      "screen": {
+        "x": 0.09139,
+        "y": 0.35014,
+        "w": 0.49883,
+        "h": 0.51559,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1725356-REG/hasselblad_cp_hb_00000723_01_x2d_100c_medium_format.html?fromDisList=y"
+    },
+    {
+      "id": "hasselblad-x1d-ii",
+      "brand": "hasselblad",
+      "name": "Hasselblad X1D II 50C",
+      "match": [
+        "X1D II 50C",
+        "X1D-50c",
+        "X1D 50c"
+      ],
+      "file": "images/hasselblad-x1d-ii.webp",
+      "size": [
+        750,
+        514
+      ],
+      "screen": {
+        "x": 0.08933,
+        "y": 0.30934,
+        "w": 0.492,
+        "h": 0.53696,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1780428-REG/hasselblad_cp_hb_00000856_01_x1d_ii_50c_primer.html?fromDisList=y"
+    },
+    {
+      "id": "leica-m11-p",
+      "brand": "leica",
+      "name": "Leica M11-P",
+      "match": [
+        "M11-P",
+        "M11",
+        "M11 Monochrom",
+        "M11-P Safari"
+      ],
+      "brandDefault": true,
+      "file": "images/leica-m11-p.webp",
+      "size": [
+        1159,
+        665
+      ],
+      "screen": {
+        "x": 0.28128,
+        "y": 0.3203,
+        "w": 0.43054,
+        "h": 0.50075,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/leica-m11-p-rangefinder-camera-body-only-60-3-mp/p/lcm11pb"
+    },
+    {
+      "id": "leica-m-ev1",
+      "brand": "leica",
+      "name": "Leica M EV1",
+      "match": [
+        "M EV1"
+      ],
+      "file": "images/leica-m-ev1.webp",
+      "size": [
+        1194,
+        680
+      ],
+      "screen": {
+        "x": 0.28057,
+        "y": 0.31912,
+        "w": 0.43635,
+        "h": 0.51323,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/leica-m-ev1-60-3-mp-mirrorless-camera/p/lc20229"
+    },
+    {
+      "id": "leica-m10",
+      "brand": "leica",
+      "name": "Leica M10",
+      "match": [
+        "M10",
+        "M10-R",
+        "M10-P",
+        "M10 Monochrom",
+        "M10-R Black Paint"
+      ],
+      "file": "images/leica-m10.webp",
+      "size": [
+        1351,
+        768
+      ],
+      "screen": {
+        "x": 0.25167,
+        "y": 0.32552,
+        "w": 0.45966,
+        "h": 0.56771,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1312543-REG/leica_20001_m10_digital_rangefinder_camera.html"
+    },
+    {
+      "id": "leica-q3",
+      "brand": "leica",
+      "name": "Leica Q3",
+      "match": [
+        "Q3",
+        "Q3 43"
+      ],
+      "file": "images/leica-q3.webp",
+      "size": [
+        1137,
+        682
+      ],
+      "screen": {
+        "x": 0.13544,
+        "y": 0.3695,
+        "w": 0.4635,
+        "h": 0.52052,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/leica-q3-compact-digital-camera/p/lcq3"
+    },
+    {
+      "id": "leica-q2",
+      "brand": "leica",
+      "name": "Leica Q2",
+      "match": [
+        "Q2",
+        "Q2 Monochrom"
+      ],
+      "file": "images/leica-q2.webp",
+      "size": [
+        1500,
+        908
+      ],
+      "screen": {
+        "x": 0.19067,
+        "y": 0.37445,
+        "w": 0.46467,
+        "h": 0.51101,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/803578354-USE/leica_19063_q2_reporter_edition_digital.html"
+    },
+    {
+      "id": "leica-sl3",
+      "brand": "leica",
+      "name": "Leica SL3",
+      "match": [
+        "SL3",
+        "SL3-S"
+      ],
+      "file": "images/leica-sl3.webp",
+      "size": [
+        1160,
+        839
+      ],
+      "screen": {
+        "x": 0.13879,
+        "y": 0.4994,
+        "w": 0.45086,
+        "h": 0.41836,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/leica-sl3-mirrorless-camera-body-only/p/lcsl3"
+    },
+    {
+      "id": "leica-d-lux-8",
+      "brand": "leica",
+      "name": "Leica D-Lux 8",
+      "match": [
+        "D-Lux 8"
+      ],
+      "file": "images/leica-d-lux-8.webp",
+      "size": [
+        1500,
+        841
+      ],
+      "screen": {
+        "x": 0.18667,
+        "y": 0.31272,
+        "w": 0.50733,
+        "h": 0.60999,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1830573-REG/leica_19191_d_lux_8_digital_camera.html/?ap=y&ap=y&smp=y&smp=y&store=420&smpm=ba_f2_lar&lsft=BI%3A514&gad_source=1&gad_campaignid=21615206057&gbraid=0AAAAAD7yMh1fKJlrNpRy8mnVt4U43S35R&gclid=CjwKCAiAq5rYBhB-EiwAhj1RduyIQ0XebV6sbBBct3CD2C2p7lw6bgaZehYnbE14NqZXaLQ59eb6rhoCiQMQAvD_BwE"
+    },
+    {
+      "id": "canon-eos-r5-ii",
+      "brand": "canon",
+      "name": "Canon EOS R5 Mark II",
+      "match": [
+        "EOS R5 Mark II",
+        "EOS R5m2"
+      ],
+      "file": "images/canon-eos-r5-ii.webp",
+      "size": [
+        1499,
+        1124
+      ],
+      "screen": {
+        "x": 0.12942,
+        "y": 0.45819,
+        "w": 0.491,
+        "h": 0.44039,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1840289-REG/canon_6536c002_eos_r5_mark_ii.html"
+    },
+    {
+      "id": "canon-eos-r5",
+      "brand": "canon",
+      "name": "Canon EOS R5",
+      "match": [
+        "EOS R5"
+      ],
+      "file": "images/canon-eos-r5.webp",
+      "size": [
+        1500,
+        1093
+      ],
+      "screen": {
+        "x": 0.13133,
+        "y": 0.44831,
+        "w": 0.48733,
+        "h": 0.44465,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1547009-REG/canon_4147c002_eos_r5_mirrorless_camera.html"
+    },
+    {
+      "id": "canon-eos-r6-iii",
+      "brand": "canon",
+      "name": "Canon EOS R6 Mark III",
+      "match": [
+        "EOS R6 Mark III",
+        "EOS R6m3"
+      ],
+      "brandDefault": true,
+      "file": "images/canon-eos-r6-iii.webp",
+      "size": [
+        1500,
+        1109
+      ],
+      "screen": {
+        "x": 0.12933,
+        "y": 0.47339,
+        "w": 0.46067,
+        "h": 0.41389,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1928858-REG/canon_eos_r6_mark_iii.html"
+    },
+    {
+      "id": "canon-eos-r6-ii",
+      "brand": "canon",
+      "name": "Canon EOS R6 Mark II",
+      "match": [
+        "EOS R6 Mark II",
+        "EOS R6m2"
+      ],
+      "file": "images/canon-eos-r6-ii.webp",
+      "size": [
+        979,
+        718
+      ],
+      "screen": {
+        "x": 0.1379,
+        "y": 0.47353,
+        "w": 0.45352,
+        "h": 0.41365,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/canon-eos-r6-mark-ii-mirrorless-camera-body-only/p/car6m2"
+    },
+    {
+      "id": "canon-eos-r6",
+      "brand": "canon",
+      "name": "Canon EOS R6",
+      "match": [
+        "EOS R6"
+      ],
+      "file": "images/canon-eos-r6.webp",
+      "size": [
+        1161,
+        844
+      ],
+      "screen": {
+        "x": 0.12834,
+        "y": 0.46801,
+        "w": 0.46597,
+        "h": 0.42299,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/used-canon-eos-r6-mirrorless-digital-camera-body/p/imccar6"
+    },
+    {
+      "id": "canon-eos-r8",
+      "brand": "canon",
+      "name": "Canon EOS R8",
+      "match": [
+        "EOS R8"
+      ],
+      "file": "images/canon-eos-r8.webp",
+      "size": [
+        1500,
+        1016
+      ],
+      "screen": {
+        "x": 0.14733,
+        "y": 0.44291,
+        "w": 0.47667,
+        "h": 0.47048,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1748813-REG/canon_eos_r8_mirrorless_camera.html"
+    },
+    {
+      "id": "canon-eos-r7",
+      "brand": "canon",
+      "name": "Canon EOS R7",
+      "match": [
+        "EOS R7"
+      ],
+      "file": "images/canon-eos-r7.webp",
+      "size": [
+        1500,
+        1065
+      ],
+      "screen": {
+        "x": 0.14,
+        "y": 0.42816,
+        "w": 0.47533,
+        "h": 0.45165,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1707911-REG/canon_eos_r7_mirrorless_camera.html"
+    },
+    {
+      "id": "canon-eos-r10",
+      "brand": "canon",
+      "name": "Canon EOS R10",
+      "match": [
+        "EOS R10"
+      ],
+      "file": "images/canon-eos-r10.webp",
+      "size": [
+        1500,
+        1101
+      ],
+      "screen": {
+        "x": 0.18867,
+        "y": 0.4505,
+        "w": 0.51267,
+        "h": 0.4723,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1707912-REG/canon_eos_r10_mirrorless_camera.html"
+    },
+    {
+      "id": "canon-eos-r50",
+      "brand": "canon",
+      "name": "Canon EOS R50",
+      "match": [
+        "EOS R50"
+      ],
+      "file": "images/canon-eos-r50.webp",
+      "size": [
+        908,
+        683
+      ],
+      "screen": {
+        "x": 0.14868,
+        "y": 0.40849,
+        "w": 0.52863,
+        "h": 0.46999,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/canon-eos-r50-mirrorless-camera-body-only-24mp-4k/p/car50"
+    },
+    {
+      "id": "canon-eos-r100",
+      "brand": "canon",
+      "name": "Canon EOS R100",
+      "match": [
+        "EOS R100"
+      ],
+      "file": "images/canon-eos-r100.webp",
+      "size": [
+        1496,
+        1122
+      ],
+      "screen": {
+        "x": 0.16577,
+        "y": 0.41265,
+        "w": 0.52741,
+        "h": 0.46969,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1769090-REG/canon_6052c012_eos_r100_mirrorless_camera.html"
+    },
+    {
+      "id": "canon-eos-rp",
+      "brand": "canon",
+      "name": "Canon EOS RP",
+      "match": [
+        "EOS RP"
+      ],
+      "file": "images/canon-eos-rp.webp",
+      "size": [
+        1495,
+        994
+      ],
+      "screen": {
+        "x": 0.17659,
+        "y": 0.43561,
+        "w": 0.4796,
+        "h": 0.48189,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1459282-REG/canon_eos_rp_mirrorless_digital.html"
+    },
+    {
+      "id": "canon-eos-r1",
+      "brand": "canon",
+      "name": "Canon EOS R1",
+      "match": [
+        "EOS R1"
+      ],
+      "file": "images/canon-eos-r1.webp",
+      "size": [
+        1498,
+        1446
+      ],
+      "screen": {
+        "x": 0.12016,
+        "y": 0.37552,
+        "w": 0.4239,
+        "h": 0.29876,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1828640-REG/canon_6577c002_eos_r1_mirrorless_camera.html"
+    },
+    {
+      "id": "canon-eos-r3",
+      "brand": "canon",
+      "name": "Canon EOS R3",
+      "match": [
+        "EOS R3"
+      ],
+      "file": "images/canon-eos-r3.webp",
+      "size": [
+        1442,
+        897
+      ],
+      "screen": {
+        "x": 0.02844,
+        "y": 0.37793,
+        "w": 0.29611,
+        "h": 0.31662,
+        "radius": 0
+      },
+      "source": "https://www.usa.canon.com/shop/p/eos-r3?color=Black&type=New&gclsrc=aw.ds&gad_source=1&gad_campaignid=18637988100&gbraid=0AAAAADxAOrykFF7gHKXnKi6EShq4yWqoO&gclid=CjwKCAiAq5rYBhB-EiwAhj1RdiboPSI-EHrRxcwz2n0XNX5e9cGf9gB4AD04RdwcL072KF67OZNTOhoCuhEQAvD_BwE"
+    },
+    {
+      "id": "canon-eos-5d-iv",
+      "brand": "canon",
+      "name": "Canon EOS 5D Mark IV",
+      "match": [
+        "EOS 5D Mark IV"
+      ],
+      "file": "images/canon-eos-5d-iv.webp",
+      "size": [
+        1162,
+        907
+      ],
+      "screen": {
+        "x": 0.15404,
+        "y": 0.45425,
+        "w": 0.4475,
+        "h": 0.38368,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/used-canon-eos-5d-mark-iv-digital-slr-camera-body/p/imcca5dm4"
+    },
+    {
+      "id": "canon-g7-x-iii",
+      "brand": "canon",
+      "name": "Canon PowerShot G7 X Mark III",
+      "match": [
+        "PowerShot G7 X Mark III"
+      ],
+      "file": "images/canon-g7-x-iii.webp",
+      "size": [
+        997,
+        597
+      ],
+      "screen": {
+        "x": 0.12638,
+        "y": 0.24288,
+        "w": 0.58475,
+        "h": 0.65159,
+        "radius": 0
+      },
+      "source": "https://www.bedfords.com/13803316063?srsltid=AYCX9vIb9vzqciLcCHkRVOoRo1eKGdDXxsaLgfp899T9IkxTFzKBEybg"
+    },
+    {
+      "id": "canon-powershot-v1",
+      "brand": "canon",
+      "name": "Canon PowerShot V1",
+      "match": [
+        "PowerShot V1"
+      ],
+      "file": "images/canon-powershot-v1.webp",
+      "size": [
+        1491,
+        889
+      ],
+      "screen": {
+        "x": 0.1603,
+        "y": 0.30934,
+        "w": 0.52649,
+        "h": 0.59167,
+        "radius": 0
+      },
+      "source": null
+    },
+    {
+      "id": "nikon-z-f",
+      "brand": "nikon",
+      "name": "Nikon Z f",
+      "match": [
+        "Z f"
+      ],
+      "brandDefault": true,
+      "file": "images/nikon-z-f.webp",
+      "size": [
+        1156,
+        786
+      ],
+      "screen": {
+        "x": 0.14101,
+        "y": 0.48728,
+        "w": 0.43772,
+        "h": 0.42875,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/nikon-z-f-mirrorless-camera-40-mm-f-2-se/p/nkzfk"
+    },
+    {
+      "id": "nikon-z-fc",
+      "brand": "nikon",
+      "name": "Nikon Z fc",
+      "match": [
+        "Z fc"
+      ],
+      "file": "images/nikon-z-fc.webp",
+      "size": [
+        1500,
+        990
+      ],
+      "screen": {
+        "x": 0.15496,
+        "y": 0.47527,
+        "w": 0.43447,
+        "h": 0.43982,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1649280-REG/nikon_1675_zfc_mirrorless_camera_with.html"
+    },
+    {
+      "id": "nikon-z6-iii",
+      "brand": "nikon",
+      "name": "Nikon Z6III",
+      "match": [
+        "Z6_3",
+        "Z 6_3",
+        "Z6III"
+      ],
+      "file": "images/nikon-z6-iii.webp",
+      "size": [
+        1500,
+        1049
+      ],
+      "screen": {
+        "x": 0.14544,
+        "y": 0.45731,
+        "w": 0.46342,
+        "h": 0.44362,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1834803-REG/nikon_z6_iii_mirrorless_camera.html"
+    },
+    {
+      "id": "nikon-z6-ii",
+      "brand": "nikon",
+      "name": "Nikon Z6II",
+      "match": [
+        "Z 6_2",
+        "Z 7_2",
+        "Z6II",
+        "Z7II",
+        "Z 6",
+        "Z 7"
+      ],
+      "file": "images/nikon-z6-ii.webp",
+      "size": [
+        1500,
+        1082
+      ],
+      "screen": {
+        "x": 0.13429,
+        "y": 0.4675,
+        "w": 0.47403,
+        "h": 0.4373,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1597168-REG/nikon_z_7_ii_mirrorless.html"
+    },
+    {
+      "id": "nikon-z8",
+      "brand": "nikon",
+      "name": "Nikon Z8",
+      "match": [
+        "Z 8",
+        "Z8"
+      ],
+      "file": "images/nikon-z8.webp",
+      "size": [
+        1500,
+        1168
+      ],
+      "screen": {
+        "x": 0.14353,
+        "y": 0.49457,
+        "w": 0.43402,
+        "h": 0.36995,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1765622-REG/nikon_z8_mirrorless_camera.html"
+    },
+    {
+      "id": "nikon-z9",
+      "brand": "nikon",
+      "name": "Nikon Z9",
+      "match": [
+        "Z 9",
+        "Z9"
+      ],
+      "file": "images/nikon-z9.webp",
+      "size": [
+        1144,
+        1098
+      ],
+      "screen": {
+        "x": 0.13967,
+        "y": 0.41572,
+        "w": 0.42562,
+        "h": 0.29494,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/nikon-z9-mirrorless-camera-body-only/p/nkz9"
+    },
+    {
+      "id": "nikon-z5-ii",
+      "brand": "nikon",
+      "name": "Nikon Z5II",
+      "match": [
+        "Z5_2",
+        "Z 5_2",
+        "Z5II",
+        "Z 5"
+      ],
+      "file": "images/nikon-z5-ii.webp",
+      "size": [
+        750,
+        545
+      ],
+      "screen": {
+        "x": 0.14529,
+        "y": 0.46567,
+        "w": 0.48232,
+        "h": 0.4445,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1931818-REG/nikon_z5_ii_mirrorless_camera.html"
+    },
+    {
+      "id": "nikon-z50-ii",
+      "brand": "nikon",
+      "name": "Nikon Z50II",
+      "match": [
+        "Z50_2",
+        "Z 50_2",
+        "Z50II",
+        "Z 50"
+      ],
+      "file": "images/nikon-z50-ii.webp",
+      "size": [
+        1500,
+        1062
+      ],
+      "screen": {
+        "x": 0.15675,
+        "y": 0.45032,
+        "w": 0.48773,
+        "h": 0.46725,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1860621-REG/nikon_1784_z50_ii_mirrorless_camera.html"
+    },
+    {
+      "id": "nikon-z30",
+      "brand": "nikon",
+      "name": "Nikon Z30",
+      "match": [
+        "Z 30",
+        "Z30"
+      ],
+      "file": "images/nikon-z30.webp",
+      "size": [
+        750,
+        433
+      ],
+      "screen": {
+        "x": 0.13107,
+        "y": 0.34811,
+        "w": 0.47344,
+        "h": 0.5457,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1739675-REG/nikon_z30_mirrorless_camera_with.html"
+    },
+    {
+      "id": "nikon-d850",
+      "brand": "nikon",
+      "name": "Nikon D850",
+      "match": [
+        "D850"
+      ],
+      "file": "images/nikon-d850.webp",
+      "size": [
+        1500,
+        1236
+      ],
+      "screen": {
+        "x": 0.21147,
+        "y": 0.53475,
+        "w": 0.42959,
+        "h": 0.3938,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1351688-REG/nikon_d850_dslr_camera_body.html"
+    },
+    {
+      "id": "sony-a7-v",
+      "brand": "sony",
+      "name": "Sony α7 V",
+      "match": [
+        "ILCE-7M5"
+      ],
+      "file": "images/sony-a7-v.webp",
+      "size": [
+        1500,
+        1038
+      ],
+      "screen": {
+        "x": 0.13627,
+        "y": 0.41855,
+        "w": 0.48211,
+        "h": 0.46455,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1935439-REG/sony_a7_v_mirrorless_camera.html"
+    },
+    {
+      "id": "sony-a7-iv",
+      "brand": "sony",
+      "name": "Sony α7 IV",
+      "match": [
+        "ILCE-7M4"
+      ],
+      "brandDefault": true,
+      "file": "images/sony-a7-iv.webp",
+      "size": [
+        1500,
+        1033
+      ],
+      "screen": {
+        "x": 0.16162,
+        "y": 0.45453,
+        "w": 0.44813,
+        "h": 0.43889,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1667800-REG/sony_ilce_7m4_b_alpha_a7_iv_mirrorless.html"
+    },
+    {
+      "id": "sony-a7-iii",
+      "brand": "sony",
+      "name": "Sony α7 III",
+      "match": [
+        "ILCE-7M3"
+      ],
+      "file": "images/sony-a7-iii.webp",
+      "size": [
+        1165,
+        817
+      ],
+      "screen": {
+        "x": 0.16846,
+        "y": 0.4353,
+        "w": 0.441,
+        "h": 0.47283,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/sony-alpha-a7-iii-24-mp-4k-mirrorless-camera/p/isoa7m3"
+    },
+    {
+      "id": "sony-a7c-ii",
+      "brand": "sony",
+      "name": "Sony α7C II",
+      "match": [
+        "ILCE-7CM2",
+        "ILCE-7CR",
+        "ILCE-7C"
+      ],
+      "file": "images/sony-a7c-ii.webp",
+      "size": [
+        1500,
+        816
+      ],
+      "screen": {
+        "x": 0.1697,
+        "y": 0.34515,
+        "w": 0.46771,
+        "h": 0.5773,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1784819-REG/sony_a7c_ii_mirrorless_camera.html"
+    },
+    {
+      "id": "sony-a7r-v",
+      "brand": "sony",
+      "name": "Sony α7R V",
+      "match": [
+        "ILCE-7RM5"
+      ],
+      "file": "images/sony-a7r-v.webp",
+      "size": [
+        1000,
+        693
+      ],
+      "screen": {
+        "x": 0.1319,
+        "y": 0.42472,
+        "w": 0.47793,
+        "h": 0.45952,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1731389-REG/sony_ilce_7rm5_b_a7r_v_mirrorless_camera.html"
+    },
+    {
+      "id": "sony-a1-ii",
+      "brand": "sony",
+      "name": "Sony α1 II",
+      "match": [
+        "ILCE-1M2",
+        "ILCE-9M3"
+      ],
+      "file": "images/sony-a1-ii.webp",
+      "size": [
+        750,
+        521
+      ],
+      "screen": {
+        "x": 0.13723,
+        "y": 0.42024,
+        "w": 0.47603,
+        "h": 0.4614,
+        "radius": 0
+      },
+      "source": null
+    },
+    {
+      "id": "sony-a6700",
+      "brand": "sony",
+      "name": "Sony α6700",
+      "match": [
+        "ILCE-6700"
+      ],
+      "file": "images/sony-a6700.webp",
+      "size": [
+        1173,
+        639
+      ],
+      "screen": {
+        "x": 0.17434,
+        "y": 0.33002,
+        "w": 0.47968,
+        "h": 0.59001,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/used-sony-alpha-a6700-mirrorless-camera-body/p/imcsoa6700"
+    },
+    {
+      "id": "sony-zv-e10-ii",
+      "brand": "sony",
+      "name": "Sony ZV-E10 II",
+      "match": [
+        "ZV-E10M2"
+      ],
+      "file": "images/sony-zv-e10-ii.webp",
+      "size": [
+        1000,
+        556
+      ],
+      "screen": {
+        "x": 0.17902,
+        "y": 0.2514,
+        "w": 0.51017,
+        "h": 0.61426,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1839377-REG/sony_zv_e10_ii_mirrorless_camera.html"
+    },
+    {
+      "id": "sony-rx100-vii",
+      "brand": "sony",
+      "name": "Sony RX100 VII",
+      "match": [
+        "DSC-RX100M7"
+      ],
+      "file": "images/sony-rx100-vii.webp",
+      "size": [
+        1000,
+        579
+      ],
+      "screen": {
+        "x": 0.13354,
+        "y": 0.14786,
+        "w": 0.58921,
+        "h": 0.76544,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1496248-REG/sony_dscrx100m7_b_cyber_shot_dsc_rx100_vii_digital.html"
+    },
+    {
+      "id": "sony-zv-1-ii",
+      "brand": "sony",
+      "name": "Sony ZV-1 II",
+      "match": [
+        "ZV-1M2"
+      ],
+      "file": "images/sony-zv-1-ii.webp",
+      "size": [
+        1000,
+        841
+      ],
+      "screen": {
+        "x": 0.17103,
+        "y": 0.423,
+        "w": 0.5731,
+        "h": 0.51195,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1767283-REG/sony_zv_1_ii_digital_camera.html"
+    },
+    {
+      "id": "sony-fx3",
+      "brand": "sony",
+      "name": "Sony FX3",
+      "match": [
+        "ILME-FX3",
+        "ILME-FX3A",
+        "ILME-FX30"
+      ],
+      "file": "images/sony-fx3.webp",
+      "size": [
+        1000,
+        614
+      ],
+      "screen": {
+        "x": 0.14471,
+        "y": 0.30435,
+        "w": 0.46479,
+        "h": 0.5694,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1894322-REG/sony_ilme_fx3a_fx3_full_frame_cinema_camera.html"
+    },
+    {
+      "id": "sony-fx5",
+      "brand": "sony",
+      "name": "Sony FX5",
+      "match": [
+        "ILME-FX5"
+      ],
+      "file": "images/sony-fx5.webp",
+      "size": [
+        1121,
+        681
+      ],
+      "screen": {
+        "x": 0.12124,
+        "y": 0.34173,
+        "w": 0.57854,
+        "h": 0.53267,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/sony-fx5-cinema-camera/p/sofx5"
+    },
+    {
+      "id": "panasonic-s5-ii",
+      "brand": "panasonic",
+      "name": "Panasonic LUMIX S5II",
+      "match": [
+        "DC-S5M2",
+        "DC-S5M2X"
+      ],
+      "brandDefault": true,
+      "file": "images/panasonic-s5-ii.webp",
+      "size": [
+        864,
+        656
+      ],
+      "screen": {
+        "x": 0.16626,
+        "y": 0.52893,
+        "w": 0.46133,
+        "h": 0.40632,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/panasonic-lumix-s5ii-mirrorless-camera-body-only-full-frame-24mp/p/pcs5m2n"
+    },
+    {
+      "id": "panasonic-s9",
+      "brand": "panasonic",
+      "name": "Panasonic LUMIX S9",
+      "match": [
+        "DC-S9"
+      ],
+      "file": "images/panasonic-s9.webp",
+      "size": [
+        1000,
+        568
+      ],
+      "screen": {
+        "x": 0.17361,
+        "y": 0.35109,
+        "w": 0.48199,
+        "h": 0.56694,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1944584-REG/panasonic_dc_s9nsb9_lumix_s9_mirrorless_camera.html"
+    },
+    {
+      "id": "panasonic-g9-ii",
+      "brand": "panasonic",
+      "name": "Panasonic LUMIX G9II",
+      "match": [
+        "DC-G9M2"
+      ],
+      "file": "images/panasonic-g9-ii.webp",
+      "size": [
+        1156,
+        879
+      ],
+      "screen": {
+        "x": 0.16403,
+        "y": 0.52698,
+        "w": 0.46445,
+        "h": 0.40885,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/panasonic-lumix-g9ii-mirrorless-camera/p/ipcg9m2n"
+    },
+    {
+      "id": "panasonic-s1-ii",
+      "brand": "panasonic",
+      "name": "Panasonic LUMIX S1II",
+      "match": [
+        "DC-S1M2",
+        "DC-S1RM2",
+        "DC-S1M2ES"
+      ],
+      "file": "images/panasonic-s1-ii.webp",
+      "size": [
+        985,
+        744
+      ],
+      "screen": {
+        "x": 0.16281,
+        "y": 0.52644,
+        "w": 0.46332,
+        "h": 0.41175,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1945158-REG/panasonic_dc_s1m2body9_lumix_s1_ii_mirrorless.html"
+    },
+    {
+      "id": "panasonic-lx100-ii",
+      "brand": "panasonic",
+      "name": "Panasonic LUMIX LX100 II",
+      "match": [
+        "DC-LX100M2"
+      ],
+      "file": "images/panasonic-lx100-ii.webp",
+      "size": [
+        1000,
+        543
+      ],
+      "screen": {
+        "x": 0.19513,
+        "y": 0.31667,
+        "w": 0.50183,
+        "h": 0.61365,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1428270-REG/panasonic_dc_lx100m2_dc_lx100_mark_2_digital.html?fromDisList=y"
+    },
+    {
+      "id": "fujifilm-x100vi",
+      "brand": "fujifilm",
+      "name": "Fujifilm X100VI",
+      "match": [
+        "X100VI"
+      ],
+      "file": "images/fujifilm-x100vi.webp",
+      "size": [
+        1134,
+        635
+      ],
+      "screen": {
+        "x": 0.1201,
+        "y": 0.33888,
+        "w": 0.46413,
+        "h": 0.55691,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/fujifilm-x100vi-digital-camera/p/ifjx1006s"
+    },
+    {
+      "id": "fujifilm-x-t5",
+      "brand": "fujifilm",
+      "name": "Fujifilm X-T5",
+      "match": [
+        "X-T5"
+      ],
+      "brandDefault": true,
+      "file": "images/fujifilm-x-t5.webp",
+      "size": [
+        1000,
+        668
+      ],
+      "screen": {
+        "x": 0.1526,
+        "y": 0.44825,
+        "w": 0.46066,
+        "h": 0.46585,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1899771-REG/fujifilm_16953857_x_t5_body_black_coo_japan.html"
+    },
+    {
+      "id": "fujifilm-x-t50",
+      "brand": "fujifilm",
+      "name": "Fujifilm X-T50",
+      "match": [
+        "X-T50"
+      ],
+      "file": "images/fujifilm-x-t50.webp",
+      "size": [
+        1000,
+        640
+      ],
+      "screen": {
+        "x": 0.14422,
+        "y": 0.43697,
+        "w": 0.48173,
+        "h": 0.49013,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1899784-REG/fujifilm_16953986_x_t50_body_silver_coo_japan.html"
+    },
+    {
+      "id": "fujifilm-x-e5",
+      "brand": "fujifilm",
+      "name": "Fujifilm X-E5",
+      "match": [
+        "X-E5"
+      ],
+      "file": "images/fujifilm-x-e5.webp",
+      "size": [
+        1500,
+        829
+      ],
+      "screen": {
+        "x": 0.1143,
+        "y": 0.29484,
+        "w": 0.48013,
+        "h": 0.60816,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1900551-REG/fujifilm_16949882_x_e5_mirrorless_camera_with.html"
+    },
+    {
+      "id": "fujifilm-x-m5",
+      "brand": "fujifilm",
+      "name": "Fujifilm X-M5",
+      "match": [
+        "X-M5"
+      ],
+      "file": "images/fujifilm-x-m5.webp",
+      "size": [
+        1000,
+        571
+      ],
+      "screen": {
+        "x": 0.16574,
+        "y": 0.25841,
+        "w": 0.54188,
+        "h": 0.65496,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1899779-REG/fujifilm_16953936_x_m5_body_black_coo_japan.html"
+    },
+    {
+      "id": "fujifilm-x-s20",
+      "brand": "fujifilm",
+      "name": "Fujifilm X-S20",
+      "match": [
+        "X-S20"
+      ],
+      "file": "images/fujifilm-x-s20.webp",
+      "size": [
+        1000,
+        636
+      ],
+      "screen": {
+        "x": 0.15911,
+        "y": 0.42668,
+        "w": 0.46918,
+        "h": 0.49547,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1765968-REG/fujifilm_16781852_x_s20_mirrorless_camera_black.html"
+    },
+    {
+      "id": "fujifilm-x-t30-iii",
+      "brand": "fujifilm",
+      "name": "Fujifilm X-T30 III",
+      "match": [
+        "X-T30 III",
+        "X-T30 II",
+        "X-T30"
+      ],
+      "file": "images/fujifilm-x-t30-iii.webp",
+      "size": [
+        1500,
+        976
+      ],
+      "screen": {
+        "x": 0.14518,
+        "y": 0.41138,
+        "w": 0.4873,
+        "h": 0.50259,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1926409-REG/fujifilm_16966880_x_t30_iii_mirrorless_camera.html"
+    },
+    {
+      "id": "fujifilm-x-h2",
+      "brand": "fujifilm",
+      "name": "Fujifilm X-H2",
+      "match": [
+        "X-H2",
+        "X-H2S"
+      ],
+      "file": "images/fujifilm-x-h2.webp",
+      "size": [
+        1000,
+        694
+      ],
+      "screen": {
+        "x": 0.13338,
+        "y": 0.46837,
+        "w": 0.46783,
+        "h": 0.46252,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1726019-REG/fujifilm_16757045_x_h2_digital_camera_body.html"
+    },
+    {
+      "id": "fujifilm-x-pro3",
+      "brand": "fujifilm",
+      "name": "Fujifilm X-Pro3",
+      "match": [
+        "X-Pro3"
+      ],
+      "file": "images/fujifilm-x-pro3.webp",
+      "size": [
+        1000,
+        579
+      ],
+      "screen": {
+        "x": 0.26728,
+        "y": 0.47779,
+        "w": 0.16237,
+        "h": 0.28045,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/803577288-USE/fujifilm_600021381_x_pro3_mirrorless_camera_black.html"
+    },
+    {
+      "id": "fujifilm-x-t4",
+      "brand": "fujifilm",
+      "name": "Fujifilm X-T4",
+      "match": [
+        "X-T4"
+      ],
+      "file": "images/fujifilm-x-t4.webp",
+      "size": [
+        1166,
+        769
+      ],
+      "screen": {
+        "x": 0.14652,
+        "y": 0.43621,
+        "w": 0.44462,
+        "h": 0.45049,
+        "radius": 0
+      },
+      "source": "https://www.adorama.com/used-fujifilm-x-t4-mirrorless-digital-camera-body-black/p/imcfjxt4b"
+    },
+    {
+      "id": "fujifilm-gfx100s-ii",
+      "brand": "fujifilm",
+      "name": "Fujifilm GFX100S II",
+      "match": [
+        "GFX100S II",
+        "GFX100S"
+      ],
+      "file": "images/fujifilm-gfx100s-ii.webp",
+      "size": [
+        1500,
+        1023
+      ],
+      "screen": {
+        "x": 0.14015,
+        "y": 0.40414,
+        "w": 0.42475,
+        "h": 0.46554,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1827223-REG/fujifilm_600023616_gfx_100s_ii_medium.html"
+    },
+    {
+      "id": "fujifilm-gfx100rf",
+      "brand": "fujifilm",
+      "name": "Fujifilm GFX100RF",
+      "match": [
+        "GFX100RF"
+      ],
+      "file": "images/fujifilm-gfx100rf.webp",
+      "size": [
+        1500,
+        943
+      ],
+      "screen": {
+        "x": 0.13674,
+        "y": 0.38677,
+        "w": 0.45659,
+        "h": 0.48412,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1884990-REG/fujifilm_16938039_gfx100_rangefinder_camera.html"
+    },
+    {
+      "id": "fujifilm-gfx100-ii",
+      "brand": "fujifilm",
+      "name": "Fujifilm GFX100 II",
+      "match": [
+        "GFX100 II"
+      ],
+      "file": "images/fujifilm-gfx100-ii.webp",
+      "size": [
+        1500,
+        1189
+      ],
+      "screen": {
+        "x": 0.11397,
+        "y": 0.47767,
+        "w": 0.42648,
+        "h": 0.40326,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1784860-REG/fujifilm_600023590_gfx_100_ii_medium.html"
+    },
+    {
+      "id": "fujifilm-x-half",
+      "brand": "fujifilm",
+      "name": "Fujifilm X half",
+      "match": [
+        "X half",
+        "X-HF1"
+      ],
+      "file": "images/fujifilm-x-half.webp",
+      "size": [
+        1500,
+        842
+      ],
+      "screen": {
+        "x": 0.34482,
+        "y": 0.34852,
+        "w": 0.23298,
+        "h": 0.55512,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1896522-REG/fujifilm_16954112_x_half_digital_camera.html"
+    },
+    {
+      "id": "ricoh-gr-iv",
+      "brand": "ricoh",
+      "name": "Ricoh GR IV",
+      "match": [
+        "GR IV",
+        "GR IV Monochrome",
+        "GR IV HDF"
+      ],
+      "brandDefault": true,
+      "file": "images/ricoh-gr-iv.webp",
+      "size": [
+        1500,
+        888
+      ],
+      "screen": {
+        "x": 0.05733,
+        "y": 0.27481,
+        "w": 0.57561,
+        "h": 0.62728,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1898564-REG/ricoh_gr_iv_digital_camera.html"
+    },
+    {
+      "id": "ricoh-gr-iii",
+      "brand": "ricoh",
+      "name": "Ricoh GR III",
+      "match": [
+        "GR III",
+        "GR IIIx",
+        "GR III HDF",
+        "GR IIIx HDF"
+      ],
+      "file": "images/ricoh-gr-iii.webp",
+      "size": [
+        1500,
+        895
+      ],
+      "screen": {
+        "x": 0.06585,
+        "y": 0.28213,
+        "w": 0.57543,
+        "h": 0.61738,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1819936-REG/ricoh_01283_gr_iiix_hdf_digital.html"
+    },
+    {
+      "id": "om-system-om-1-ii",
+      "brand": "om",
+      "name": "OM System OM-1 Mark II",
+      "match": [
+        "OM-1MarkII",
+        "OM-1 Mark II",
+        "OM-1"
+      ],
+      "brandDefault": true,
+      "file": "images/om-system-om-1-ii.webp",
+      "size": [
+        1500,
+        1023
+      ],
+      "screen": {
+        "x": 0.15331,
+        "y": 0.43033,
+        "w": 0.46353,
+        "h": 0.4545,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1806609-REG/om_system_v210040bu000_om_1_mark_ii_camera.html"
+    },
+    {
+      "id": "om-system-om-5",
+      "brand": "om",
+      "name": "OM System OM-5",
+      "match": [
+        "OM-5",
+        "E-M5MarkIII",
+        "E-M5 Mark III"
+      ],
+      "file": "images/om-system-om-5.webp",
+      "size": [
+        999,
+        655
+      ],
+      "screen": {
+        "x": 0.14744,
+        "y": 0.43475,
+        "w": 0.47703,
+        "h": 0.48398,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/803588506-USE/olympus_v207090su000_om_d_e_m5_mark_iii.html"
+    },
+    {
+      "id": "sigma-bf",
+      "brand": "sigma",
+      "name": "Sigma BF",
+      "match": [
+        "BF"
+      ],
+      "file": "images/sigma-bf.webp",
+      "size": [
+        750,
+        436
+      ],
+      "screen": {
+        "x": 0.06624,
+        "y": 0.11775,
+        "w": 0.53168,
+        "h": 0.67691,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1881809-REG/sigma_c47900_bf_mirrorless_camera_silver.html"
+    },
+    {
+      "id": "sigma-fp",
+      "brand": "sigma",
+      "name": "Sigma fp",
+      "match": [
+        "fp",
+        "fp L"
+      ],
+      "brandDefault": true,
+      "file": "images/sigma-fp.webp",
+      "size": [
+        1000,
+        565
+      ],
+      "screen": {
+        "x": 0.1075,
+        "y": 0.1115,
+        "w": 0.54,
+        "h": 0.63717,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/803486671-USE/sigma_1h900_fp_l_mirrorless_camera.html"
+    },
+    {
+      "id": "pentax-k-1-ii",
+      "brand": "pentax",
+      "name": "Pentax K-1 Mark II",
+      "match": [
+        "K-1 Mark II",
+        "K-1"
+      ],
+      "brandDefault": true,
+      "file": "images/pentax-k-1-ii.webp",
+      "size": [
+        1000,
+        790
+      ],
+      "screen": {
+        "x": 0.10995,
+        "y": 0.44706,
+        "w": 0.47984,
+        "h": 0.416,
+        "radius": 0
+      },
+      "source": "https://www.bhphotovideo.com/c/product/1778304-REG/pentax_k_1_mark_ii_dslr.html"
+    }
+  ]
+}

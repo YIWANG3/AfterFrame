@@ -19,6 +19,9 @@ import { formatExif, resolveTokens } from "./render/frameRender";
 import { drawLayersOnCanvas } from "./render/drawLayers";
 import { clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./render/frameBackdrop";
 import { resolveCanvasPad } from "./imageMath";
+import { mockupById, mockupImageIfLoaded } from "./mockups";
+import { drawMockup, mockupHidesPhoto, photoForMockup, withMockupFor } from "./render/mockupRender";
+import { textForFont } from "./render/frameGlyphs";
 
 export const USER_TEMPLATE_PREFIX = "user:";
 const USER_TEMPLATE_VERSION = 1;
@@ -133,12 +136,12 @@ function textBox(layer, fontPx, measure) {
  * @returns {{ template: object, skipped: number }} skipped: stickers that exist only as
  *   pixels in a data: URL (a handwriting sticker) and cannot travel in a template
  */
-export function templateFromLayers({ id, name, layers, geom, pad, bg, aspect = null, photo = null, measure }) {
+export function templateFromLayers({ id, name, layers, geom, pad, bg, aspect = null, photo = null, mockup = null, measure }) {
   const g = geom;
   const saved = [];
   let skipped = 0;
   for (const layer of layers || []) {
-    const { id: _id, x, y, fromPreset: _preset, ...rest } = layer;
+    const { id: _id, x, y, fromPreset: _preset, presetId: _presetId, ...rest } = layer;
     if (layer.type === "overlay") {
       saved.push(rest);
       continue;
@@ -186,6 +189,7 @@ export function templateFromLayers({ id, name, layers, geom, pad, bg, aspect = n
         bg: bg ? JSON.parse(JSON.stringify(bg)) : null,
         aspect: aspect ?? null,
         photo: photo ? { ...photo } : null,
+        ...(mockup ? { mockup: { ...mockup } } : {}),
       },
       layers: saved,
     },
@@ -232,7 +236,8 @@ export function layersFromTemplate(tpl, { geom, exif, profile, measure, logoFor 
       });
       continue;
     }
-    const text = saved.tokenSource ? resolveSource(saved.tokenSource, exif, profile) : saved.text;
+    // A camera name's α in a font without one: its own a (frameGlyphs).
+    const text = saved.tokenSource ? textForFont(resolveSource(saved.tokenSource, exif, profile), style.fontFamily) : saved.text;
     if (!text) continue; // a token this photo has no value for: hidden, as built-ins do
     const layer = { ...style, text };
     for (const field of TEXT_SIZE_FIELDS) layer[field] = ((sizeS?.[field] ?? 0) * g.short * 1920) / g.outW;
@@ -251,7 +256,11 @@ export function layersFromTemplate(tpl, { geom, exif, profile, measure, logoFor 
  * stickers must already be in `stickerImages` (keyed by path); logos are added
  * as logoFor returns them.
  */
-export function renderUserTemplate({ photo, template, exif, profile, measure, logoFor, stickerImages = new Map() }) {
+export function renderUserTemplate({ photo: given, template: asGiven, exif, profile, measure, logoFor, stickerImages = new Map() }) {
+  // A camera mockup: settled for this photo, its picture loaded beforehand
+  // (prepareMockup), a big photo brought down to the camera's resolution.
+  const template = withMockupFor(asGiven, exif, given.naturalWidth || given.width, given.naturalHeight || given.height);
+  const photo = photoForMockup(template, given);
   const fullW = photo.naturalWidth || photo.width;
   const fullH = photo.naturalHeight || photo.height;
   // The template's margins, widened to its ratio when it has one.
@@ -272,11 +281,16 @@ export function renderUserTemplate({ photo, template, exif, profile, measure, lo
       bottom: userPad.bottom * g.short, left: userPad.left * g.short,
     },
   });
-  drawPhotoShadow(ctx, contentRect, photoStyle, g.short);
-  ctx.save();
-  clipToPhoto(ctx, contentRect, photoStyle, g.short);
-  ctx.drawImage(photo, g.left, g.top, g.contentW, g.contentH);
-  ctx.restore();
+  const mockup = template.canvas?.mockup;
+  const asset = mockup ? mockupById(mockup.id) : null;
+  if (asset) drawMockup(ctx, { asset, spec: mockup, contentRect, photo, image: mockupImageIfLoaded(mockup.id) });
+  if (!asset || !mockupHidesPhoto(mockup)) {
+    drawPhotoShadow(ctx, contentRect, photoStyle, g.short);
+    ctx.save();
+    clipToPhoto(ctx, contentRect, photoStyle, g.short);
+    ctx.drawImage(photo, g.left, g.top, g.contentW, g.contentH);
+    ctx.restore();
+  }
   const images = new Map(stickerImages);
   const layers = layersFromTemplate(template, {
     geom: g, exif, profile, measure,

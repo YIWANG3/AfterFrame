@@ -77,11 +77,13 @@ export default function BorderControls({
           type="button" title={tpl.name}
           onClick={() => onApplyPreset?.(tpl)}
           style={{ aspectRatio: String(cellAspect || 0.8) }}
-          className="grid w-full shrink-0 place-items-center overflow-hidden p-1 transition hover:bg-hover"
+          // The picture fills the cell's box and is contained in it: a tall
+          // template (9:16, a camera held upright) shows whole, not cut.
+          className="relative block w-full shrink-0 overflow-hidden transition hover:bg-hover"
         >
           {thumb
-            ? <img src={thumb} alt="" className="max-h-full max-w-full object-contain" />
-            : <div className="h-3.5 w-3.5 animate-pulse rounded-full bg-hover" />}
+            ? <img src={thumb} alt="" className="absolute inset-0 h-full w-full object-contain p-1" />
+            : <div className="absolute inset-0 m-auto h-3.5 w-3.5 animate-pulse rounded-full bg-hover" />}
         </button>
         {mine && <div className="truncate px-0.5 text-center text-[9.5px] text-muted2">{tpl.name}</div>}
         {mine && (
