@@ -17,6 +17,7 @@ import { resolveCanvasPad } from "../imageMath";
 import { mockupById, mockupImageIfLoaded } from "../mockups";
 import { mockupBodyPad, mockupHidesPhoto, mockupLayout } from "./mockupLayout";
 import { drawMockup, photoForMockup, withMockupFor } from "./mockupRender";
+import { textForFont } from "./frameGlyphs";
 import {
   formatAperture, formatShutterSpeed, formatFocalLength, formatISO,
 } from "../../../utils/format";
@@ -470,6 +471,8 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
 
     const style = groupStyle.get(ei) || el.style || {};
     const family = FRAME_FONTS[style.font] || FRAME_FONTS.grotesk;
+    // A camera name's α in a font without one: its own a (frameGlyphs).
+    text = textForFont(text, family);
     const weight = style.weight ?? 400;
     const italic = !!style.italic;
     const tracking = style.tracking ?? 0;

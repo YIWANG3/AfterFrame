@@ -9,6 +9,7 @@ import { useState } from "react";
 import api from "../../../api";
 import { createDefaultLayer, createStickerLayer, measureTextWidthDOM } from "../textState";
 import { FRAME_FONTS } from "../frameTemplates";
+import { textForFont } from "../render/frameGlyphs";
 import { isFrameLayer } from "../layerStack";
 import { outputGeometry } from "../frameUserTemplates";
 import {
@@ -247,11 +248,13 @@ export function useFramePlacement({
   // centre, its right end), dark on a light background and light on a dark
   // one; with no bar, the photo's bottom-left corner. Returns whether there
   // was anything to add (a photo without a lens has no lens line).
-  function addFrameText({ text, tokenSource = null, secondary = false }) {
+  function addFrameText({ text: asGiven, tokenSource = null, secondary = false }) {
     const g = currentGeometry();
-    if (!g || !text) return false;
+    if (!g || !asGiven) return false;
     const { source, pad, fullW, geom } = g;
     const family = FRAME_FONTS.grotesk;
+    // A camera name's α in a font without one: its own a (frameGlyphs).
+    const text = textForFont(asGiven, family);
     const widthAt = (fontPx) => measureTextWidthDOM(text, { fontPx, weight: 400, family });
     const spot = placeText({
       geom, pad, widthAt, scale: secondary ? 0.75 : 1,

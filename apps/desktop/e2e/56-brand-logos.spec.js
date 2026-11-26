@@ -395,3 +395,12 @@ test("a brand with four marks: every one gets a cell, wrapping; previews show tw
   await expect(window.locator('[data-brand-logo-row="hasselblad"] [data-more-marks="2"]')).toBeVisible();
   await window.keyboard.press("Escape");
 });
+
+test("a camera named with an α keeps to the frame font: its own a, not an α from another face", async () => {
+  await window.evaluate((key) => window.mediaWorkspace.setCameraName(key, "α7C II"), R6_KEY);
+  await openFrameToolOn(CANON, "bar-id");
+  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("a7C II");
+  expect((await editorState()).layers.some((l) => String(l.text || "").includes("α"))).toBe(false);
+  await closeEditor(window);
+  await window.evaluate((key) => window.mediaWorkspace.setCameraName(key, null), R6_KEY);
+});

@@ -21,6 +21,7 @@ import { clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./render/fra
 import { resolveCanvasPad } from "./imageMath";
 import { mockupById, mockupImageIfLoaded } from "./mockups";
 import { drawMockup, mockupHidesPhoto, photoForMockup, withMockupFor } from "./render/mockupRender";
+import { textForFont } from "./render/frameGlyphs";
 
 export const USER_TEMPLATE_PREFIX = "user:";
 const USER_TEMPLATE_VERSION = 1;
@@ -235,7 +236,8 @@ export function layersFromTemplate(tpl, { geom, exif, profile, measure, logoFor 
       });
       continue;
     }
-    const text = saved.tokenSource ? resolveSource(saved.tokenSource, exif, profile) : saved.text;
+    // A camera name's α in a font without one: its own a (frameGlyphs).
+    const text = saved.tokenSource ? textForFont(resolveSource(saved.tokenSource, exif, profile), style.fontFamily) : saved.text;
     if (!text) continue; // a token this photo has no value for: hidden, as built-ins do
     const layer = { ...style, text };
     for (const field of TEXT_SIZE_FIELDS) layer[field] = ((sizeS?.[field] ?? 0) * g.short * 1920) / g.outW;
