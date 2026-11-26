@@ -5,12 +5,15 @@
 // changes a folder on disk except Move to Trash, which goes through the same
 // path a photo's does.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
 import { choose } from "../components/confirm";
-import { folderName, hasChildren as folderHasChildren, isSynced, isWithin } from "../components/diskFolderTree";
+import { canHideLevel, folderName, hasChildren as folderHasChildren, isSynced, isWithin, withHiddenLevels } from "../components/diskFolderTree";
+import { usePref } from "./usePref";
 import { folderBase } from "./workspaceLogic";
+
+const pathList = (value) => (Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : undefined);
 
 export default function useDiskFolders({ workspaceRef, pushToast, refreshKey }) {
   const { t } = useTranslation("nav");
@@ -18,6 +21,11 @@ export default function useDiskFolders({ workspaceRef, pushToast, refreshKey }) 
   const [folders, setFolders] = useState([]);
   const [watchedDirs, setWatchedDirs] = useState([]);
   const loadIdRef = useRef(0);
+  // The top levels the user hid (Lightroom's Hide This Parent), by path, a
+  // remembered choice of this Mac. The sidebar and the manager show the tree
+  // without them; Sync All and a folder's own menu still work on the whole.
+  const [hiddenLevels, setHiddenLevels] = usePref("sidebar.diskFolderHiddenLevels", [], pathList);
+  const shown = useMemo(() => withHiddenLevels(folders, hiddenLevels), [folders, hiddenLevels]);
 
   async function refresh() {
     if (!api.has("listFolders")) return;
@@ -199,8 +207,20 @@ export default function useDiskFolders({ workspaceRef, pushToast, refreshKey }) 
     }
   }
 
+  // Hide a top folder that only leads to others: its folders move up.
+  function hideLevel(folder) {
+    if (!canHideLevel(shown, folder)) return;
+    setHiddenLevels((current) => [...current.filter((path) => path !== folder.path), folder.path]);
+  }
+
+  // The level hidden right above a top folder, back again.
+  function showLevelAbove(folder) {
+    if (!folder?.hiddenParent) return;
+    setHiddenLevels((current) => current.filter((path) => path !== folder.hiddenParent));
+  }
+
   return {
-    folders,
+    folders: shown,
     watchedDirs,
     refresh,
     hasChildren: (path) => folderHasChildren(folders, path),
@@ -213,5 +233,7 @@ export default function useDiskFolders({ workspaceRef, pushToast, refreshKey }) 
     saveAsCollection,
     reveal: (folder) => api.revealPath(folder.path),
     remove,
+    hideLevel,
+    showLevelAbove,
   };
 }

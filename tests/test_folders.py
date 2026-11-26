@@ -78,6 +78,20 @@ class FoldersTest(unittest.TestCase):
         # The fold stops at Photos, the first directory with two children.
         self.assertEqual(tops, [str(self.photos)])
 
+    def test_the_catalogs_own_versions_are_not_a_folder(self) -> None:
+        self.jpeg("Shoot/a.jpg", 1)
+        crop = self.catalog.derived_dir / "a_crop1x1_0001.jpg"
+        crop.write_bytes(TINY_JPEG + bytes([2]))
+        resolve_image_batch(self.connection, [self.photos, crop])
+
+        everything = [row["path"] for row in list_folders(self.connection)["folders"]]
+        self.assertIn(str(self.catalog.derived_dir), everything)
+        rows = list_folders(self.connection, exclude_under=self.catalog.root)["folders"]
+        # The crop is the app's file, not a folder of the user's: without it
+        # the fold goes all the way down to the shoot.
+        self.assertEqual([row["path"] for row in rows], [str(self.photos / "Shoot")])
+        self.assertEqual(rows[0]["total"], 1)
+
     def test_a_merged_pair_counts_once(self) -> None:
         shoot = self.photos / "Shoot"
         shoot.mkdir(parents=True)

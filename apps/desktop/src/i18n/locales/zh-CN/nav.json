@@ -737,6 +737,8 @@
     "autoSyncOff": "停止自动同步",
     "saveAsCollection": "存为合集…",
     "reveal": "在访达中显示",
+    "hideLevel": "隐藏这一层",
+    "showLevelAbove": "显示上一层",
     "remove": "从图库移除…",
     "failed": "操作没有完成",
     "synced": "已同步“{{name}}”",

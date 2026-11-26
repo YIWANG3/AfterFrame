@@ -3,14 +3,16 @@
 // follows the disk and never changes it: no new folder, no rename, no
 // dragging photos in. A folder opens as a place; its menu locates one that
 // moved, syncs, turns auto-sync on or off, saves it as a collection, shows it
-// in Finder, or takes its photos out of the library. The rows and their
-// order come from components/diskFolderTree.js.
+// in Finder, or takes its photos out of the library. A top folder that only
+// leads to others can be hidden as a level, its folders taking its place
+// (Lightroom's Hide This Parent), and shown again from them. The rows and
+// their order come from components/diskFolderTree.js.
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Album, ChevronDown, ChevronRight, EyeOff, Folder, FolderCog, FolderSearch, FolderX, HardDrive, Plus, RefreshCw, Search, Trash2, FolderSync, Eye, X } from "lucide-react";
+import { Album, ChevronDown, ChevronRight, EyeOff, Folder, FolderCog, FolderSearch, FolderUp, FolderX, HardDrive, Plus, RefreshCw, Search, Trash2, FolderSync, Eye, X } from "lucide-react";
 import FaceMenu from "./FaceMenu";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
-import { DISK_FOLDER_SORTS, ancestorsOf, folderName, isSynced, isWithin, syncedBy, visibleRows } from "./diskFolderTree";
+import { DISK_FOLDER_SORTS, ancestorsOf, canHideLevel, folderName, isSynced, isWithin, syncedBy, visibleRows } from "./diskFolderTree";
 import SectionMoreMenu from "./SectionMoreMenu";
 import { setSidebarHidden } from "./sidebarLayout";
 import { usePref } from "../hooks/usePref";
@@ -43,7 +45,7 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
     return next;
   });
 
-  const menuItems = (folder) => diskFolderMenu(folder, { t, watchedDirs, actions });
+  const menuItems = (folder) => diskFolderMenu(folder, { t, watchedDirs, actions, tree: folders });
 
   return (
     <div
@@ -214,8 +216,9 @@ export function AutoSyncMark({ path, watchedDirs }) {
 
 // A folder's menu, in the sidebar and on the manager's Folders tab: locate one
 // that moved, sync, auto-sync on or off, save as a collection, show in
-// Finder, take its photos out of the library.
-export function diskFolderMenu(folder, { t, watchedDirs, actions }) {
+// Finder, take its photos out of the library. In the sidebar's tree (`tree`)
+// a top folder also hides as a level, or shows the level hidden above it.
+export function diskFolderMenu(folder, { t, watchedDirs, actions, tree = null }) {
   const synced = isSynced(folder.path, watchedDirs);
   return [
     !folder.exists && { key: "locate", icon: FolderSearch, label: t("diskFolders.locate"), onClick: () => actions.locate(folder) },
@@ -228,6 +231,8 @@ export function diskFolderMenu(folder, { t, watchedDirs, actions }) {
     },
     { key: "save-collection", icon: Album, label: t("diskFolders.saveAsCollection"), onClick: () => actions.saveAsCollection(folder) },
     folder.exists && { key: "reveal", icon: Eye, label: t("diskFolders.reveal"), onClick: () => actions.reveal(folder) },
+    tree && canHideLevel(tree, folder) && { key: "hide-level", icon: EyeOff, label: t("diskFolders.hideLevel"), onClick: () => actions.hideLevel(folder) },
+    tree && folder.hiddenParent && { key: "show-level", icon: FolderUp, label: t("diskFolders.showLevelAbove"), onClick: () => actions.showLevelAbove(folder) },
     { key: "remove", icon: Trash2, label: t("diskFolders.remove"), danger: true, onClick: () => actions.remove(folder) },
   ].filter(Boolean);
 }

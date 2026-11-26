@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ancestorsOf, folderName, hasChildren, isSynced, isWithin, syncedBy, visibleRows } from "./diskFolderTree";
+import { ancestorsOf, canHideLevel, folderName, hasChildren, isSynced, isWithin, syncedBy, visibleRows, withHiddenLevels } from "./diskFolderTree";
 
 const folder = (path, parent, volume = "") => ({ path, name: folderName(path), parent, volume, direct: 1, total: 1, exists: true });
 
@@ -67,6 +67,46 @@ describe("disk folders", () => {
     const rows = visibleRows(TREE, new Set(), { query: "day" });
     expect(rows.map((row) => `${row.depth}:${row.folder.name}`)).toEqual(["0:2024", "1:Tokyo", "2:Day 2"]);
     expect(visibleRows(TREE, new Set(), { query: "nowhere" })).toEqual([]);
+  });
+
+  describe("hiding a level", () => {
+    // Photos in ~/Desktop/Export and ~/Downloads: the fold stops at ~.
+    const empty = (path, parent) => ({ ...folder(path, parent), direct: 0 });
+    const HOME = [
+      empty("/Users/me", null),
+      empty("/Users/me/Desktop", "/Users/me"),
+      folder("/Users/me/Desktop/Export", "/Users/me/Desktop"),
+      folder("/Users/me/Desktop/Export/Tokyo", "/Users/me/Desktop/Export"),
+      folder("/Users/me/Downloads", "/Users/me"),
+    ];
+    const tops = (list) => list.filter((row) => row.parent == null).map((row) => row.name);
+
+    it("only a top folder with no photo of its own that leads to others", () => {
+      expect(canHideLevel(HOME, HOME[0])).toBe(true);
+      expect(canHideLevel(HOME, HOME[1])).toBe(false); // not at the top
+      expect(canHideLevel(TREE, TREE[0])).toBe(false); // photos of its own
+      expect(canHideLevel([empty("/a", null)], empty("/a", null))).toBe(false); // nothing under it
+    });
+
+    it("its folders take its place at the top, knowing the level above them", () => {
+      const once = withHiddenLevels(HOME, ["/Users/me"]);
+      expect(tops(once)).toEqual(["Desktop", "Downloads"]);
+      expect(once.find((row) => row.name === "Desktop").hiddenParent).toBe("/Users/me");
+      expect(once.find((row) => row.name === "Tokyo").parent).toBe("/Users/me/Desktop/Export");
+      expect(once.some((row) => row.path === "/Users/me")).toBe(false);
+
+      const twice = withHiddenLevels(HOME, ["/Users/me", "/Users/me/Desktop"]);
+      expect(tops(twice)).toEqual(["Export", "Downloads"]);
+      expect(twice.find((row) => row.name === "Export").hiddenParent).toBe("/Users/me/Desktop");
+      expect(visibleRows(twice, new Set()).map((row) => row.folder.name)).toEqual(["Export", "Downloads"]);
+    });
+
+    it("a level below the top, or one that holds photos now, stays", () => {
+      expect(tops(withHiddenLevels(HOME, ["/Users/me/Desktop"]))).toEqual(["me"]);
+      const photosNow = [{ ...HOME[0], direct: 2 }, ...HOME.slice(1)];
+      expect(tops(withHiddenLevels(photosNow, ["/Users/me"]))).toEqual(["me"]);
+      expect(withHiddenLevels(HOME, [])).toBe(HOME);
+    });
   });
 
   it("heads each volume's folders when there is another disk", () => {
