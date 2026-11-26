@@ -16,7 +16,62 @@
 // logo: `variant` picks symbol|wordmark; `strict` skips (vs. falls back) when a
 //   brand lacks that variant; `color` tints a mono mark; `rotation` for side text.
 
+import { mockupsAvailable } from "./mockups";
+
 const INK = "#1a1a1a", SUB = "#9a9a9a", WHITE = "#f4f4f4";
+
+export const MOCKUP_TEMPLATE_ID = "camera-screen";
+
+// ───────────────────────── 机模 Camera screen ─────────────────────────
+// The photo played back on a camera's display (frame-mockups/): the photo's
+// own camera when there is a picture of it, the photo filling the display, a
+// signature line under the camera. The margins go around the camera; its body
+// around the photo is added by the mockup itself. Sizes are of the bigger of
+// the camera and the photo (frameRender.geometry).
+const MOCKUP_SIGNATURE = [
+  { type: "text", content: "{camera_model}", group: "sig",
+    anchor: { region: "bottom", h: "center", v: "center" },
+    style: { font: "grotesk", weight: 500, size: 0.028, color: INK, tracking: 0.02 } },
+  { type: "exif", fields: ["focal", "aperture", "shutter", "iso"], group: "sig",
+    anchor: { region: "bottom", h: "center", v: "center" },
+    style: { font: "grotesk", weight: 400, size: 0.019, color: SUB, tracking: 0.04 } },
+];
+const MOCKUP_BG = { type: "solid", color: "#f4f3ef" };
+const MOCKUP_TEMPLATE = {
+  id: MOCKUP_TEMPLATE_ID, name: "机模 · 相机屏幕", family: "mockup",
+  canvas: {
+    mockup: { id: "auto", fit: "fill", rotation: "auto", layout: "screen", reflection: false },
+    pad: { top: 0.06, left: 0.06, right: 0.06, bottom: 0.15 },
+    bg: MOCKUP_BG,
+  },
+  elements: MOCKUP_SIGNATURE,
+};
+// The same without the signature: the camera alone, even margins.
+const MOCKUP_PLAIN_TEMPLATE = {
+  id: "camera-screen-plain", name: "机模 · 无字", family: "mockup",
+  canvas: { ...MOCKUP_TEMPLATE.canvas, mockup: { ...MOCKUP_TEMPLATE.canvas.mockup }, pad: { top: 0.06, left: 0.06, right: 0.06, bottom: 0.06 } },
+  elements: [],
+};
+// The camera above the photo, the photo on its display too.
+const MOCKUP_STACK_TEMPLATE = {
+  id: "camera-screen-stack", name: "机模 · 上下", family: "mockup",
+  canvas: {
+    mockup: { id: "auto", fit: "fill", rotation: "auto", layout: "stack", reflection: false },
+    pad: { top: 0.07, left: 0.07, right: 0.07, bottom: 0.15 },
+    bg: MOCKUP_BG,
+  },
+  elements: MOCKUP_SIGNATURE,
+};
+// No border: the photo runs to the canvas's sides and bottom, room only above
+// the camera; the photo square-cornered, no shadow.
+const MOCKUP_STACK_PLAIN_TEMPLATE = {
+  id: "camera-screen-stack-plain", name: "机模 · 上下无字", family: "mockup",
+  canvas: {
+    ...MOCKUP_STACK_TEMPLATE.canvas, mockup: { ...MOCKUP_STACK_TEMPLATE.canvas.mockup },
+    pad: { top: 0.06, left: 0, right: 0, bottom: 0 }, photo: null,
+  },
+  elements: [],
+};
 
 export const FRAME_TEMPLATES = [
   // ───────────────────────── 信息条 Bar ─────────────────────────
@@ -80,6 +135,9 @@ export const FRAME_TEMPLATES = [
         style: { font: "grotesk", weight: 400, size: 0.0145, color: "#8a8a8a" } },
     ],
   },
+
+  // Without frame-mockups/ (deleted) there is no camera to offer.
+  ...(mockupsAvailable ? [MOCKUP_TEMPLATE, MOCKUP_PLAIN_TEMPLATE, MOCKUP_STACK_TEMPLATE, MOCKUP_STACK_PLAIN_TEMPLATE] : []),
 
   // ───────────────────────── 照片底色 Photo backgrounds ─────────────────────────
   // The margin is the photo blurred or the photo's own colours (bg in the

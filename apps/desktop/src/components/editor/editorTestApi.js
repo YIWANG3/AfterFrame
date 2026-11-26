@@ -100,6 +100,7 @@ function buildEditorTestApi(h) {
         canvasBg: s.canvas?.bg || null,
         canvasAspect: s.canvas?.aspect ?? null,
         canvasPhoto: s.canvas?.photo ?? null,
+        canvasMockup: s.canvas?.mockup ?? null,
         imageRect: h.imageRect,
         outputRect: h.screenOutputRect,
         outputContentRect: h.screenOutputView?.contentRect || null,
