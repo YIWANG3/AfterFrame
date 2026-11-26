@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  MOCKUP_MAX_UPSCALE, mockupBodyPad, mockupLayout, mockupOutputScale, mockupRotation, turnedAsset,
+  MOCKUP_MAX_UPSCALE, mockupBodyPad, mockupHidesPhoto, mockupLayout, mockupOutputScale, mockupRotation, turnedAsset,
 } from "./mockupLayout";
 
 // A 1000×600 camera picture with a 4:3 display (400×300) at (100, 150).
@@ -78,6 +78,26 @@ describe("mockup layout", () => {
     expect(pad.right).toBeCloseTo(3000 - 300 - 1200);
     expect(pad.top).toBeCloseTo(450 + 50);
     expect(pad.bottom).toBeCloseTo(1800 - 450 - 900 + 50);
+  });
+
+  it("stacks the camera above the photo, the photo on its display too", () => {
+    const stack = { fit: "fill", rotation: "auto", layout: "stack" };
+    const content = { x: 0, y: 0, width: 1200, height: 800 };
+    const L = mockupLayout(CAMERA, stack, content);
+    // 80% of the photo's width, centred, a gap of 6% of its width above it.
+    expect(L.camera.width).toBeCloseTo(960);
+    expect(L.camera.x).toBeCloseTo(120);
+    expect(L.camera.y + L.camera.height).toBeCloseTo(-72);
+    // The display filled: the photo covers it, centred on it.
+    expect(L.photo.width).toBeGreaterThanOrEqual(L.screen.width - 1e-6);
+    expect(L.photo.height).toBeCloseTo(L.screen.height);
+    expect(L.photo.x + L.photo.width / 2).toBeCloseTo(L.screen.x + L.screen.width / 2);
+    // All the margin is above the photo.
+    const pad = mockupBodyPad(CAMERA, stack, 1200, 800);
+    expect(pad.top).toBeCloseTo(72 + L.camera.height);
+    expect([pad.left, pad.right, pad.bottom]).toEqual([0, 0, 0]);
+    expect(mockupHidesPhoto(stack)).toBe(false);
+    expect(mockupHidesPhoto(contain)).toBe(true);
   });
 
   it("draws a big photo smaller rather than blowing the camera up", () => {

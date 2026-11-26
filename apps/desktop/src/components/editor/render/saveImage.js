@@ -16,7 +16,7 @@ import { canvasActive, canvasMockupAsset, getOutputDimensions, resolveCanvasPad 
 import { clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./frameBackdrop";
 import { loadMockupImage } from "../mockups";
 import { mockupOutputScale } from "./mockupLayout";
-import { drawMockup } from "./mockupRender";
+import { drawMockup, mockupHidesPhoto } from "./mockupRender";
 
 // Catalog registration is a nice-to-have — if it fails (no catalog loaded,
 // sidecar down) we still consider the save successful.
@@ -168,10 +168,11 @@ export async function saveEditedImage(ctx) {
       },
     });
     if (mockupAsset) {
-      // The photo plays back on the camera's display.
       const image = await loadMockupImage(canvasMockup.id);
       drawMockup(outCtx, { asset: mockupAsset, spec: canvasMockup, contentRect, photo: content, image });
-    } else {
+    }
+    // On a camera's "screen" the photo plays back on its display instead.
+    if (!mockupAsset || !mockupHidesPhoto(canvasMockup)) {
       drawPhotoShadow(outCtx, contentRect, canvasPhoto, short);
       outCtx.save();
       clipToPhoto(outCtx, contentRect, canvasPhoto, short);

@@ -15,7 +15,7 @@ import { brandIdForExif, logoHeightFor, pickVariant } from "./frameLogos";
 import { bgUsesPhoto, clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./frameBackdrop";
 import { resolveCanvasPad } from "../imageMath";
 import { mockupById, mockupImageIfLoaded } from "../mockups";
-import { mockupBodyPad } from "./mockupLayout";
+import { mockupBodyPad, mockupHidesPhoto, mockupLayout } from "./mockupLayout";
 import { drawMockup, photoForMockup, withMockupFor } from "./mockupRender";
 import {
   formatAperture, formatShutterSpeed, formatFocalLength, formatISO,
@@ -229,7 +229,15 @@ export function layoutRef(width, height) {
 export function geometry(photo, template, adjust) {
   const photoW = photo.width || photo.naturalWidth;
   const href = photo.height || photo.naturalHeight;
-  const wref = layoutRef(photoW, href);
+  // A camera mockup: the template's text and margins go with the bigger of
+  // the camera and the photo, so they read the same on every camera.
+  const mockup = template.canvas?.mockup;
+  const asset = mockup ? mockupById(mockup.id) : null;
+  let wref = layoutRef(photoW, href);
+  if (asset) {
+    const { camera } = mockupLayout(asset, mockup, { x: 0, y: 0, width: photoW, height: href });
+    wref = Math.max(wref, layoutRef(camera.width, camera.height));
+  }
   const pad = template.canvas?.pad || {};
   const m = adjust?.margin ?? 1; // "blank area" knob scales the padding bands
   let padPx = {
@@ -238,11 +246,9 @@ export function geometry(photo, template, adjust) {
     bottom: (pad.bottom || 0) * wref * m,
     left: (pad.left || 0) * wref * m,
   };
-  // A camera mockup: the template's margins go around the camera, whose body
-  // reaches out from the photo by its own margins (the same ones the editor
-  // adds in resolveCanvasPad).
-  const mockup = template.canvas?.mockup;
-  const asset = mockup ? mockupById(mockup.id) : null;
+  // The template's margins go around the camera, whose body reaches out from
+  // the photo by its own margins (the same ones the editor adds in
+  // resolveCanvasPad).
   const body = asset ? mockupBodyPad(asset, mockup, photoW, href) : null;
   if (body) {
     padPx = {
@@ -289,9 +295,9 @@ export function drawFrameBase(ctx, template, photo, g) {
   const mockup = template.canvas?.mockup;
   const asset = mockup ? mockupById(mockup.id) : null;
   if (asset) {
-    // The photo plays back on the camera's display instead.
     drawMockup(ctx, { asset, spec: mockup, contentRect: rect, photo, image: mockupImageIfLoaded(mockup.id) });
-    return;
+    // On "screen" the photo plays back on the camera's display instead.
+    if (mockupHidesPhoto(mockup)) return;
   }
   drawPhotoShadow(ctx, rect, photoStyle, short);
   ctx.save();
@@ -541,6 +547,12 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
  * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
  * @returns {HTMLCanvasElement}
  */
+/** The template's layout reference per short edge of a photo w×h: how its
+ *  margin fractions turn into the editor's (short-edge) margins. */
+export function templateLayoutUnit(template, w, h) {
+  return geometry({ width: w, height: h }, template, { text: 1, margin: 1 }).wref / Math.min(w, h);
+}
+
 export function renderFrame({ photo: given, exif = {}, profile = {}, template: asGiven, registry, logoImages = new Map(), adjust, logoColor }) {
   // A camera mockup: the camera settled for this photo (its picture must have
   // been loaded: prepareMockup), and a big photo brought down to the camera's

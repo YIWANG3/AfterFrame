@@ -95,7 +95,8 @@ function scrimEquals(a, b) {
 
 function mockupEquals(a, b) {
   if (!a || !b) return (a ?? null) === (b ?? null);
-  return a.id === b.id && a.fit === b.fit && a.rotation === b.rotation && !!a.reflection === !!b.reflection;
+  return a.id === b.id && a.fit === b.fit && a.rotation === b.rotation &&
+    (a.layout || "screen") === (b.layout || "screen") && !!a.reflection === !!b.reflection;
 }
 
 function canvasEquals(a, b) {

@@ -20,7 +20,7 @@ import { drawLayersOnCanvas } from "./render/drawLayers";
 import { clipToPhoto, drawCanvasBackground, drawPhotoShadow } from "./render/frameBackdrop";
 import { resolveCanvasPad } from "./imageMath";
 import { mockupById, mockupImageIfLoaded } from "./mockups";
-import { drawMockup, photoForMockup, withMockupFor } from "./render/mockupRender";
+import { drawMockup, mockupHidesPhoto, photoForMockup, withMockupFor } from "./render/mockupRender";
 
 export const USER_TEMPLATE_PREFIX = "user:";
 const USER_TEMPLATE_VERSION = 1;
@@ -140,7 +140,7 @@ export function templateFromLayers({ id, name, layers, geom, pad, bg, aspect = n
   const saved = [];
   let skipped = 0;
   for (const layer of layers || []) {
-    const { id: _id, x, y, fromPreset: _preset, ...rest } = layer;
+    const { id: _id, x, y, fromPreset: _preset, presetId: _presetId, ...rest } = layer;
     if (layer.type === "overlay") {
       saved.push(rest);
       continue;
@@ -281,9 +281,8 @@ export function renderUserTemplate({ photo: given, template: asGiven, exif, prof
   });
   const mockup = template.canvas?.mockup;
   const asset = mockup ? mockupById(mockup.id) : null;
-  if (asset) {
-    drawMockup(ctx, { asset, spec: mockup, contentRect, photo, image: mockupImageIfLoaded(mockup.id) });
-  } else {
+  if (asset) drawMockup(ctx, { asset, spec: mockup, contentRect, photo, image: mockupImageIfLoaded(mockup.id) });
+  if (!asset || !mockupHidesPhoto(mockup)) {
     drawPhotoShadow(ctx, contentRect, photoStyle, g.short);
     ctx.save();
     clipToPhoto(ctx, contentRect, photoStyle, g.short);

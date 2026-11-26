@@ -5,6 +5,7 @@
 // and the agent's apply_frame, so they can't drift apart.
 
 import { mockupLayout, mockupOutputScale } from "./mockupLayout";
+export { mockupHidesPhoto } from "./mockupLayout";
 import { loadMockupImage, mockupById, resolveMockupSpec } from "../mockups";
 
 /** A template (built-in or the user's) with its camera mockup settled for a
@@ -63,6 +64,7 @@ function drawReflection(ctx, s) {
 }
 
 /**
+ * In a stack the photo itself is drawn by the caller, as without a camera.
  * @param {CanvasRenderingContext2D} ctx
  * @param {object} o
  * @param {object} o.asset        the camera (mockups.json entry)
@@ -84,7 +86,8 @@ export function drawMockup(ctx, { asset, spec, contentRect, photo, image }) {
   ctx.fill();
   ctx.clip();
   const pw = photo.width || photo.naturalWidth, ph = photo.height || photo.naturalHeight;
-  ctx.drawImage(photo, 0, 0, pw, ph, contentRect.x, contentRect.y, contentRect.width, contentRect.height);
+  const p = L.photo;
+  ctx.drawImage(photo, 0, 0, pw, ph, p.x, p.y, p.width, p.height);
   if (spec.reflection) drawReflection(ctx, s);
   ctx.restore();
 

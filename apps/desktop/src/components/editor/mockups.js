@@ -95,6 +95,7 @@ export function resolveMockupSpec(spec, exif, contentW, contentH) {
     id,
     fit: spec.fit === "fill" ? "fill" : "contain",
     rotation: spec.rotation === 0 || spec.rotation === -90 || spec.rotation === 90 ? spec.rotation : "auto",
+    layout: spec.layout === "stack" ? "stack" : "screen",
     reflection: !!spec.reflection,
   };
 }

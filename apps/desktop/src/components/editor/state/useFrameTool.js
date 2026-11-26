@@ -380,7 +380,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     // A camera mockup: the photo's own camera (or the one asked for), its
     // picture loaded for the preview.
     const tpl = await prepareMockup(asGiven, labelledExif(exif, lg), base.width, base.height);
-    if (isUserTemplate(tpl)) return placeLayers(await userTemplateLayers(tpl, lg, base, currentProfile));
+    if (isUserTemplate(tpl)) return placeLayers({ ...(await userTemplateLayers(tpl, lg, base, currentProfile)), presetId: tpl.id });
     await ensureLogos(lg, tpl, base.height || 1200);
     const g = geometry(base, tpl, ADJUST);
     const isOverlay = onPhotoPixels(tpl);
@@ -481,7 +481,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       }
       return null;
     }).filter(Boolean);
-    return placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, mockup, stickerImages, layers });
+    return placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, mockup, stickerImages, layers, presetId: tpl.id });
   }
 
   // A user template's layers on this photo, as generatePresetLayers returns
@@ -520,7 +520,9 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
 
   // Generated layers → STORED layers, plus the canvas treatment. `layoutPad`
   // is the margin the layers were laid out in when a ratio widened it.
-  function placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, mockup = null, stickerImages, layers }) {
+  // `presetId`: the template, kept on each layer so the frame can be laid out
+  // again when the canvas changes shape (EditorOverlay.relayoutCanvas).
+  function placeLayers({ pad, layoutPad, bg, aspect, photo, scrim, mockup = null, stickerImages, layers, presetId = null }) {
     const lp = layoutPad || pad;
     // Layers are STORED in full-photo coords. The elements above were computed on
     // the cropped base:
@@ -546,7 +548,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     }
     return {
       pad, bg, aspect, photo, scrim, mockup, stickerImages,
-      layers: layersFromDisplay(layers, transformedPreview, normalizedCrop, lp),
+      layers: layersFromDisplay(layers, transformedPreview, normalizedCrop, lp).map((l) => (presetId ? { ...l, presetId } : l)),
     };
   }
 

@@ -25,8 +25,8 @@ import { drawLayersOnCanvas } from "./editor/render/drawLayers";
 import { bgUsesPhoto, photoPalette, photoStyleCss } from "./editor/render/frameBackdrop";
 import FrameBackgroundCanvas from "./editor/components/FrameBackgroundCanvas";
 import MockupCanvas from "./editor/components/MockupCanvas";
-import { mockupRotation } from "./editor/render/mockupLayout";
-import { layoutRef } from "./editor/render/frameRender";
+import { mockupHidesPhoto, mockupRotation } from "./editor/render/mockupLayout";
+import { templateLayoutUnit } from "./editor/render/frameRender";
 import { isUserTemplate } from "./editor/frameUserTemplates";
 import { createOverlayLayer } from "./editor/textState";
 import { isFrameLayer } from "./editor/layerStack";
@@ -101,7 +101,7 @@ function padEquals(a, b) {
 
 // Margins and ratio: what changes the framed canvas's shape (and so the fit).
 function canvasShapeEquals(a, b) {
-  const m = (c) => (c?.mockup ? `${c.mockup.id}|${c.mockup.fit}|${c.mockup.rotation}` : null);
+  const m = (c) => (c?.mockup ? `${c.mockup.id}|${c.mockup.fit}|${c.mockup.rotation}|${c.mockup.layout}` : null);
   return padEquals(a?.pad, b?.pad) && (a?.aspect ?? null) === (b?.aspect ?? null) && m(a) === m(b);
 }
 
@@ -858,15 +858,19 @@ export default function EditorOverlay({
   // together, so a single undo reverses the whole preset. Crop and zoom/offset
   // stay untouched — the composed output view wraps the CROPPED photo. Sets
   // layerBasisRef so the basis-sync effect treats the fresh head as current.
-  function setCanvasPreset(res) {
+  // `relayout`: the same template laid out again on a changed canvas: what the
+  // template itself set (presetCanvasRef) stays as it was.
+  function setCanvasPreset(res, { relayout = false } = {}) {
     const s = editorStateRef.current;
     const nextPad = res ? res.pad : { top: 0, right: 0, bottom: 0, left: 0 };
     const nextState = res
       ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: null, aspect: keptCanvas(res, "aspect"), photo: keptCanvas(res, "photo"), mockup: res.mockup ?? null } }
       : { ...s, canvas: { ...s.canvas, pad: nextPad, bg: null, scrim: null, aspect: null, photo: null, mockup: null } };
-    presetCanvasRef.current = res
-      ? Object.fromEntries(PRESET_CANVAS_KEYS.filter((k) => res[k] !== undefined).map((k) => [k, res[k]]))
-      : {};
+    if (!relayout) {
+      presetCanvasRef.current = res
+        ? Object.fromEntries(PRESET_CANVAS_KEYS.filter((k) => res[k] !== undefined).map((k) => [k, res[k]]))
+        : {};
+    }
     // Layers are full-photo coords, basis-independent — the user's own layers
     // stay put; the preset's generated layers already arrive in full-photo coords.
     // Re-applying a preset REPLACES the previous preset's layers (don't stack).
@@ -887,13 +891,9 @@ export default function EditorOverlay({
     setTool("frame");
   }
 
-  // The template last applied: a change to its camera lays it out again.
-  const lastPresetRef = useRef(null);
-
   async function applyFramePreset(tpl) {
     const res = await frameToolRef.current?.generatePresetLayers?.(tpl);
     if (!res) return;
-    lastPresetRef.current = tpl;
     // The template's colours, where they would not read on its background
     // (a saved template's dark text on a dark blurred photo), as one step
     // with the template.
@@ -904,31 +904,53 @@ export default function EditorOverlay({
   }
 
   function clearFramePreset() {
-    lastPresetRef.current = null;
     setCanvasPreset(null);
   }
 
-  // Another camera, fit, way of holding it or reflection. The camera's body
-  // decides where the frame's text goes, so the template is laid out again
-  // around it, with the margins and background as they are now.
-  async function changeMockup(patch) {
+  // The template whose layers the frame has now, by the id they carry (so
+  // after an undo it is the one on screen); null when it has none.
+  function currentPreset() {
+    const id = currentLayerHead().find((l) => l.fromPreset && l.presetId)?.presetId;
+    return id ? frameToolRef.current?.templates?.find((t) => t.id === id) || null : null;
+  }
+
+  // The canvas changing shape under a template (another ratio, camera, fit,
+  // way of holding it): its text and logos are laid out again on the new
+  // canvas, with the margins, background and photo style as they are now, so
+  // nothing is left off it. Edits made to those layers go with the old
+  // layout. Without a template, just the change.
+  async function relayoutCanvas(patch) {
     const s = editorStateRef.current;
-    const cur = s.canvas?.mockup;
-    if (!cur) return;
-    const mockup = { ...cur, ...patch };
-    const tpl = lastPresetRef.current;
-    if (!tpl?.canvas?.mockup) {
-      recordCanvas({ mockup });
+    const tpl = currentPreset();
+    if (!tpl || !previewContentRect) {
+      recordCanvas(patch);
       return;
     }
-    // A built-in template's margins are in its own layout unit, a saved one's
-    // in the editor's (the photo's short edge).
-    const unit = isUserTemplate(tpl) ? 1 : layoutRef(1, 1);
+    const canvas = { ...s.canvas, ...patch };
+    // The margins back in the template's unit: a built-in's layout reference
+    // as laid out now (its camera's, when it has one), a saved template's the
+    // photo's short edge.
+    const unit = isUserTemplate(tpl) ? 1 : templateLayoutUnit(
+      { ...tpl, canvas: { ...tpl.canvas, mockup: s.canvas?.mockup ?? undefined } },
+      previewContentRect.width, previewContentRect.height,
+    );
     const pad = Object.fromEntries(Object.entries(s.canvas?.pad || {}).map(([edge, v]) => [edge, (v || 0) / unit]));
     const res = await frameToolRef.current?.generatePresetLayers?.({
-      ...tpl, canvas: { ...tpl.canvas, mockup, pad, ...(s.canvas?.bg ? { bg: s.canvas.bg } : {}) },
+      ...tpl,
+      canvas: {
+        ...tpl.canvas, pad, aspect: canvas.aspect ?? null, photo: canvas.photo ?? null,
+        ...(canvas.bg ? { bg: canvas.bg } : {}),
+        ...(tpl.canvas?.mockup && canvas.mockup ? { mockup: canvas.mockup } : {}),
+      },
     });
-    if (res) setCanvasPreset(res);
+    if (res) setCanvasPreset(res, { relayout: true });
+    else recordCanvas(patch);
+  }
+
+  // Another camera, fit, way of holding it or reflection.
+  function changeMockup(patch) {
+    const cur = editorStateRef.current.canvas?.mockup;
+    if (cur) relayoutCanvas({ mockup: { ...cur, ...patch } });
   }
 
   const {
@@ -1162,8 +1184,8 @@ export default function EditorOverlay({
                     left: `${composedView.contentRect.x}px`, top: `${composedView.contentRect.y}px`,
                     width: `${composedView.contentRect.width}px`, height: `${composedView.contentRect.height}px`,
                     ...photoStyleCss(editorState.canvas?.photo, Math.min(composedView.contentRect.width, composedView.contentRect.height)),
-                    // On a camera the mockup draws the photo, on its display.
-                    ...(mockupAsset ? { visibility: "hidden" } : {}),
+                    // On a camera's "screen" the mockup draws the photo, on its display.
+                    ...(mockupAsset && mockupHidesPhoto(editorState.canvas.mockup) ? { visibility: "hidden" } : {}),
                   }}
                 >
                   <div
@@ -1417,7 +1439,7 @@ export default function EditorOverlay({
                   }
                   recordCanvasReadable(patch);
                 }}
-                onCanvasAspect={(aspect) => recordCanvas({ aspect })}
+                onCanvasAspect={(aspect) => relayoutCanvas({ aspect })}
                 onCanvasPhoto={applyCanvasPhoto}
                 onCanvasPhotoCommit={() => recordState(editorStateRef.current)}
                 canvasMockup={mockupAsset ? editorState.canvas.mockup : null}

@@ -86,13 +86,13 @@ test.describe("Camera mockup frame", () => {
   };
   const mockupCanvas = (id) => window.locator(`[data-frame-mockup="${id}"][data-mockup-ready="true"]`);
 
-  test("the template plays the photo back on the generic camera, with black bars, in the preview and the export", async () => {
+  test("the template plays the photo back on the generic camera, filling its display, in the preview and the export", async () => {
     // Its thumbnail renders, camera included.
     await expect(window.locator('[data-frame-template="camera-screen"] img')).toBeVisible({ timeout: 15_000 });
     await window.locator('[data-frame-template="camera-screen"] button').first().click();
     // No camera in the photo's EXIF: the generic landscape one.
     await expect.poll(async () => (await state()).canvasMockup).toEqual({
-      id: "hasselblad-907x", fit: "contain", rotation: "auto", reflection: false,
+      id: "hasselblad-907x", fit: "fill", rotation: "auto", layout: "screen", reflection: false,
     });
     await expect(mockupCanvas("hasselblad-907x")).toBeVisible();
     await expect(window.locator("[data-frame-mockup-controls]")).toBeVisible();
@@ -110,32 +110,31 @@ test.describe("Camera mockup frame", () => {
     const out = await saveTo("generic.jpg");
     const { info, at } = await readPixels(out);
     const p = photoInExport(s, info);
-    const cx = (p.x0 + p.x1) / 2, h = p.y1 - p.y0;
-    expect(near(at(cx, p.y0 + h * 0.25), BLUE)).toBe(true);
-    expect(near(at(cx, p.y1 - h * 0.25), ORANGE)).toBe(true);
-    // A 16:10 photo on a 4:3 display: black bars above and below it.
-    expect(dark(at(cx, p.y0 - h * 0.04))).toBe(true);
-    expect(dark(at(cx, p.y1 + h * 0.04))).toBe(true);
+    const cx = (p.x0 + p.x1) / 2, w = p.x1 - p.x0, h = p.y1 - p.y0;
+    // A 16:10 photo filling a 4:3 display: photo to its top and bottom…
+    expect(near(at(cx, p.y0 + h * 0.03), BLUE)).toBe(true);
+    expect(near(at(cx, p.y1 - h * 0.03), ORANGE)).toBe(true);
+    // …and its sides under the camera.
+    expect(near(at(p.x0 + w * 0.02, p.y0 + h * 0.25), BLUE)).toBe(false);
     // Far out from the photo: the frame's light background.
     expect(Math.min(...at(4, 4))).toBeGreaterThan(220);
   });
 
-  test("fill covers the display, the camera cuts the photo's overflow", async () => {
+  test("letterbox shows the whole photo with black bars, one undo step from fill", async () => {
     await clearToasts();
-    await window.locator("[data-frame-mockup-controls] button", { hasText: "Fill" }).click();
-    await expect.poll(async () => (await state()).canvasMockup?.fit).toBe("fill");
+    await window.locator("[data-frame-mockup-controls] button", { hasText: "Letterbox" }).click();
+    await expect.poll(async () => (await state()).canvasMockup?.fit).toBe("contain");
     const s = await state();
-    const out = await saveTo("fill.jpg");
+    const out = await saveTo("letterbox.jpg");
     const { info, at } = await readPixels(out);
     const p = photoInExport(s, info);
-    const cx = (p.x0 + p.x1) / 2, w = p.x1 - p.x0, h = p.y1 - p.y0;
-    // The display is filled to its top: photo where the bar was.
-    expect(near(at(cx, p.y0 + h * 0.03), BLUE)).toBe(true);
-    // The photo is wider than the display: its sides are under the camera.
-    expect(near(at(p.x0 + w * 0.02, p.y0 + h * 0.25), BLUE)).toBe(false);
-    // One undo step back to the bars.
+    const cx = (p.x0 + p.x1) / 2, h = p.y1 - p.y0;
+    expect(near(at(cx, p.y0 + h * 0.25), BLUE)).toBe(true);
+    // Black bars above and below the photo.
+    expect(dark(at(cx, p.y0 - h * 0.04))).toBe(true);
+    expect(dark(at(cx, p.y1 + h * 0.04))).toBe(true);
     await window.evaluate(() => window.__afterframeTest.undo());
-    await expect.poll(async () => (await state()).canvasMockup?.fit).toBe("contain");
+    await expect.poll(async () => (await state()).canvasMockup?.fit).toBe("fill");
   });
 
   test("another camera, held upright, with a reflection", async () => {
@@ -165,6 +164,27 @@ test.describe("Camera mockup frame", () => {
     expect(info.width / info.height).toBeCloseTo(3 / 4, 2);
     // A big photo is drawn at the camera picture's resolution, not blown up around it.
     expect(Math.max(info.width, info.height)).toBeLessThan(4000);
+  });
+
+  test("the stack puts the camera above the photo, the photo on its display too", async () => {
+    await clearToasts();
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("camera-screen-stack"));
+    await expect.poll(async () => (await state()).canvasMockup?.layout).toBe("stack");
+    await expect(mockupCanvas("hasselblad-907x")).toBeVisible();
+    // The photo is drawn as usual, with its corner and shadow sliders.
+    await expect(window.locator("[data-frame-photo]")).toBeVisible();
+    await expect(window.locator("[data-frame-photo-style]")).toHaveCount(1);
+    const s = await state();
+    const o = s.outputRect, c = s.outputContentRect;
+    // The camera takes the upper part.
+    expect(c.y - o.y).toBeGreaterThan(o.height * 0.3);
+    const out = await saveTo("stack.jpg");
+    const { info, at } = await readPixels(out);
+    const p = photoInExport(s, info);
+    const cx = (p.x0 + p.x1) / 2, h = p.y1 - p.y0;
+    expect(near(at(cx, p.y0 + h * 0.25), BLUE)).toBe(true);
+    expect(near(at(cx, p.y1 - h * 0.25), ORANGE)).toBe(true);
+    await window.screenshot({ path: path.join(SHOTS, "stack.png") });
   });
 
   test("another template takes the camera away", async () => {
@@ -210,5 +230,25 @@ test.describe("Camera mockup frame", () => {
     await expect.poll(async () => (await state()).canvasMockup?.id).toBe("fujifilm-x100vi");
     const after = (await state()).layers.find((l) => l.fromPreset && l.text === "Canon EOS R6 Mark II");
     expect(after.y).not.toBeCloseTo(sig.y, 3);
+  });
+  // Still on the Canon photo: its EXIF gives the template text.
+  test("a ratio laid over a template keeps its text on the canvas", async () => {
+    await clearToasts();
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("blur-story"));
+    await expect.poll(async () => (await state()).canvasAspect).toBe("9:16");
+    const presetIds = async () => (await state()).layers.filter((l) => l.fromPreset).map((l) => l.id);
+    const before = await presetIds();
+    expect(before.length).toBeGreaterThan(0);
+    await window.locator("[data-frame-aspect]").getByRole("button", { name: "1:1" }).click();
+    await expect.poll(async () => (await state()).canvasAspect).toBe("1:1");
+    // Laid out again on the square canvas: every preset layer on it.
+    await expect.poll(async () => (await presetIds()).join()).not.toBe(before.join());
+    const s = await state();
+    const ids = new Set(await presetIds());
+    for (const l of s.displayLayers.filter((d) => ids.has(d.id))) {
+      expect(l.y).toBeGreaterThan(0);
+      expect(l.y).toBeLessThan(1);
+    }
+    await window.screenshot({ path: path.join(SHOTS, "ratio-relayout.png") });
   });
 });

@@ -9,6 +9,7 @@ import HandwritingModal from "./handwriting/HandwritingModal";
 import { SliderRow, TextArea, Toggle } from "../../ui";
 import BorderControls from "./components/BorderControls";
 import MockupControls from "./components/MockupControls";
+import { mockupHidesPhoto } from "./render/mockupLayout";
 import FooterButton from "./components/FooterButton";
 import MyLogosRow from "./components/MyLogosRow";
 import CameraLogosBlock from "./components/CameraLogosBlock";
@@ -333,7 +334,7 @@ export default function TextPanel({
                 part="canvas" pad={canvasPad} onPad={onCanvasPad} onPadCommit={onCanvasPadCommit} bg={canvasBg} onBg={onCanvasBg}
                 aspect={canvasAspect} onAspect={onCanvasAspect}
                 // On a camera's display the photo has the display's corners.
-                photo={canvasPhoto} onPhoto={canvasMockup ? undefined : onCanvasPhoto} onPhotoCommit={onCanvasPhotoCommit}
+                photo={canvasPhoto} onPhoto={canvasMockup && mockupHidesPhoto(canvasMockup) ? undefined : onCanvasPhoto} onPhotoCommit={onCanvasPhotoCommit}
                 palette={bgPalette}
               />
             </Section>
