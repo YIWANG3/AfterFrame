@@ -19,6 +19,7 @@ const BLUE = [40, 90, 200], ORANGE = [210, 120, 30];
 const FIX = path.join(__dirname, "fixtures", "frame-mockup-1600.jpg");
 const FIX_TALL = path.join(__dirname, "fixtures", "frame-mockup-tall.jpg");
 const FIX_PHONE = path.join(__dirname, "fixtures", "frame-mockup-phone.jpg");
+const FIX_GR = path.join(__dirname, "fixtures", "frame-mockup-gr.jpg");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-frame-mockup-"));
 const SHOTS = path.join(__dirname, "..", "test-results", "frame-mockup");
 
@@ -62,7 +63,7 @@ test.describe("Camera mockup frame", () => {
   test.afterAll(async () => {
     await closeApp(app, userDataDir);
     fs.rmSync(tmp, { recursive: true, force: true });
-    for (const f of [FIX, FIX_TALL, FIX_PHONE]) { try { fs.rmSync(f, { force: true }); } catch { /* ignore */ } }
+    for (const f of [FIX, FIX_TALL, FIX_PHONE, FIX_GR]) { try { fs.rmSync(f, { force: true }); } catch { /* ignore */ } }
   });
 
   const state = () => window.evaluate(() => window.__afterframeTest.getState());
@@ -331,5 +332,27 @@ test.describe("Camera mockup frame", () => {
     }, { timeout: 30_000 }).toBe("leica-m11-p");
     await expect(window.locator("[data-frame-mockup-missing]")).toHaveText("No camera picture for iPhone XS Max");
     expect((await state()).layers.some((l) => /iPhone/.test(l.text || ""))).toBe(false);
+  });
+
+  // The first GR (2013) has PENTAX in its Make, the company's name then: it is
+  // still a Ricoh, so it gets a GR, its name under it, not a Pentax SLR.
+  test("a first GR, Pentax in its Make, gets a Ricoh GR", async () => {
+    await window.evaluate(() => window.__afterframeTest.closeEditor());
+    await sharp({ create: { width: 1500, height: 1000, channels: 3, background: { r: BLUE[0], g: BLUE[1], b: BLUE[2] } } })
+      .withExif({ IFD0: { Make: "PENTAX RICOH IMAGING", Model: "GR" } }).jpeg({ quality: 92 }).toFile(FIX_GR);
+    await window.evaluate((p) => window.mediaWorkspace.quickRegister(p, null), FIX_GR);
+    await expect.poll(
+      () => window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p).then((d) => d?.asset_id || null), FIX_GR),
+      { timeout: 20_000 },
+    ).toBeTruthy();
+    const detail = await window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), FIX_GR);
+    await openEditorOn(window, detail, "frame");
+    await expect.poll(async () => {
+      await window.evaluate(() => window.__afterframeTest.applyFramePreset("camera-screen"));
+      return (await state()).canvasMockup?.id;
+    }, { timeout: 30_000 }).toMatch(/^ricoh-gr-/);
+    const texts = (await state()).layers.filter((l) => l.fromPreset).map((l) => l.text || "");
+    expect(texts.some((t) => /\bGR\b/.test(t))).toBe(true);
+    await window.screenshot({ path: path.join(SHOTS, "ricoh-gr.png") });
   });
 });

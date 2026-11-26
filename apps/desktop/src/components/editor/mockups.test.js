@@ -32,6 +32,10 @@ describe("camera model names", () => {
     // Pentax bodies say RICOH IMAGING in Make.
     expect(mockupBrandOf({ make: "RICOH IMAGING COMPANY, LTD.", camera_model: "PENTAX K-1 Mark II" })).toBe("pentax");
     expect(mockupBrandOf({ make: "RICOH IMAGING COMPANY, LTD.", camera_model: "RICOH GR III" })).toBe("ricoh");
+    // The first GR (2013) has the company's name then in Make.
+    expect(mockupBrandOf({ make: "PENTAX RICOH IMAGING", camera_model: "GR" })).toBe("ricoh");
+    expect(mockupBrandOf({ make: "PENTAX RICOH IMAGING", camera_model: "PENTAX K-3" })).toBe("pentax");
+    expect(mockupBrandOf({ make: "PENTAX Corporation", camera_model: "PENTAX K-5" })).toBe("pentax");
     expect(mockupBrandOf({ make: "Apple", camera_model: "iPhone 16 Pro" })).toBe(null);
   });
 });
@@ -52,6 +56,7 @@ describe("picking a camera for a photo", () => {
   it("gives a camera with no picture its maker's usual one", () => {
     expect(pick({ make: "Canon", camera_model: "Canon EOS R8" })).toBe("canon-eos-r6-iii");
     expect(pick({ make: "RICOH IMAGING COMPANY, LTD.", camera_model: "PENTAX KF" })).toBe("pentax-k-1-ii");
+    expect(pick({ make: "PENTAX RICOH IMAGING", camera_model: "GR" })).toBe("ricoh-gr-iii");
   });
 
   it("says how well the photo's camera is matched", () => {
