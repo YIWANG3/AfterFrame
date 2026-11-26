@@ -66,6 +66,15 @@ test.describe("Camera mockup frame", () => {
   });
 
   const state = () => window.evaluate(() => window.__afterframeTest.getState());
+  // The canvas fields are the state as set; the rectangles are the view as last
+  // drawn, at times a render behind them: the state once the view shows `check`.
+  const viewWhere = async (check) => {
+    await expect.poll(async () => {
+      const s = await state();
+      return !!(s.outputRect && s.outputContentRect && check(s.outputRect, s.outputContentRect));
+    }).toBe(true);
+    return state();
+  };
   const saveTo = async (name) => {
     const p = path.join(tmp, name);
     await window.evaluate(async (x) => { await window.__afterframeTest.saveAs(x); }, p);
@@ -198,10 +207,8 @@ test.describe("Camera mockup frame", () => {
     // The photo is drawn as usual, with its corner and shadow sliders.
     await expect(window.locator("[data-frame-photo]")).toBeVisible();
     await expect(window.locator("[data-frame-photo-style]")).toHaveCount(1);
-    const s = await state();
-    const o = s.outputRect, c = s.outputContentRect;
     // The camera takes the upper part.
-    expect(c.y - o.y).toBeGreaterThan(o.height * 0.3);
+    const s = await viewWhere((o, c) => c.y - o.y > o.height * 0.3);
     const out = await saveTo("stack.jpg");
     const { info, at } = await readPixels(out);
     const p = photoInExport(s, info);
@@ -223,13 +230,11 @@ test.describe("Camera mockup frame", () => {
     await expect.poll(async () => (await state()).canvasAspect).toBe(null);
     await window.evaluate(() => window.__afterframeTest.applyFramePreset("camera-screen-stack-plain"));
     await expect.poll(async () => (await state()).canvasMockup?.layout).toBe("stack");
-    s = await state();
-    expect(s.layers.filter((l) => l.fromPreset)).toEqual([]);
     // No border: the photo meets the canvas's sides and bottom, square-cornered.
-    const o = s.outputRect, c = s.outputContentRect;
-    expect(c.x).toBeCloseTo(o.x, 0);
-    expect(c.x + c.width).toBeCloseTo(o.x + o.width, 0);
-    expect(c.y + c.height).toBeCloseTo(o.y + o.height, 0);
+    const meets = (a, b) => Math.abs(a - b) < 0.5;
+    s = await viewWhere((o, c) => meets(c.x, o.x) && meets(c.x + c.width, o.x + o.width)
+      && meets(c.y + c.height, o.y + o.height));
+    expect(s.layers.filter((l) => l.fromPreset)).toEqual([]);
     expect(s.canvasPhoto).toBe(null);
   });
 
