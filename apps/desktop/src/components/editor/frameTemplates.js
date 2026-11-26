@@ -62,9 +62,14 @@ const MOCKUP_STACK_TEMPLATE = {
   },
   elements: MOCKUP_SIGNATURE,
 };
+// No border: the photo runs to the canvas's sides and bottom, room only above
+// the camera; the photo square-cornered, no shadow.
 const MOCKUP_STACK_PLAIN_TEMPLATE = {
   id: "camera-screen-stack-plain", name: "机模 · 上下无字", family: "mockup",
-  canvas: { ...MOCKUP_STACK_TEMPLATE.canvas, mockup: { ...MOCKUP_STACK_TEMPLATE.canvas.mockup }, pad: { top: 0.07, left: 0.07, right: 0.07, bottom: 0.07 } },
+  canvas: {
+    ...MOCKUP_STACK_TEMPLATE.canvas, mockup: { ...MOCKUP_STACK_TEMPLATE.canvas.mockup },
+    pad: { top: 0.06, left: 0, right: 0, bottom: 0 }, photo: null,
+  },
   elements: [],
 };
 

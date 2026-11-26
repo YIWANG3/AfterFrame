@@ -218,10 +218,19 @@ test.describe("Camera mockup frame", () => {
     expect(s.layers.filter((l) => l.fromPreset)).toEqual([]);
     expect(s.canvasPad.top).toBeCloseTo(s.canvasPad.bottom);
     expect(s.canvasPad.left).toBeCloseTo(s.canvasPad.bottom);
+    // The photo's own shape (an earlier test set 3:4, which a template keeps).
+    await window.locator("[data-frame-aspect]").getByRole("button", { name: "Photo" }).click();
+    await expect.poll(async () => (await state()).canvasAspect).toBe(null);
     await window.evaluate(() => window.__afterframeTest.applyFramePreset("camera-screen-stack-plain"));
     await expect.poll(async () => (await state()).canvasMockup?.layout).toBe("stack");
     s = await state();
     expect(s.layers.filter((l) => l.fromPreset)).toEqual([]);
+    // No border: the photo meets the canvas's sides and bottom, square-cornered.
+    const o = s.outputRect, c = s.outputContentRect;
+    expect(c.x).toBeCloseTo(o.x, 0);
+    expect(c.x + c.width).toBeCloseTo(o.x + o.width, 0);
+    expect(c.y + c.height).toBeCloseTo(o.y + o.height, 0);
+    expect(s.canvasPhoto).toBe(null);
   });
 
   test("another template takes the camera away", async () => {
