@@ -103,7 +103,11 @@ body,
 
 body {
   margin: 0;
-  overflow: hidden;
+  /* clip, not hidden: the page itself must never scroll. hidden still lets a script scroll it
+     (scrollIntoView, focus()), and #root, the containing block of the fixed layers, lets anything
+     a layer lays out past the window widen the page: the lightbox centring a filmstrip thumbnail
+     then slid the whole app left, and the transparent window showed the desktop on the right. */
+  overflow: clip;
   background: rgb(var(--app-bg));
   color: rgb(var(--text-color));
   /* Windows: Segoe UI, and Microsoft YaHei for Chinese (after PingFang SC, so a Mac with Office's YaHei keeps PingFang) */

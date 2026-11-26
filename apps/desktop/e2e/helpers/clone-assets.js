@@ -2,18 +2,17 @@ const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 
-const SOURCE_STEM = "001-red";
-
-// Clone the 001-red row (asset, registry, preview) under new names, each with
-// its own copy of the file so browse sees a present, unchanged source. Paging
-// specs use it to build a catalog several pages of 180 long.
-function cloneAssets(catalogDir, stems) {
+// Clone one seeded row (asset, registry, preview), 001-red unless `source` names
+// another stem, under new names, each with its own copy of the file so browse
+// sees a present, unchanged source. Paging specs use it to build a catalog
+// several pages of 180 long.
+function cloneAssets(catalogDir, stems, { source = "001-red" } = {}) {
   const db = path.join(catalogDir, "catalog.sqlite3");
   // The SQL goes in on stdin: hundreds of clones make a statement longer than a
   // Windows command line may be (32K).
   const sqlite = (sql) => execFileSync("sqlite3", ["-cmd", ".timeout 10000", "-separator", "\t", db], { input: sql }).toString().trim();
   const [srcId, srcPath, mtimeIso] = sqlite(
-    `SELECT asset_id, canonical_path, modified_time FROM assets WHERE stem = '${SOURCE_STEM}'`,
+    `SELECT asset_id, canonical_path, modified_time FROM assets WHERE stem = '${source}'`,
   ).split("\t");
   const dir = path.join(catalogDir, "clone-images");
   fs.mkdirSync(dir, { recursive: true });
