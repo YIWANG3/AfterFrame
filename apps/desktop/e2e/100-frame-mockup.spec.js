@@ -92,7 +92,7 @@ test.describe("Camera mockup frame", () => {
     await window.locator('[data-frame-template="camera-screen"] button').first().click();
     // No camera in the photo's EXIF: the generic landscape one.
     await expect.poll(async () => (await state()).canvasMockup).toEqual({
-      id: "hasselblad-907x", fit: "fill", rotation: "auto", layout: "screen", reflection: false,
+      id: "hasselblad-907x", fit: "fill", rotation: "auto", layout: "screen", reflection: false, exposure: 0,
     });
     await expect(mockupCanvas("hasselblad-907x")).toBeVisible();
     await expect(window.locator("[data-frame-mockup-controls]")).toBeVisible();
@@ -155,6 +155,30 @@ test.describe("Camera mockup frame", () => {
     await window.screenshot({ path: path.join(SHOTS, "upright-reflection.png") });
   });
 
+  test("the camera's exposure lightens the camera alone, in one undo step", async () => {
+    await clearToasts();
+    const mean = async (file) => {
+      const { channels } = await sharp(file).stats();
+      return (channels[0].mean + channels[1].mean + channels[2].mean) / 3;
+    };
+    const before = await state();
+    const plain = await mean(await saveTo("exposure-0.jpg"));
+    // A drag to +60, released.
+    await window.getByTestId("frame-mockup-exposure").evaluate((el) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "60");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    });
+    await expect.poll(async () => (await state()).canvasMockup?.exposure).toBe(60);
+    const after = await state();
+    // Nothing moves: the same canvas, the same layers.
+    expect(after.outputRect).toEqual(before.outputRect);
+    expect(after.layers.map((l) => l.id)).toEqual(before.layers.map((l) => l.id));
+    expect(await mean(await saveTo("exposure-60.jpg"))).toBeGreaterThan(plain + 2);
+    await window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(async () => (await state()).canvasMockup?.exposure).toBe(0);
+  });
+
   test("a canvas ratio widens the margins around the camera", async () => {
     await clearToasts();
     await window.locator("[data-frame-aspect]").getByRole("button", { name: "3:4" }).click();
@@ -185,6 +209,19 @@ test.describe("Camera mockup frame", () => {
     expect(near(at(cx, p.y0 + h * 0.25), BLUE)).toBe(true);
     expect(near(at(cx, p.y1 - h * 0.25), ORANGE)).toBe(true);
     await window.screenshot({ path: path.join(SHOTS, "stack.png") });
+  });
+
+  test("the templates without text: the camera alone, even margins", async () => {
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("camera-screen-plain"));
+    await expect.poll(async () => (await state()).canvasMockup?.layout).toBe("screen");
+    let s = await state();
+    expect(s.layers.filter((l) => l.fromPreset)).toEqual([]);
+    expect(s.canvasPad.top).toBeCloseTo(s.canvasPad.bottom);
+    expect(s.canvasPad.left).toBeCloseTo(s.canvasPad.bottom);
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("camera-screen-stack-plain"));
+    await expect.poll(async () => (await state()).canvasMockup?.layout).toBe("stack");
+    s = await state();
+    expect(s.layers.filter((l) => l.fromPreset)).toEqual([]);
   });
 
   test("another template takes the camera away", async () => {

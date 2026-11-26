@@ -223,7 +223,8 @@
       "orientation": "方向",
       "landscape": "横拿",
       "portrait": "竖拿",
-      "reflection": "反光"
+      "reflection": "反光",
+      "exposure": "曝光"
     }
   },
   "handwriting": {

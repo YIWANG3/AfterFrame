@@ -223,7 +223,8 @@
       "orientation": "Holding",
       "landscape": "Level",
       "portrait": "Upright",
-      "reflection": "Reflection"
+      "reflection": "Reflection",
+      "exposure": "Exposure"
     }
   },
   "handwriting": {

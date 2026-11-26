@@ -15,7 +15,8 @@
 // `asset` is a mockups.json entry: { size: [w, h], screen: { x, y, w, h, radius } }
 // with the display as fractions of the picture and its corner radius as a
 // fraction of the display's short side. `spec` is canvas.mockup:
-// { id, fit: "contain" | "fill", rotation: "auto" | 0 | -90 | 90, layout, reflection }.
+// { id, fit: "contain" | "fill", rotation: "auto" | 0 | -90 | 90, layout, reflection,
+//   exposure: -100..100, the camera picture's, a stop at either end }.
 
 // The camera picture is never blown up past this: an export of a big photo is
 // drawn smaller instead (mockupOutputScale).

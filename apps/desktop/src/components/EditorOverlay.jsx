@@ -947,10 +947,21 @@ export default function EditorOverlay({
     else recordCanvas(patch);
   }
 
-  // Another camera, fit, way of holding it or reflection.
-  function changeMockup(patch) {
-    const cur = editorStateRef.current.canvas?.mockup;
-    if (cur) relayoutCanvas({ mockup: { ...cur, ...patch } });
+  // Another camera, fit or way of holding it: laid out again. The camera's
+  // exposure and reflection move nothing: just the change (`live` mid-drag,
+  // recorded on release).
+  function changeMockup(patch, { live = false } = {}) {
+    const s = editorStateRef.current;
+    const cur = s.canvas?.mockup;
+    if (!cur) return;
+    const mockup = { ...cur, ...patch };
+    if (Object.keys(patch).every((key) => key === "exposure" || key === "reflection")) {
+      const next = { ...s, canvas: { ...s.canvas, mockup } };
+      if (live) applyState(next);
+      else recordState(next);
+      return;
+    }
+    relayoutCanvas({ mockup });
   }
 
   const {

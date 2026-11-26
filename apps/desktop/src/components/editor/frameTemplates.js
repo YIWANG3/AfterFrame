@@ -46,6 +46,12 @@ const MOCKUP_TEMPLATE = {
   },
   elements: MOCKUP_SIGNATURE,
 };
+// The same without the signature: the camera alone, even margins.
+const MOCKUP_PLAIN_TEMPLATE = {
+  id: "camera-screen-plain", name: "机模 · 无字", family: "mockup",
+  canvas: { ...MOCKUP_TEMPLATE.canvas, mockup: { ...MOCKUP_TEMPLATE.canvas.mockup }, pad: { top: 0.06, left: 0.06, right: 0.06, bottom: 0.06 } },
+  elements: [],
+};
 // The camera above the photo, the photo on its display too.
 const MOCKUP_STACK_TEMPLATE = {
   id: "camera-screen-stack", name: "机模 · 上下", family: "mockup",
@@ -55,6 +61,11 @@ const MOCKUP_STACK_TEMPLATE = {
     bg: MOCKUP_BG,
   },
   elements: MOCKUP_SIGNATURE,
+};
+const MOCKUP_STACK_PLAIN_TEMPLATE = {
+  id: "camera-screen-stack-plain", name: "机模 · 上下无字", family: "mockup",
+  canvas: { ...MOCKUP_STACK_TEMPLATE.canvas, mockup: { ...MOCKUP_STACK_TEMPLATE.canvas.mockup }, pad: { top: 0.07, left: 0.07, right: 0.07, bottom: 0.07 } },
+  elements: [],
 };
 
 export const FRAME_TEMPLATES = [
@@ -121,7 +132,7 @@ export const FRAME_TEMPLATES = [
   },
 
   // Without frame-mockups/ (deleted) there is no camera to offer.
-  ...(mockupsAvailable ? [MOCKUP_TEMPLATE, MOCKUP_STACK_TEMPLATE] : []),
+  ...(mockupsAvailable ? [MOCKUP_TEMPLATE, MOCKUP_PLAIN_TEMPLATE, MOCKUP_STACK_TEMPLATE, MOCKUP_STACK_PLAIN_TEMPLATE] : []),
 
   // ───────────────────────── 照片底色 Photo backgrounds ─────────────────────────
   // The margin is the photo blurred or the photo's own colours (bg in the

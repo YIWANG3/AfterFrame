@@ -89,7 +89,8 @@ describe("the bundled mockups", () => {
 
   it("settles a template's camera for a photo", () => {
     const spec = resolveMockupSpec({ id: "auto", fit: "fill" }, { make: "Canon", camera_model: "Canon EOS R5" }, 3000, 2000);
-    expect(spec).toEqual({ id: "canon-eos-r5", fit: "fill", rotation: "auto", layout: "screen", reflection: false });
+    expect(spec).toEqual({ id: "canon-eos-r5", fit: "fill", rotation: "auto", layout: "screen", reflection: false, exposure: 0 });
+    expect(resolveMockupSpec({ id: "auto", exposure: 250 }, {}, 3000, 2000).exposure).toBe(100);
     // A camera that is no longer there is replaced by the photo's own.
     expect(resolveMockupSpec({ id: "gone" }, {}, 2000, 3000).id).toBe(GENERIC_MOCKUPS.portrait);
   });

@@ -97,6 +97,7 @@ export function resolveMockupSpec(spec, exif, contentW, contentH) {
     rotation: spec.rotation === 0 || spec.rotation === -90 || spec.rotation === 90 ? spec.rotation : "auto",
     layout: spec.layout === "stack" ? "stack" : "screen",
     reflection: !!spec.reflection,
+    exposure: Math.max(-100, Math.min(100, Math.round(Number(spec.exposure) || 0))),
   };
 }
 

@@ -1,9 +1,10 @@
 // The camera of a camera-mockup frame (frame-mockups/): which camera, the
 // photo with black bars or filling the display, the camera held level or
-// upright, and a reflection on its glass. Shown while the frame has a camera.
+// upright, the camera's exposure and a reflection on its glass. Shown while
+// the frame has a camera.
 
 import { useTranslation } from "react-i18next";
-import { Select, Toggle } from "../../../ui";
+import { Select, SliderRow, Toggle } from "../../../ui";
 import { SegGroup } from "../text/controls";
 import { MOCKUPS } from "../mockups";
 
@@ -37,7 +38,8 @@ function Row({ label, children }) {
  * @param {object} props
  * @param {object} props.mockup    canvas.mockup
  * @param {number} props.rotation  the quarter turn it has on this photo now
- * @param {(patch: object) => void} props.onChange
+ * @param {(patch: object, opts?: { live?: boolean }) => void} props.onChange
+ *   `live`: a slider mid-drag, recorded on release
  */
 export default function MockupControls({ mockup, rotation, onChange }) {
   const { t } = useTranslation("editor");
@@ -72,6 +74,15 @@ export default function MockupControls({ mockup, rotation, onChange }) {
           ]}
         />
       </Row>
+      <SliderRow
+        compact
+        label={t("border.mockup.exposure")}
+        min={-100} max={100} resetValue={0}
+        value={mockup.exposure || 0}
+        onChange={(v) => onChange({ exposure: v }, { live: true })}
+        onCommit={(v) => onChange({ exposure: v })}
+        testId="frame-mockup-exposure"
+      />
       <Row label={t("border.mockup.reflection")}>
         <span data-frame-mockup-reflection="true">
           <Toggle on={!!mockup.reflection} onChange={(on) => onChange({ reflection: on })} />

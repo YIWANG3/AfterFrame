@@ -97,6 +97,10 @@ export function drawMockup(ctx, { asset, spec, contentRect, photo, image }) {
   ctx.save();
   ctx.translate(c.x + c.width / 2, c.y + c.height / 2);
   if (L.rotation) ctx.rotate((L.rotation * Math.PI) / 180);
+  // The camera's exposure: product shots come lighter or darker than one
+  // another; ±100 is a stop either way. The photo is left as it is.
+  const stops = (spec.exposure || 0) / 100;
+  if (stops) ctx.filter = `brightness(${Math.pow(2, stops).toFixed(4)})`;
   ctx.drawImage(image, -w / 2, -h / 2, w, h);
   ctx.restore();
 }
