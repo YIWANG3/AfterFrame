@@ -54,8 +54,13 @@ const BRAND_WORDS = [
 
 /** The maker of the camera that took a photo, as mockups.json names makers. */
 export function mockupBrandOf(exif) {
-  const s = `${exif?.make || ""} ${exif?.camera_model || ""}`.toLowerCase();
-  // A Pentax says RICOH IMAGING in Make: its model decides.
+  const model = String(exif?.camera_model || "").toLowerCase();
+  const s = `${exif?.make || ""} ${model}`.toLowerCase();
+  // Ricoh Imaging makes both. A Pentax names itself in the model, whatever Make
+  // says ("RICOH IMAGING COMPANY, LTD."); a Ricoh may have Pentax in Make: the
+  // first GR says "PENTAX RICOH IMAGING", the company's name in 2013.
+  if (model.includes("pentax")) return "pentax";
+  if (s.includes("ricoh")) return "ricoh";
   if (s.includes("pentax")) return "pentax";
   return BRAND_WORDS.find(([word]) => s.includes(word))?.[1] || null;
 }
