@@ -1979,7 +1979,7 @@ def _cmd_verify_assets(args, connection, catalog, parser):
 
 
 def _cmd_list_folders(args, connection, catalog, parser):
-    print(json.dumps(list_folders(connection), indent=2))
+    print(json.dumps(list_folders(connection, exclude_under=catalog.root), indent=2))
     return 0
 
 

@@ -49,6 +49,38 @@ export function ancestorsOf(folders, path) {
   return out;
 }
 
+// A level the user can hide (Lightroom's "Hide This Parent"): a top folder
+// that holds no photo itself and leads to others. Its photos are all in the
+// folders under it, which take its place at the top.
+export const canHideLevel = (folders, folder) => !!folder && folder.parent == null && !folder.direct && hasChildren(folders, folder.path);
+
+// The tree with the levels the user hid taken away: each hidden top's folders
+// become top folders, each knowing the level hidden right above it
+// (`hiddenParent`) so it can be shown again. A level hides only while it can
+// (canHideLevel): one that holds photos of its own now, or that is no longer
+// at the top, shows.
+export function withHiddenLevels(folders, hidden) {
+  const list = folders || [];
+  const set = hidden instanceof Set ? hidden : new Set(hidden || []);
+  if (!set.size || !list.length) return list;
+  const gone = new Set();
+  const promoted = new Map();
+  const queue = list.filter((folder) => folder.parent == null);
+  while (queue.length) {
+    const top = queue.shift();
+    if (!set.has(top.path) || !canHideLevel(list, top)) continue;
+    gone.add(top.path);
+    for (const kid of childrenOf(list, top.path)) {
+      promoted.set(kid.path, top.path);
+      queue.push({ ...kid, parent: null });
+    }
+  }
+  if (!gone.size) return list;
+  return list
+    .filter((folder) => !gone.has(folder.path))
+    .map((folder) => (promoted.has(folder.path) ? { ...folder, parent: null, hiddenParent: promoted.get(folder.path) } : folder));
+}
+
 export const DISK_FOLDER_SORTS = ["name", "count"];
 
 // The rows the sidebar shows: the tree depth-first, a folder's children only

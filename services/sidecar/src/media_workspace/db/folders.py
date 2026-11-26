@@ -63,7 +63,15 @@ def _ancestors(directory: str, root: str) -> list[str]:
     return out
 
 
-def list_folders(connection: sqlite3.Connection) -> dict[str, object]:
+def _under(path: str, directory: str) -> bool:
+    """`path` is inside `directory`, compared without case (§5.1)."""
+    prefix = directory.rstrip("/\\")
+    if not prefix:
+        return False
+    return path.lower().startswith(prefix.lower()) and path[len(prefix):len(prefix) + 1] in ("/", "\\")
+
+
+def list_folders(connection: sqlite3.Connection, *, exclude_under: Path | str | None = None) -> dict[str, object]:
     """The folder tree as flat rows: {path, name, parent, volume, direct,
     total}. `direct` counts the photos right in that directory, `total` the
     ones in it and below. `parent` is None for a top folder.
@@ -71,7 +79,11 @@ def list_folders(connection: sqlite3.Connection) -> dict[str, object]:
     Per volume, each branch's directories above the photos that hold none
     themselves and lead to a single child are folded away: photos all under
     /Users/me/Pictures/2024/… show "2024" at the top, not a chain from /.
-    Only directories that hold photos (themselves or below) appear."""
+    Only directories that hold photos (themselves or below) appear.
+
+    `exclude_under` is the catalog's own folder: the versions the app writes
+    there (crops, text, frames in derived/) are its own files, not a folder
+    the user keeps photos in, so they are left out of the tree."""
     rows = connection.execute(
         f"""
         SELECT assets.canonical_path AS path
@@ -80,6 +92,7 @@ def list_folders(connection: sqlite3.Connection) -> dict[str, object]:
         WHERE {_LIBRARY_WHERE}
         """
     ).fetchall()
+    excluded = str(exclude_under) if exclude_under else ""
 
     direct: dict[str, int] = {}
     total: dict[str, int] = {}
@@ -87,7 +100,7 @@ def list_folders(connection: sqlite3.Connection) -> dict[str, object]:
     volume_of: dict[str, tuple[str, str]] = {}
     for row in rows:
         path = str(row["path"] or "")
-        if not path:
+        if not path or (excluded and _under(path, excluded)):
             continue
         flavour = _flavour(path)
         directory = flavour.dirname(path)

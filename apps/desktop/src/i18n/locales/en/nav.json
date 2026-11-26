@@ -783,6 +783,8 @@
     "autoSyncOff": "Stop Syncing Automatically",
     "saveAsCollection": "Save as Collection…",
     "reveal": "Show in Finder",
+    "hideLevel": "Hide This Level",
+    "showLevelAbove": "Show the Level Above",
     "remove": "Remove from Library…",
     "failed": "Couldn't finish that",
     "synced": "Synced “{{name}}”",
