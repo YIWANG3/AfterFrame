@@ -228,7 +228,7 @@ export default function PeopleSettings() {
         {indexing ? (
           <div className="py-3">
             <div className="flex items-center justify-between gap-3 text-[11px]">
-              <span className="min-w-0 truncate text-text">{job.paused ? t("people.paused") : t("people.indexing")}</span>
+              <span className="min-w-0 truncate text-text">{job.pausedForImport ? t("people.waitingForImport") : job.paused ? t("people.paused") : t("people.indexing")}</span>
               <span className="shrink-0 tabular-nums text-muted2">{progress}%</span>
             </div>
             <div className="mt-2 h-1 overflow-hidden rounded-full bg-app">

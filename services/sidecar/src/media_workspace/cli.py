@@ -506,6 +506,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     pause_job_parser = subparsers.add_parser("pause-job", parents=[common])
     pause_job_parser.add_argument("--job-id", required=True)
+    pause_job_parser.add_argument("--for-import", action="store_true",
+                                  help="The app's pause while an import runs, lifted when imports are done")
+
+    # The app's main process follows up ended imports (people, annotation):
+    # which still have that to do, and what it did (db/import_followups.py).
+    subparsers.add_parser("pending-import-followups", parents=[common])
+    mark_followups_parser = subparsers.add_parser("mark-import-followups", parents=[common])
+    mark_followups_parser.add_argument("--job-id", required=True)
+    mark_followups_parser.add_argument("--followups-json", required=True)
 
     resume_job_parser = subparsers.add_parser("resume-job", parents=[common])
     resume_job_parser.add_argument("--job-id", required=True)
@@ -698,6 +707,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_annotation_job_parser.add_argument("--asset-ids", help="Comma-separated asset_ids to scope the batch (multi-select).")
     run_annotation_job_parser.add_argument("--collection-id", help="Scope the batch to a collection/folder.")
     run_annotation_job_parser.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
+    run_annotation_job_parser.add_argument("--import-job-id", dest="import_job_ids", action="append",
+                                           help="Scope the batch to the photos this import added (repeatable)")
     run_annotation_job_parser.add_argument("--languages", default="en,zh")
     run_annotation_job_parser.add_argument("--max-tags", type=int, default=10)
     run_annotation_job_parser.add_argument("--max-caption-chars", type=int, default=200)
@@ -714,6 +725,7 @@ def build_parser() -> argparse.ArgumentParser:
     annotation_count_p.add_argument("--asset-ids")
     annotation_count_p.add_argument("--collection-id")
     annotation_count_p.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
+    annotation_count_p.add_argument("--import-job-id", dest="import_job_ids", action="append")
 
     get_annotation_p = subparsers.add_parser("get-annotation", parents=[common])
     get_annotation_p.add_argument("--asset-id", required=True)
@@ -1135,6 +1147,7 @@ def _cmd_run_annotation_job(args, connection, catalog, parser):
         asset_ids=asset_ids,
         collection_id=args.collection_id or None,
         include_descendants=bool(args.include_descendants),
+        import_job_ids=args.import_job_ids,
         languages=langs,
         max_tags=args.max_tags,
         max_caption_chars=args.max_caption_chars,
@@ -1157,6 +1170,7 @@ def _cmd_annotation_count(args, connection, catalog, parser):
         asset_ids=asset_ids,
         collection_id=args.collection_id or None,
         include_descendants=bool(args.include_descendants),
+        import_job_ids=args.import_job_ids,
     )
     print(json.dumps({"count": count}, ensure_ascii=False))
     return 0
@@ -1478,7 +1492,24 @@ def _cmd_fail_job(args, connection, catalog, parser):
 
 
 def _cmd_pause_job(args, connection, catalog, parser):
-    print(json.dumps(request_job_pause(connection, args.job_id), indent=2))
+    print(json.dumps(request_job_pause(connection, args.job_id, for_import=bool(args.for_import)), indent=2))
+    return 0
+
+
+def _cmd_pending_import_followups(args, connection, catalog, parser):
+    from .db.import_followups import pending_import_followups
+
+    print(json.dumps(pending_import_followups(connection)))
+    return 0
+
+
+def _cmd_mark_import_followups(args, connection, catalog, parser):
+    from .db.import_followups import mark_import_followups
+
+    followups = json.loads(args.followups_json)
+    if not isinstance(followups, dict):
+        parser.error("--followups-json must be an object")
+    print(json.dumps(mark_import_followups(connection, args.job_id, followups)))
     return 0
 
 
@@ -2241,6 +2272,8 @@ COMMAND_HANDLERS = {
     "cancel-job": _cmd_cancel_job,
     "fail-job": _cmd_fail_job,
     "pause-job": _cmd_pause_job,
+    "pending-import-followups": _cmd_pending_import_followups,
+    "mark-import-followups": _cmd_mark_import_followups,
     "resume-job": _cmd_resume_job,
     "list-active-jobs": _cmd_list_active_jobs,
     "run-import-job": _cmd_run_import_job,

@@ -131,7 +131,7 @@
 | `get_asset(id)` | asset-detail | 1 |
 | `view_assets(ids)` | previews → 小图 base64 | 1 |
 | `get_selection()` | 主进程 ↔ renderer IPC | 2 |
-| `import_directory(path, opts)` | run-import-job（封装轮询） | 2 |
+| `import_directory(path, opts)` | run-import-job（封装轮询；撞上正在跑的导入时排队，返回 `queued: true`，等它结束再导入） | 2 |
 | `annotate_assets(ids \| filter)` | annotation job | 2 |
 | `update_assets(ids, {tags, star, annotation})` | 元数据批量写；`add_tags` 的新标签按词表落组，`tag_group` 指定组 | 2 |
 | `list_tags(group?, query?, limit?)` / `manage_tags(action, …)` | 标签按组列出；组与标签的管理（移组 / 改名 / 合并 / 删除 / 置顶） | 2 |

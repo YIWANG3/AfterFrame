@@ -39,7 +39,7 @@ export function jobLine(job, t) {
   const processed = Number(phase.processed || 0);
   const total = Number(phase.total || 0);
   const name = phaseName(job, t);
-  if (job.status === "paused") return t("activity.paused");
+  if (job.status === "paused") return t(job.pausedForImport ? "activity.waitingForImport" : "activity.paused");
   if (total > 0) return t("activity.workingProgress", { label: name || t("activity.working"), processed, total });
   return name || (job.status === "queued" ? t("activity.queued") : t("activity.working"));
 }

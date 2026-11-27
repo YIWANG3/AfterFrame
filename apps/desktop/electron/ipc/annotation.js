@@ -4,6 +4,7 @@
 
 const jobArgv = require("../sidecar/jobArgv");
 const { withCatalog, catalogRequired, jobStatusHandler } = require("./guard");
+const { PRIORITY } = require("../tasks");
 
 function register({
   ipcMain,
@@ -105,6 +106,9 @@ function register({
   // onlyMissing (default true) skips already-annotated assets; pass false to
   // re-annotate. Reads provider + annotation options from saved settings.
   // Shared by the IPC handler below and the MCP annotate_assets tool.
+  // importJobIds (scope "import"): the photos those imports added, the
+  // import pipeline's follow-up (../pipeline.js) when autoOnImport is on.
+  // auto: the app started it, not the user (the job list's order).
   const startAnnotationTask = guarded(catalogRequired("Open a catalog before annotating assets."), async (options) => {
     const current = await latestJobStatus("annotation");
     if (current.running) return current;
@@ -116,6 +120,7 @@ function register({
     const assetIds = Array.isArray(opts.assetIds) ? opts.assetIds.filter(Boolean) : [];
     const collectionId = opts.collectionId || null;
     const includeDescendants = !!collectionId && opts.includeDescendants === true;
+    const importJobIds = Array.isArray(opts.importJobIds) ? opts.importJobIds.filter(Boolean).map(String) : [];
 
     const job = await createJob("annotation", {
       provider: sidecarProvider,
@@ -124,7 +129,8 @@ function register({
       only_missing: onlyMissing,
       asset_count: assetIds.length || null,
       collection_id: collectionId,
-    });
+      ...(importJobIds.length ? { import_job_ids: importJobIds } : {}),
+    }, { priority: opts.auto === true ? PRIORITY.auto : PRIORITY.user });
 
     launchSidecarJob(jobArgv.annotationJob({
       jobId: job.job_id,
@@ -136,10 +142,21 @@ function register({
       assetIds,
       collectionId,
       includeDescendants,
+      importJobIds,
       settings,
     }));
     return formatJobStatus(job);
   });
+
+  // Whether a batch could start: a provider configured, with the key it needs.
+  async function hasProvider() {
+    try {
+      await resolveActiveProvider();
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   ipcMain.handle("workspace:annotation-start", (_event, options) => startAnnotationTask(options));
 
@@ -246,7 +263,7 @@ function register({
     }
   });
 
-  return { startAnnotationTask };
+  return { startAnnotationTask, hasProvider };
 }
 
 module.exports = { register };

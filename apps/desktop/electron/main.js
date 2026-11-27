@@ -50,6 +50,7 @@ const { createSampleCatalog } = require("./sampleCatalog");
 const { IPC_METHODS } = require("../shared/ipcChannels.mjs");
 const { createImageMetadataWriter } = require("./imageMetadata");
 const { createTaskStarters } = require("./tasks");
+const { createImportPipeline } = require("./pipeline");
 const { createTokenStore } = require("./tokens");
 const { createMediaAllowlist } = require("./media/allowlist");
 const { registerMediaProtocol } = require("./media/protocol");
@@ -223,6 +224,10 @@ const tasks = createTaskStarters({
   providerCredentials,
   // people registers after the task starters exist; read it at call time.
   resumePeopleIndexJob: (jobId) => services.people?.resumePeopleIndexJob(jobId),
+  // So is the import pipeline (./pipeline.js), set before any window asks.
+  onImportStarted: () => services.pipeline?.importStarted(),
+  deferUntilImportsEnd: (type, options) => services.pipeline?.deferUntilImportsEnd(type, options),
+  onJobResumed: (jobId) => services.pipeline?.jobResumed(jobId),
 });
 const { startImportTask } = tasks;
 
@@ -267,7 +272,9 @@ ipcMain.handle("window:set-titlebar-theme", (event, theme) =>
 const sample = createSampleCatalog({
   catalog, source: samplePhotosSource,
   transport: sidecarTransport, commands: sidecarCommands,
-  startImportTask, switchCatalogTo, registerRoots,
+  // Through the pipeline: behind an import already running it waits its turn.
+  startImportTask: (options) => (services.pipeline ? services.pipeline.startImport(options) : startImportTask(options)),
+  switchCatalogTo, registerRoots,
 });
 
 async function switchCatalogTo(nextCatalogPath) {
@@ -292,6 +299,7 @@ async function switchCatalogTo(nextCatalogPath) {
   services.mcp?.clearPreviewCache();
   await sample.prepareCatalogPath();
   void services.people?.recoverQueuedPeopleJobs?.();
+  services.pipeline?.catalogChanged();
   // Persist last catalog path for next launch
   if (catalog.path()) {
     await updateAppSettings((s) => ({ ...s, lastCatalogPath: catalog.path() }));
@@ -328,6 +336,20 @@ jobsIpc.register(host);
 aiIpc.register(host);
 services.set("annotation", annotationIpc.register(host));
 services.set("people", peopleIpc.register(host));
+// What happens around imports: follow-ups, analysis making way, the queue
+// for callers without one (./pipeline.js).
+services.set("pipeline", createImportPipeline({
+  commands: sidecarCommands,
+  tasks,
+  people: services.people,
+  annotation: services.annotation,
+  readAppSettings,
+  getCatalogPath: catalog.path,
+  announce: (jobId, jobType) => {
+    if (jobId) agentBridge.broadcastCatalogChanged("jobs", { jobId, jobType });
+  },
+}));
+sidecarTransport.onJobExit(() => services.pipeline.jobExited());
 browseIpc.register(host);
 assetsIpc.register(host);
 
@@ -440,6 +462,7 @@ app.whenReady().then(async () => {
     }
   }
   try { services.watcher.start(); } catch (err) { console.warn("[watcher] start failed:", err?.message || err); }
+  services.pipeline.start();
 
   // Embedded MCP server — external AI agents (Claude Code etc.) drive the app
   // through this while it runs. Failures must never affect the app itself.

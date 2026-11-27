@@ -571,6 +571,7 @@ def list_assets_for_annotation(
     collection_id: str | None = None,
     limit: int | None = None,
     include_descendants: bool = False,
+    import_job_ids: list[str] | None = None,
 ) -> list[sqlite3.Row]:
     """Assets eligible for AI annotation, with their best preview path.
 
@@ -579,6 +580,8 @@ def list_assets_for_annotation(
     - asset_ids scopes to an explicit selection (multi-select right-click).
     - collection_id scopes to a folder/collection; include_descendants takes
       the folders under it too.
+    - import_job_ids scopes to the photos those imports added (annotating
+      on import: import_followups.import_scope).
     Returns rows with asset_id, canonical_path, extension, and ready preview
     relative paths (preview-hd preferred) for the batch encoder.
     """
@@ -606,6 +609,12 @@ def list_assets_for_annotation(
         placeholders = ",".join("?" for _ in asset_ids)
         where.append(f"assets.asset_id IN ({placeholders})")
         params.extend(asset_ids)
+    if import_job_ids is not None:
+        from .import_followups import import_scope
+
+        scope_sql, scope_params = import_scope(connection, import_job_ids)
+        where.append(scope_sql)
+        params.extend(scope_params)
 
     sql = f"""
         SELECT
@@ -634,6 +643,7 @@ def count_assets_for_annotation(
     asset_ids: list[str] | None = None,
     collection_id: str | None = None,
     include_descendants: bool = False,
+    import_job_ids: list[str] | None = None,
 ) -> int:
     """How many assets a batch-annotation job would process (for UI counts)."""
     rows = list_assets_for_annotation(
@@ -643,6 +653,7 @@ def count_assets_for_annotation(
         asset_ids=asset_ids,
         collection_id=collection_id,
         include_descendants=include_descendants,
+        import_job_ids=import_job_ids,
     )
     return len(rows)
 

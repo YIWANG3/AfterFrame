@@ -83,7 +83,10 @@ function contentTypeFor(filePath) {
 function createMcpServer(host, { port = DEFAULT_PORT } = {}) {
   const { catalog, commands, tasks, registerRoots, sharp, agentBridge, services } = host;
   const getCatalogState = catalog.state;
-  const { startImportTask, formatJobStatus } = tasks;
+  const { formatJobStatus } = tasks;
+  // Through the import pipeline (../pipeline.js): behind an import already
+  // running, an agent's waits its turn instead of being turned away.
+  const startImportTask = (options) => (services.pipeline ? services.pipeline.startImport(options) : tasks.startImportTask(options));
   const deps = {
     // The agent ↔ app window bridge.
     revealAssetsInApp: agentBridge.revealAssetsInApp,

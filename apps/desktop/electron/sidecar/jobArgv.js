@@ -103,7 +103,7 @@ function textImageJob({
 // maxCaptionChars, customInstructions, videoFrameInterval, maxWorkers); unset
 // or out-of-range fields fall through to the sidecar's argparse defaults.
 function annotationJob({
-  jobId, provider, model, apiKey, baseUrl, reannotate, assetIds, collectionId, includeDescendants, settings,
+  jobId, provider, model, apiKey, baseUrl, reannotate, assetIds, collectionId, includeDescendants, importJobIds, settings,
 }) {
   const argv = [
     "run-annotation-job",
@@ -117,6 +117,9 @@ function annotationJob({
   if (Array.isArray(assetIds) && assetIds.length) argv.push("--asset-ids", assetIds.map(String).join(","));
   pushIf(argv, "--collection-id", collectionId);
   if (collectionId && includeDescendants) argv.push("--include-descendants");
+  for (const importJobId of Array.isArray(importJobIds) ? importJobIds.filter(Boolean) : []) {
+    argv.push("--import-job-id", String(importJobId));
+  }
   const s = settings || {};
   if (Array.isArray(s.languages) && s.languages.length) argv.push("--languages", s.languages.join(","));
   if (Number.isFinite(s.maxTags)) argv.push("--max-tags", String(s.maxTags));

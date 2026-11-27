@@ -252,7 +252,7 @@ export default function App() {
   // Photos whose preview has no look-alike hash yet get one (and, on a Mac,
   // a feature print): after an import, and once for an existing library.
   useCatalogCatchUp(api.has("startVisualAnalysis") ? readyCatalogKey : null, async () => {
-    followJob("visual")(await api.startVisualAnalysis({}));
+    followJob("visual")(await api.startVisualAnalysis({ auto: true }));
   });
   // Thumbnails made before the photo's shape was recorded get it read
   // (portrait / landscape, for the orientation filter and the layouts).
@@ -531,7 +531,10 @@ export default function App() {
   }, []);
 
   // Unified finish handling: annotation results (toast + cache invalidation)
-  // and auto-annotate-on-import both react to the workspace's finish events.
+  // and failures react to the workspace's finish events. What follows an
+  // import (people, annotation) is the main process's (electron/pipeline.js),
+  // whether the import ended well or not and whether a window saw it end;
+  // the jobs it starts reach the dock through the "jobs" broadcast.
   // Effect event: fires once per finish event, with the current toast/i18n/
   // annotation closures rather than the ones from that render.
   const onJobFinished = useEffectEvent((fin) => {
@@ -555,28 +558,6 @@ export default function App() {
         pushToast?.({ title: t("annotationCancelled"), message: t("annotationKept"), ttl: 4000 });
       } else if (fin.status === "failed") {
         pushToast?.({ title: t("annotationFailed"), message: fin.error || t("jobFailed"), ttl: 7000, tone: "error" });
-      }
-    } else if (fin.jobType === "import" && fin.status === "succeeded") {
-      // Auto-annotate on import (setting-gated; no-ops without provider/targets).
-      void (async () => {
-        try {
-          const s = await api.getAnnotationSettings();
-          if (s?.autoOnImport) runAnnotation(null, { scope: "all", onlyMissing: true });
-        } catch { /* ignore */ }
-      })();
-      // Auto-analyze faces on import. Already-indexed photos are skipped by
-      // the job, and a running people job is returned instead of doubled up.
-      // Without an installed model this stays silent: the toggle is opt-in and
-      // an import must never end in an error about a feature the user didn't ask for.
-      if (api.can("people")) {
-        void (async () => {
-          try {
-            const p = await api.getPeopleSettings();
-            if (!p?.autoIndexOnImport || !p.activeModel?.available) return;
-            const started = await api.startPeopleIndex({ priority: 1 });
-            window.dispatchEvent(new CustomEvent("people-index:started", { detail: started }));
-          } catch { /* ignore */ }
-        })();
       }
     } else if (fin.status === "failed" && fin.jobType !== "ai_repaint") {
       // Generic failure surfacing for the other job types (the editor handles

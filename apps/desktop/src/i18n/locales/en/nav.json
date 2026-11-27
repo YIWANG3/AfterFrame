@@ -440,6 +440,7 @@
     "pause": "Pause",
     "resume": "Resume",
     "paused": "Paused",
+    "waitingForImport": "Waits for the import",
     "queued": "Queued",
     "working": "Working…",
     "workingProgress": "{{label}} · {{processed}}/{{total}}",
