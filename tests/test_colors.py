@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from PIL import Image
 
+from media_workspace import preview_service
 from media_workspace.catalog import ensure_catalog
 from media_workspace.colors import extract_palette, palette_from_pixels, parse_hex
 from media_workspace.db import connect, init_db, list_image_assets, upsert_image_asset, upsert_registry
@@ -165,6 +168,37 @@ class ColorFilterTest(unittest.TestCase):
         self.assertEqual(run_colors_job(self.connection, self.catalog.root, "job-2")["total"], 0)
         self.assertEqual(run_colors_job(self.connection, self.catalog.root, "job-2", force=True)["total"], 3)
         self.assertNotEqual(get_asset_colors(self.connection, "image_sea")[0]["hex"], "#000000")
+
+    def test_palettes_are_read_in_the_render_threads_and_written_by_the_caller(self):
+        # The palette is ~11 ms a photo: taken on the thread that does every
+        # write, it was most of a fast import. Only the write stays there.
+        read_on, written_on = [], []
+        real_extract, real_replace = preview_service.extract_palette, preview_service.replace_asset_colors
+
+        def extract(path):
+            read_on.append(threading.current_thread())
+            return real_extract(path)
+
+        def replace(connection, asset_id, swatches, **kwargs):
+            written_on.append(threading.current_thread())
+            return real_replace(connection, asset_id, swatches, **kwargs)
+
+        with mock.patch.object(preview_service, "extract_palette", extract), \
+                mock.patch.object(preview_service, "replace_asset_colors", replace):
+            self.assertEqual(self.render_previews()["generated"], 3)
+        self.assertEqual(len(read_on), 3)
+        self.assertNotIn(threading.current_thread(), read_on)
+        self.assertEqual(written_on, [threading.current_thread()] * 3)
+        self.assertEqual(color_status(self.connection), {"analyzed": 3, "missing": 0, "stale": False})
+
+    def test_a_preview_whose_colours_cannot_be_read_is_still_ready(self):
+        with mock.patch.object(preview_service, "extract_palette", lambda path: []):
+            result = self.render_previews()
+        self.assertEqual((result["generated"], result["failed"]), (3, 0))
+        self.assertEqual(color_status(self.connection)["missing"], 3)
+        # The next pass reads them from the previews already on disk.
+        self.assertEqual(self.render_previews()["skipped"], 3)
+        self.assertEqual(color_status(self.connection)["missing"], 0)
 
     def test_a_second_preview_pass_fills_colours_without_rerendering(self):
         self.render_previews()

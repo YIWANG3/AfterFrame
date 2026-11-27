@@ -75,3 +75,7 @@ words.
 - **Native helpers** (`apps/desktop/native/*.swift`) are built by
   `npm run build:native` with Xcode's toolchain. Their binaries, the Core ML
   models (face and depth) and ExifTool are fetched or built, never committed.
+  Rebuild them after pulling a change to a `.swift` file: a stale helper
+  doesn't fail, the sidecar quietly works around it (an `image-features`
+  from before its "thumb" request leaves every preview to Pillow, at a
+  fraction of the speed).

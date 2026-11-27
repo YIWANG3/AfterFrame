@@ -1,0 +1,28 @@
+{
+ "wall_s": 115.56,
+ "cpu_self_s": 0.3,
+ "cpu_children_s": 114.71,
+ "avg_cores_busy": 1.0,
+ "steps": {
+  "main | sqlite commit [people]": {
+   "calls": 1005,
+   "total_s": 0.179
+  },
+  "main | job: update_job (progress writes)": {
+   "calls": 503,
+   "total_s": 0.13
+  },
+  "main | sqlite execute [people]": {
+   "calls": 5531,
+   "total_s": 0.071
+  },
+  "main | sqlite execute [setup]": {
+   "calls": 8,
+   "total_s": 0.001
+  },
+  "main | sqlite commit [setup]": {
+   "calls": 1,
+   "total_s": 0.0
+  }
+ }
+}
