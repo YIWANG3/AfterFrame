@@ -1,0 +1,231 @@
+{
+ "wall_s": 7.41,
+ "cpu_self_s": 7.48,
+ "cpu_children_s": 23.96,
+ "avg_cores_busy": 4.24,
+ "phase_results": [
+  {
+   "key": "index_processed_media",
+   "label": "Index Images",
+   "result": {
+    "processed": 500,
+    "total": 500,
+    "status_counts": {
+     "unmatched": 500
+    },
+    "already_in_catalog": 0,
+    "newly_added": 500,
+    "claimed_moved": 0,
+    "skipped_deleted": 0,
+    "deferred_files": 0,
+    "raw_pairs_made": 0,
+    "skipped_unsupported": {
+     "count": 0,
+     "by_extension": {}
+    },
+    "skipped_companion": {
+     "count": 0,
+     "by_extension": {}
+    },
+    "changed_paths": []
+   }
+  },
+  {
+   "key": "generate_previews",
+   "label": "Generate Previews",
+   "result": {
+    "generated": 500,
+    "skipped": 0,
+    "failed": 0,
+    "deferred": 0,
+    "total": 500
+   }
+  }
+ ],
+ "steps": {
+  "thread | render: generate_for_row (incl.)": {
+   "calls": 500,
+   "total_s": 27.368
+  },
+  "thread | render: _render_with_image_io (incl. fallbacks to Pillow)": {
+   "calls": 500,
+   "total_s": 27.098
+  },
+  "main | PHASE index (resolve_image_batch incl. inline previews)": {
+   "calls": 1,
+   "total_s": 7.381
+  },
+  "thread | render: extract_palette": {
+   "calls": 500,
+   "total_s": 6.917
+  },
+  "main | PREVIEWS inline batches during index": {
+   "calls": 5,
+   "total_s": 6.506
+  },
+  "main | previews: wait() for a render (idle)": {
+   "calls": 497,
+   "total_s": 5.758
+  },
+  "thread | render: VisualAnalyzer.measure (hash + feature print)": {
+   "calls": 500,
+   "total_s": 3.246
+  },
+  "main | index: resolve_image (per JPG/HEIC, incl.)": {
+   "calls": 500,
+   "total_s": 0.726
+  },
+  "main | index: extract_image_candidate (incl.)": {
+   "calls": 500,
+   "total_s": 0.562
+  },
+  "main | index: read_metadata (incl.)": {
+   "calls": 500,
+   "total_s": 0.494
+  },
+  "main | index: exiftool.read (wait for tags)": {
+   "calls": 500,
+   "total_s": 0.456
+  },
+  "main | previews: VisualAnalyzer.store": {
+   "calls": 500,
+   "total_s": 0.227
+  },
+  "main | sqlite execute [previews-inline]": {
+   "calls": 3530,
+   "total_s": 0.159
+  },
+  "main | previews: replace_asset_colors": {
+   "calls": 500,
+   "total_s": 0.136
+  },
+  "main | previews: preview_shape": {
+   "calls": 500,
+   "total_s": 0.093
+  },
+  "main | sqlite commit [previews-inline]": {
+   "calls": 502,
+   "total_s": 0.09
+  },
+  "main | index: upsert_image_asset": {
+   "calls": 500,
+   "total_s": 0.077
+  },
+  "main | sqlite commit [index]": {
+   "calls": 507,
+   "total_s": 0.075
+  },
+  "main | sqlite execute [index]": {
+   "calls": 8419,
+   "total_s": 0.074
+  },
+  "main | index: quick_fingerprint": {
+   "calls": 500,
+   "total_s": 0.047
+  },
+  "main | index: shortlist_candidates": {
+   "calls": 500,
+   "total_s": 0.041
+  },
+  "main | previews: set_display_shape": {
+   "calls": 500,
+   "total_s": 0.029
+  },
+  "main | previews: upsert_preview_entry": {
+   "calls": 500,
+   "total_s": 0.026
+  },
+  "main | PREVIEWS pass after index (preview, image)": {
+   "calls": 1,
+   "total_s": 0.02
+  },
+  "main | previews: list_assets_for_preview": {
+   "calls": 8,
+   "total_s": 0.019
+  },
+  "main | index: pair_asset": {
+   "calls": 500,
+   "total_s": 0.014
+  },
+  "main | index: walk #2 (iter_image_files next)": {
+   "calls": 1002,
+   "total_s": 0.013
+  },
+  "main | index: _previous_asset_signature": {
+   "calls": 500,
+   "total_s": 0.013
+  },
+  "main | index: get_registry": {
+   "calls": 500,
+   "total_s": 0.013
+  },
+  "main | index: claim_moved_original": {
+   "calls": 500,
+   "total_s": 0.01
+  },
+  "main | index: upsert_registry": {
+   "calls": 500,
+   "total_s": 0.006
+  },
+  "main | sqlite execute [after-index]": {
+   "calls": 2006,
+   "total_s": 0.006
+  },
+  "main | index: walk #1 (count_image_files)": {
+   "calls": 1,
+   "total_s": 0.006
+  },
+  "main | sqlite execute [setup]": {
+   "calls": 140,
+   "total_s": 0.005
+  },
+  "main | index: report_progress": {
+   "calls": 501,
+   "total_s": 0.004
+  },
+  "main | previews: _preview_on_disk": {
+   "calls": 500,
+   "total_s": 0.004
+  },
+  "main | sqlite execute [previews-pass]": {
+   "calls": 510,
+   "total_s": 0.003
+  },
+  "main | job: update_job (progress writes)": {
+   "calls": 12,
+   "total_s": 0.001
+  },
+  "main | sqlite commit [setup]": {
+   "calls": 3,
+   "total_s": 0.001
+  },
+  "main | sqlite execute [job]": {
+   "calls": 11,
+   "total_s": 0.001
+  },
+  "main | sqlite commit [after-index]": {
+   "calls": 3,
+   "total_s": 0.0
+  },
+  "main | sqlite commit [job]": {
+   "calls": 2,
+   "total_s": 0.0
+  },
+  "main | PREVIEWS pass after index (preview, video)": {
+   "calls": 1,
+   "total_s": 0.0
+  },
+  "main | sqlite commit [previews-pass]": {
+   "calls": 5,
+   "total_s": 0.0
+  },
+  "main | index: upsert_catalog_root": {
+   "calls": 1,
+   "total_s": 0.0
+  },
+  "main | PREVIEWS pass after index (preview, raw)": {
+   "calls": 1,
+   "total_s": 0.0
+  }
+ }
+}

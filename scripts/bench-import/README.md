@@ -12,6 +12,8 @@ python3 scripts/bench-import/make_dataset.py apps/desktop/sample-photos $B/photo
 
 用内置样片生成 400 张 2400 万像素 JPEG 和 100 张 1200 万像素 HEIC（约 3.6 GB，HEIC 编码慢，M3 Pro 上要 12 分钟）。
 
+加 `--sips` 用系统的硬件编码器出 HEIC，一两分钟就好，风扇也安静得多；加 `--workers 4` 限制进程数。两种 HEIC 不能混着比，前后对比用同一批。
+
 ```bash
 python3 scripts/bench-import/measure.py import $B/cat.afcatalog $B/photos > $B/import.json
 ```
@@ -40,4 +42,4 @@ mkdir -p $B/before && git archive <改动前的提交> services/sidecar/src | ta
 BENCH_SIDECAR_SRC=$B/before/services/sidecar/src python3 scripts/bench-import/measure.py import $B/cat-before.afcatalog $B/photos > $B/before.json
 ```
 
-`results-2026-11-26/` 是第一次测量的原始输出。输出里 `main |` 是索引和写库的主线程，`thread |` 是出图线程（各线程时间相加）；带 `(incl.)` 的包含它里面的子步骤。
+`results-2026-11-26/` 是原始输出：不带前缀的是第一次测量，`step1-*`、`step2-*` 是重新设计第 1、2 步前后的对比（见重新设计 §1.6、§1.7）。输出里 `main |` 是索引和写库的主线程，`thread |` 是出图线程（各线程时间相加）；带 `(incl.)` 的包含它里面的子步骤。

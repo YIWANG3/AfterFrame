@@ -1,6 +1,6 @@
 # 导入管线重新设计
 
-> **状态（2026-11-26）**：第 1 步已实现（分支 `perf/import-colors-in-threads`，复测见 §1.6），其余未实现。依据是同日的实测（§1）和评估 [review/2026-11-26-导入管线评估.md](review/2026-11-26-导入管线评估.md)。测量脚本在 [scripts/bench-import/](../scripts/bench-import/README.md)，每一阶段做完都用它复测。
+> **状态（2026-11-26）**：第 1、2 步已实现，同在分支 `perf/import-colors-in-threads`（复测见 §1.6、§1.7），其余未实现。依据是同日的实测（§1）和评估 [review/2026-11-26-导入管线评估.md](review/2026-11-26-导入管线评估.md)。测量脚本在 [scripts/bench-import/](../scripts/bench-import/README.md)，每一阶段做完都用它复测。
 
 ## 1. 测出来的
 
@@ -71,6 +71,28 @@ AI 标注（要花钱调接口，按每次请求 2 到 5 秒、3 个并发估算
 - 所以第 1 步单独合并是轻微的退步，收益要等第 2 步：出图交给 ImageIO helper 以后，出图线程大部分时间在等 helper 回复，取颜色正好填进去；留在主线程的话，它要串行 7 秒，比出完全部缩略图的 6.4 秒还长。
 - 这一批的两边都比 §1.1 的 21 秒快约 3 秒，测试集是重新生成的，原因没有细查。前后比较只看本节同一批的数字。
 
+### 1.7 第 2 步之后（Mac 上 JPEG、HEIF 走 ImageIO）
+
+测试集换了一批：HEIC 用系统的 `sips` 编码（`make_dataset.py --sips`，和 iPhone 存的一样，生成只要 4 分钟，不用 12 分钟），其余同 §1.1。`main`（改动前）和这个分支（第 1、2 步）交替各跑两次，原始输出在 `scripts/bench-import/results-2026-11-26/step2-*.json`。
+
+| | `main` | 第 1、2 步 |
+|---|---|---|
+| 整个导入 | 13.9 / 14.1 s | **7.4 / 7.4 s** |
+| CPU 合计（含 ExifTool 和 helper 进程） | 98 / 101 s | **31 s** |
+| 出图线程（各线程相加） | 68 s（Pillow） | 27 s（等 helper） |
+| 主线程取颜色 | 10.9 s | 0（在出图线程里，6.9 到 7.4 s 摊给 6 个线程） |
+| 主线程空等出图 | 1.2 / 1.8 s | 5.8 s |
+| 走了 Pillow 的照片 | 500 | 0 |
+
+- 这一批 HEIC 是 sips 编的，Pillow 解它比解 pillow-heif 编的快，所以 `main` 只要 14 秒（§1.1 是 21 秒），主线程取颜色（10.9 秒）已经比出图还慢：第 1 步的收益在这里显出来了。
+- 同样 500 张，CPU 只用原来的三分之一：风扇和电池都轻得多。
+- 一致性（同一批照片，两边的图库逐张比）：
+  - 显示形状（横 / 竖 / 方）、缩略图状态：500 张完全一致。
+  - 相似照片哈希：中位数 0 位，最大 4 位（判重阈值 8，「相似」阈值 20）。
+  - 调色板：按占比加权的色差中位数 4.0 ΔE，95% 的照片在 6.9 以内，最大 8.1；颜色筛选最严一档的容差是 15。拿一组 Lab 网格上的颜色去筛，结果变了 2.1%，都在容差边上。对照：Pillow 自己从 JPEG 质量 90 换到 85，样片上是中位数 3.5 ΔE、变 1.8%，量级相同。
+  - 缩略图目录 23 MB → 25 MB。
+- 主线程现在有 5.8 秒在等出图，出图线程的 27 秒里大半是在等 helper 回复。再往下压要加 helper 进程，或者把颜色和哈希挪进 helper，这次没做。
+
 ## 2. 目标
 
 - 同样 500 张，导入（能在画廊里看到、能按颜色筛选、能找相似）从 21 秒降到 8 秒以内（Mac）。
@@ -96,13 +118,21 @@ AI 标注（要花钱调接口，按每次请求 2 到 5 秒、3 个并发估算
 
 ## 4. 出图
 
-### 4.1 Mac：ImageIO helper 进程池
+### 4.1 Mac：ImageIO helper 进程池（已实现）
 
-- 把 `native/image-features.swift` 扩成「出图 + 特征向量」helper（暂名 `media-thumbs`），沿用它现有的协议：每行一个 JSON 请求，每行一个回复，进程常驻。
-- 一个请求：源文件路径、目标路径、边长 512。helper 用 `CGImageSourceCreateThumbnailAtIndex` 解码到 512，写 JPEG，再用同一张内存里的图算特征向量，回复里带上尺寸和特征向量。原文件只读一次，缩略图不用再读回来算特征向量。
-- 进程数取核数的一半（M3 Pro 上 6 个，和现在的线程数一样）。Python 端的出图线程变成「发请求、等回复」，基本不占 GIL。
-- 只接管 `_render_image` 里普通照片这一路（JPEG、HEIC、PNG、TIFF、WebP、AVIF）。helper 失败就回退到现在的 Pillow 路径，再不行回退 sips，所以以前能出图的文件不会出不来。RAW（rawpy 取内嵌预览）和视频封面不动。
-- **输出要和现在的缩略图一致**：像素按原样存，不套 `WithTransform`，EXIF 方向标签照抄（现在 `preview_shape` 和渲染层都按标签转）；保留 RGB 的 ICC（Display P3 照片不能变成 sRGB）；CMYK 转 sRGB。这几条每条一个单测，拿现有的测试图比对。
+做成的样子（`native/image-features.swift` 的 `thumb` 请求，`services/sidecar/src/media_workspace/image_io_previews.py`）：
+
+- **没有新做一个可执行文件**，给现有的 `image-features` 加了一种请求 `{"op":"thumb", …}`。打包、签名、`IMAGE_FEATURES_PATH`、macOS 12 和 Intel 的构建都不用动。只出缩略图的 helper 进程从不做特征向量，也就不加载 Vision 的模型。
+- 每个出图线程借一个 helper 进程，进程常驻、批次之间复用，退出时关掉（`HelperPool`，和特征向量那一组分开：太慢、不做特征向量的 Mac 照样用它出图）。
+- 只接 **JPEG 和 HEIF**，而且只接 8 位 RGB、不带透明的；CMYK、灰度、透明、每通道超过 8 位（相机的 10 位 HDR HEIF）都回复「不接」，照旧走 Pillow。PNG、TIFF、WebP、AVIF 不经过 helper：它们很少见，Pillow 也不慢，接过来要逐种对齐 Pillow 的转换，不值。
+- **缩略图和 Pillow 出的一致**，规则都由 Python 按 Pillow 读到的文件头定，再交给 helper：
+  - JPEG 像素按原样存，写 Pillow 读到的方向标签；
+  - HEIF 像素转正、不写标签，因为 pillow-heif 交出来的就是转正的（libheif 会应用 irot）；pillow-heif 保留了方向标签的少数 HEIF 交给 Pillow；
+  - 尺寸按 Pillow 的取整规则精确到像素（`pillow_preview_size`）。ImageIO 的短边向下取整，5997×6000 会变成 511×512 的「竖图」，Pillow 是 512×512 的「方图」。差 1 像素时 helper 重绘一次；
+  - 保留 RGB 色彩配置（P3、Adobe RGB 照旧）；不放大小图。
+- JPEG 质量取 ImageIO 的 0.8。它的刻度和 libjpeg 不同：画质最接近 Pillow 的 90，文件大约大一成。
+- **回退**：没有 helper（Windows）、helper 是这次改动以前编的（`--thumb-protocol` 答不出 1）、超时 30 秒、进程退出、stdout 上出现协议外的行（#215 那种）、ImageIO 读不了，都回到 Pillow，再不行回到 sips。以前能出图的文件不会出不来。
+- 原计划「在 helper 里用同一张内存里的图算特征向量」没做：相似照片的测量在出图线程里只占 3.3 秒（各线程相加），合进来要改特征向量的输入（内存里的图和读回来的 JPEG 不完全一样），不值。
 
 ### 4.2 颜色和感知哈希挪到工作线程
 
@@ -170,10 +200,10 @@ AI 标注（要花钱调接口，按每次请求 2 到 5 秒、3 个并发估算
 
 | 结果 | 风险 | 怎么保证 |
 |---|---|---|
-| 缩略图 | ImageIO 的缩放算法和 Pillow 的 LANCZOS 不同，画面会有细微差别 | 不重做已有的缩略图；方向、ICC 按 §4.1 单测 |
-| 颜色 | 调色板来自缩略图，换了缩放算法可能有微小偏差 | 同一批图两种引擎各取一次，比较主色的 Lab 距离；超过颜色筛选的匹配阈值就记为 stale，让已有的「颜色过期就重做」接管 |
-| 相似照片 | 新旧缩略图混在一起，哈希会有偏差 | 同一张图两种缩略图的哈希距离要远小于「看起来像」的阈值；`78-lookalikes.spec.js` 照旧要过 |
-| 方向 | 不变（仍按 EXIF 标签） | `preview_shape` 的现有单测 |
+| 缩略图 | ImageIO 的缩放算法和 Pillow 的 LANCZOS 不同，画面会有细微差别 | 不重做已有的缩略图；方向、尺寸、色彩配置、不放大各有单测（`tests/test_image_io_previews.py`） |
+| 颜色 | 调色板来自缩略图，换了缩放算法会有偏差 | 实测（§1.7）中位数 4.0 ΔE、最大 8.1，和 Pillow 自己换个 JPEG 质量同一量级，远小于筛选容差 15，所以**不标 stale、不重做** |
+| 相似照片 | 新旧缩略图混在一起，哈希会有偏差 | 实测最大 4 位，判重阈值 8；`78-lookalikes.spec.js` 通过 |
+| 方向 | 尺寸取整不同会让接近正方形的照片换类 | 尺寸按 Pillow 的规则对齐（§4.1）；实测 500 张显示形状完全一致 |
 
 ## 8. 小修
 
@@ -193,7 +223,7 @@ AI 标注（要花钱调接口，按每次请求 2 到 5 秒、3 个并发估算
 | | 内容 | 预期效果 | 要过的 e2e |
 |---|---|---|---|
 | 1 | 颜色挪到工作线程（§4.2；哈希本来就在工作线程） | 单独做慢 3%（§1.6），为第 2 步铺路 | `52-color-filter`、`78-lookalikes`、`37-heic-import` |
-| 2 | Mac ImageIO helper（§4.1） | 导入 21 s → 约 8 s | 同上，加 `35-raw-import`、`64-import-self-repair`、`65-search-during-import` |
+| 2 | Mac ImageIO helper（§4.1） | 实测导入 14 s → 7.4 s，CPU 降到三分之一（§1.7） | 同上，加 `35-raw-import`、`64-import-self-repair`、`65-search-during-import` |
 | 3 | 主进程协调器、取消和失败也触发、启动补起、标注只标这次导入的（§5.1、§5.2） | 行为修复 | `17-watched-dirs`、`72-people-flows`，新增「取消导入后照样识别人脸」「自动标注只标这次导入的照片」 |
 | 4 | 两条道取代 `priority`，导入时暂停人脸（§5.3） | 后台任务不再互抢 | 新增「导入时人脸任务暂停、导入完自动续跑，手动暂停的不续」 |
 | 5 | 人脸多 worker（§6） | 人脸 114 s → 约 45 s | `62-people-real-model`、`71-people-view`、`72-people-flows` |

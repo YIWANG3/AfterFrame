@@ -5,10 +5,18 @@ files have real-photo entropy and size, not smooth upscales), HEICs at 12 MP.
 Every file is unique (own crop, own grain, own capture time) so fingerprints
 and asset ids differ, and the source EXIF (camera, lens) is kept.
 
-usage: make_dataset.py <sample-photos dir> <out dir> <n_jpeg> <n_heic>
+usage: make_dataset.py <sample-photos dir> <out dir> <n_jpeg> <n_heic> [--sips] [--workers N]
+
+--sips encodes the HEICs with macOS's sips (the hardware HEVC encoder, as
+an iPhone does) instead of pillow-heif's x265: a minute instead of most of
+the twelve, and far less heat. The first measurement (2026-11-26, §1 of
+the redesign) used pillow-heif; compare before and after on one set only.
+--workers caps the processes (default: one per core).
 """
 
+import subprocess
 import sys
+import tempfile
 from datetime import datetime, timedelta
 from multiprocessing import Pool
 from pathlib import Path
@@ -20,6 +28,8 @@ SRC = Path(sys.argv[1])
 OUT = Path(sys.argv[2])
 N_JPEG = int(sys.argv[3])
 N_HEIC = int(sys.argv[4])
+SIPS = "--sips" in sys.argv
+WORKERS = int(sys.argv[sys.argv.index("--workers") + 1]) if "--workers" in sys.argv else None
 SOURCES = sorted(SRC.glob("sample-*.jpg"))
 BASE_TIME = datetime(2026, 5, 1, 9, 0, 0)
 
@@ -51,6 +61,13 @@ def make(job):
     if kind == "jpeg":
         target = shoot / f"IMG_{index:05d}.jpg"
         img.save(target, "JPEG", quality=92, exif=exif.tobytes())
+    elif SIPS:
+        target = shoot / f"IMG_{index:05d}.heic"
+        with tempfile.TemporaryDirectory() as tmp:
+            staged = Path(tmp) / "staged.jpg"
+            img.save(staged, "JPEG", quality=97, exif=exif.tobytes())
+            subprocess.run(["sips", "-s", "format", "heic", "-s", "formatOptions", "80", str(staged), "--out", str(target)],
+                           check=True, capture_output=True)
     else:
         import pillow_heif
 
@@ -62,6 +79,6 @@ def make(job):
 
 if __name__ == "__main__":
     jobs = [(i, "jpeg") for i in range(N_JPEG)] + [(N_JPEG + i, "heic") for i in range(N_HEIC)]
-    with Pool() as pool:
+    with Pool(WORKERS) as pool:
         sizes = pool.map(make, jobs, chunksize=4)
     print(f"{len(sizes)} files, {sum(sizes) / 1e9:.2f} GB, mean {sum(sizes) / len(sizes) / 1e6:.1f} MB")

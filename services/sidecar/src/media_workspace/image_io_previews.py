@@ -15,6 +15,8 @@ colours, the look-alike hash and the display shape are read from them:
   (libheif applies the rotation). A HEIF whose tag pillow-heif keeps is
   left to Pillow;
 - the RGB colour space stays (a Display P3 photo stays P3);
+- the size is Pillow's to the pixel: a 5997 × 6000 photo is a 512 × 512
+  "square" preview there, 511 × 512 "portrait" by Image I/O's rounding;
 - what Pillow converts (CMYK, grey, transparency, more than 8 bits a
   channel) the helper declines, and Pillow renders it as before.
 
@@ -31,6 +33,7 @@ from __future__ import annotations
 
 import atexit
 import json
+import math
 import os
 import select
 import subprocess
@@ -222,6 +225,27 @@ def helper_for(source: Path) -> Path | None:
     return helper_path
 
 
+def pillow_preview_size(width: int, height: int, size: int) -> tuple[int, int]:
+    """The size Image.thumbnail((size, size)) gives a width × height image:
+    Pillow's rounding (Image.thumbnail's preserve_aspect_ratio, Pillow 10
+    to 12), which picks whichever neighbouring whole number keeps the aspect
+    closest, and never enlarges. test_image_io_previews checks it against
+    Pillow itself."""
+    if size >= width and size >= height:
+        return width, height
+
+    def round_aspect(number: float, key) -> int:
+        return max(min(math.floor(number), math.ceil(number), key=key), 1)
+
+    x, y = size, size
+    aspect = width / height
+    if x / y >= aspect:
+        x = round_aspect(y * aspect, key=lambda n: abs(aspect - n / y))
+    else:
+        y = round_aspect(x / aspect, key=lambda n: 0 if n == 0 else abs(aspect - x / n))
+    return x, y
+
+
 def render(helper_path: Path, source: Path, target: Path, size: int) -> None:
     """Write the preview of `source` to `target` (see the module doc), or
     raise ImageIOPreviewError for Pillow to render it instead."""
@@ -229,10 +253,14 @@ def render(helper_path: Path, source: Path, target: Path, size: int) -> None:
     heif = fmt is not None and fmt.family == "heif"
     if heif:
         register_heif()
-    # The tag Pillow would carry over: the header only, a tenth of a millisecond.
+    # What Pillow would make of it, from the header alone (a tenth of a
+    # millisecond): the tag it carries over, and the size it decodes at (a
+    # JPEG at a reduced scale, draft) and so the size it ends up with.
     try:
         with Image.open(source) as image:
             orientation = int(image.getexif().get(_ORIENTATION_TAG) or 1)
+            image.draft("RGB", (size, size))
+            width, height = pillow_preview_size(image.width, image.height, size)
     except Exception as error:
         raise ImageIOPreviewError(f"Pillow can't read {source.name}'s header: {error}") from error
     if heif and orientation != 1:
@@ -246,6 +274,8 @@ def render(helper_path: Path, source: Path, target: Path, size: int) -> None:
         "quality": JPEG_QUALITY,
         "transform": heif,
         "orientation": orientation,
+        "width": width,
+        "height": height,
     }
     with HELPERS.borrow(helper_path) as helper:
         response = helper.request(request)

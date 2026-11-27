@@ -22,9 +22,12 @@
 //           {"id":"asset-42","ok":false,"error":"…"} when the image can't be read.
 //
 // Request:  {"id":"asset-42","op":"thumb","path":"/photo.jpg","out":"/preview.jpg",
-//            "size":512,"quality":0.8,"transform":false,"orientation":6}
+//            "size":512,"quality":0.8,"transform":false,"orientation":6,
+//            "width":512,"height":341}
 //           orientation: the EXIF tag to write (default: the source's own);
-//           transform: turn the pixels upright instead, and write none.
+//           transform: turn the pixels upright instead, and write none;
+//           width, height: the preview's exact size, when Image I/O's
+//           rounding of the short edge would differ (default: Image I/O's).
 // Response: {"id":"asset-42","ok":true,"width":512,"height":384}
 //           {"id":"asset-42","ok":false,"declined":true,"error":"…"} for a picture
 //           the sidecar renders itself (see thumbnail()), ok false alone when
@@ -95,11 +98,13 @@ private struct ThumbnailError: Error {
 ///   when the sidecar names it: the tag Pillow reads), unless `transform`
 ///   (pillow-heif hands a HEIF over upright, without the tag);
 /// - the source's RGB colour space kept (a Display P3 photo stays P3);
+/// - `exact` size when given: Image I/O rounds the short edge down, Pillow to
+///   the nearer aspect, and a 5997 × 6000 photo must stay a square preview;
 /// - never enlarged.
 /// Anything else that path treats specially is declined rather than
 /// approximated: CMYK and grey (converted to sRGB there), transparency
 /// (flattened onto white), more than 8 bits a channel (a camera's HDR HEIF).
-private func thumbnail(path: String, out: String, size: Int, quality: Double, transform: Bool, orientation: Int?) throws -> (Int, Int) {
+private func thumbnail(path: String, out: String, size: Int, quality: Double, transform: Bool, orientation: Int?, exact: (Int, Int)?) throws -> (Int, Int) {
     guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
         throw ThumbnailError(message: "can't open \(path)")
     }
@@ -127,8 +132,12 @@ private func thumbnail(path: String, out: String, size: Int, quality: Double, tr
         kCGImageSourceCreateThumbnailWithTransform: transform,
         kCGImageSourceShouldCacheImmediately: true,
     ]
-    guard let image = CGImageSourceCreateThumbnailAtIndex(source, index, options as CFDictionary) else {
+    guard var image = CGImageSourceCreateThumbnailAtIndex(source, index, options as CFDictionary) else {
         throw ThumbnailError(message: "can't decode \(path)")
+    }
+    if let (exactWidth, exactHeight) = exact, exactWidth > 0, exactHeight > 0,
+       (image.width, image.height) != (exactWidth, exactHeight) {
+        image = try redrawn(image, width: exactWidth, height: exactHeight)
     }
     guard let destination = CGImageDestinationCreateWithURL(URL(fileURLWithPath: out) as CFURL, "public.jpeg" as CFString, 1, nil) else {
         throw ThumbnailError(message: "can't write \(out)")
@@ -140,6 +149,22 @@ private func thumbnail(path: String, out: String, size: Int, quality: Double, tr
     CGImageDestinationAddImage(destination, image, written as CFDictionary)
     guard CGImageDestinationFinalize(destination) else { throw ThumbnailError(message: "can't write \(out)") }
     return (image.width, image.height)
+}
+
+/// The image redrawn at a size a pixel or so off Image I/O's own: same
+/// colour space, 8 bits a channel, no alpha.
+private func redrawn(_ image: CGImage, width: Int, height: Int) throws -> CGImage {
+    guard let space = image.colorSpace, space.model == .rgb,
+          let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+        throw ThumbnailError(message: "can't resize to \(width) × \(height)", declined: true)
+    }
+    context.interpolationQuality = .high
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    guard let resized = context.makeImage() else {
+        throw ThumbnailError(message: "can't resize to \(width) × \(height)", declined: true)
+    }
+    return resized
 }
 
 private func respondThumbnail(id: String, request: [String: Any]) {
@@ -154,7 +179,8 @@ private func respondThumbnail(id: String, request: [String: Any]) {
             size: request["size"] as? Int ?? 512,
             quality: request["quality"] as? Double ?? 0.8,
             transform: request["transform"] as? Bool ?? false,
-            orientation: request["orientation"] as? Int
+            orientation: request["orientation"] as? Int,
+            exact: (request["width"] as? Int).flatMap { width in (request["height"] as? Int).map { (width, $0) } }
         )
         response["ok"] = true
         response["width"] = width

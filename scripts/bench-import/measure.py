@@ -171,6 +171,7 @@ def _generate_batch(self, connection, kind, asset_type=None, **kwargs):
 preview_service.PreviewService.generate_batch = _generate_batch
 patch(preview_service.PreviewService, "generate_for_row", "render: generate_for_row (incl.)")
 patch(preview_service.PreviewService, "_render_with_pillow", "render: _render_with_pillow")
+patch(preview_service.PreviewService, "_render_with_image_io", "render: _render_with_image_io (incl. fallbacks to Pillow)")
 patch(preview_service.PreviewService, "_render_raw", "render: _render_raw")
 patch(preview_service.PreviewService, "_preview_on_disk", "previews: _preview_on_disk")
 patch(preview_service.VisualAnalyzer, "measure", "render: VisualAnalyzer.measure (hash + feature print)")
@@ -248,10 +249,17 @@ def main() -> None:
         wall = time.perf_counter() - start
     else:
         raise SystemExit("import | people")
-    # Close the ExifTool pool so its processes are reaped and their CPU counted.
+    # Close the ExifTool pool and the preview helpers so their processes are
+    # reaped and their CPU counted (an older checkout has no helpers).
     pool = exiftool._shared
     if pool is not None:
         pool.close()
+    try:
+        from media_workspace import image_io_previews
+    except ImportError:
+        image_io_previews = None
+    if image_io_previews is not None:
+        image_io_previews.HELPERS.close_all()
     usage1 = resource.getrusage(resource.RUSAGE_SELF)
     child1 = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu_self = (usage1.ru_utime + usage1.ru_stime) - (usage0.ru_utime + usage0.ru_stime)

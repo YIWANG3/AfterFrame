@@ -3,6 +3,7 @@ and Pillow whenever the helper can't."""
 from __future__ import annotations
 
 import os
+import random
 import stat
 import sys
 import tempfile
@@ -12,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from media_workspace import image_io_previews
 from media_workspace.catalog import ensure_catalog
@@ -34,9 +35,16 @@ def built_helper_renders() -> bool:
 
 def photo(path: Path, size=(1200, 800), *, mode="RGB", orientation: int | None = None, icc: bytes | None = None) -> Path:
     """A picture whose layout shows which way it is turned: a blue band down
-    the left, a red one along the bottom, on grey."""
+    the left, a red one along the bottom, and shapes between them, as a
+    photo has (on flat colour alone, a perceptual hash is noise)."""
     width, height = size
     image = Image.new("RGB", size, (150, 150, 150))
+    draw = ImageDraw.Draw(image)
+    rng = random.Random(width * 7919 + height)
+    for _ in range(40):
+        x, y = rng.randrange(width), rng.randrange(height)
+        w, h = rng.randrange(width // 20 + 1, width // 4 + 2), rng.randrange(height // 20 + 1, height // 4 + 2)
+        draw.ellipse((x, y, x + w, y + h), fill=(rng.randrange(256), rng.randrange(256), rng.randrange(256)))
     image.paste((30, 60, 200), (0, 0, width // 5, height))
     image.paste((200, 40, 40), (0, height - height // 6, width, height))
     image = image.convert(mode)
@@ -112,6 +120,15 @@ class BuiltHelperTest(unittest.TestCase):
             with self.subTest(mode=mode), self.assertRaises(image_io_previews.ImageIOPreviewError):
                 image_io_previews.render(HELPER, photo(self.root / name, mode=mode), self.root / f"{name}.out.jpg", 512)
 
+    def test_a_nearly_square_photo_stays_a_square_preview(self):
+        # Image I/O alone makes 5997 x 6000 a 511 x 512 portrait; Pillow's
+        # rounding, which the previews already in a catalog have, a square.
+        for size in ((5997, 6000), (6000, 5993)):
+            with self.subTest(size=size):
+                pillow, image_io = self.both(photo(self.root / f"near-{size[0]}.jpg", size=size))
+                self.assertEqual(described(image_io)[0], described(pillow)[0])
+                self.assertEqual(preview_shape(image_io), "square")
+
     def test_a_small_photo_is_not_enlarged(self):
         source = photo(self.root / "small.jpg", size=(300, 200))
         for size in (512, 2000):
@@ -136,6 +153,19 @@ class BuiltHelperTest(unittest.TestCase):
                     self.assertEqual((image.format, image.mode), ("JPEG", "RGB"))
         rendered_by_pillow = sorted(Path(call.args[0]).name for call in pillow.call_args_list)
         self.assertEqual(rendered_by_pillow, ["c.jpg", "d.png"])
+
+
+class PreviewSizeTest(unittest.TestCase):
+    def test_the_size_is_the_one_pillow_gives(self):
+        sizes = [(6000, 4000), (4000, 6000), (5997, 6000), (6000, 5993), (4032, 3024), (800, 533),
+                 (513, 1), (1, 513), (300, 200), (512, 512), (2001, 1999), (7, 5000)]
+        sizes += [(w, h) for w in range(500, 530, 7) for h in range(300, 1300, 97)]
+        for width, height in sizes:
+            for size in (512, 2000):
+                with self.subTest(width=width, height=height, size=size):
+                    image = Image.new("L", (width, height))
+                    image.thumbnail((size, size))
+                    self.assertEqual(image_io_previews.pillow_preview_size(width, height, size), image.size)
 
 
 # Stand-ins for the helper, one per way it can let a render down. They speak
