@@ -128,3 +128,58 @@ test("a short section beside a long one keeps its first rows in view", async () 
     await closeApp(ctx.app, ctx.userDataDir);
   }
 });
+
+// A section folded by its own heading gives its room back at once. Smart
+// collections and the folders on disk keep their fold to themselves, so
+// folding one doesn't render the sidebar again; the floor it had been given
+// used to hold it at its old height, a blank under the heading, until
+// something else did.
+test("a folded section gives back its room at once", async () => {
+  const ctx = await launchApp({ testName: "sidebar-fold-floor" });
+  const page = ctx.window;
+  try {
+    await page.evaluate(async () => {
+      for (let i = 0; i < 40; i++) await window.mediaWorkspace.createCollection(`Long list ${String(i).padStart(2, "0")}`, "manual");
+      for (let i = 1; i <= 12; i++) await window.mediaWorkspace.createCollection(`Rated ${i}`, "smart", { filters: { rating_min: 1 } });
+    });
+    await ctx.app.evaluate(({ BrowserWindow }, height) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      win.setMinimumSize(900, 600);
+      win.setSize(1080, height);
+    }, process.platform === "win32" ? 716 : 680);
+    await page.reload();
+    await expect(page.locator("[data-smart-collection]")).toHaveCount(12);
+    const nav = page.locator("aside.border-r nav");
+    // Each section's room under its heading, and the floor it was given.
+    const boxes = () => nav.evaluate((el) => Object.fromEntries(
+      [["smart", "[data-smart-collections]"], ["collections", "[data-sidebar-folders]"], ["folders", "[data-disk-folders]"]].map(([name, sel]) => {
+        const root = el.querySelector(`:scope > ${sel}`);
+        const heading = root.firstElementChild.getBoundingClientRect();
+        return [name, { extra: Math.round(root.getBoundingClientRect().bottom - heading.bottom), floor: root.style.minHeight }];
+      }),
+    ));
+    // Open, the smart section holds rows under its heading.
+    await expect.poll(async () => (await boxes()).smart.extra).toBeGreaterThan(20);
+
+    for (const [toggle, name] of [["smart", "smart"], ["diskFolders", "folders"]]) {
+      await page.locator(`[data-sidebar-section-toggle='${toggle}']`).click();
+      await expect(page.locator(`[data-sidebar-section-toggle='${toggle}']`)).toHaveAttribute("aria-expanded", "false");
+      // Folded: nothing under the heading and no floor left on it, with
+      // nothing else in the sidebar changing to put it right.
+      expect((await boxes())[name], `${name} folded`).toEqual({ extra: 0, floor: "" });
+    }
+    // The collections heading sits right under the folded smart section.
+    const gap = await nav.evaluate((el) => {
+      const smart = el.querySelector(":scope > [data-smart-collections]").getBoundingClientRect();
+      const collections = el.querySelector(":scope > [data-sidebar-folders]").getBoundingClientRect();
+      return Math.round(collections.top - smart.bottom);
+    });
+    expect(gap).toBe(16);
+
+    // Unfolded again, its rows come back.
+    await page.locator("[data-sidebar-section-toggle='smart']").click();
+    await expect.poll(async () => (await boxes()).smart.extra).toBeGreaterThan(20);
+  } finally {
+    await closeApp(ctx.app, ctx.userDataDir);
+  }
+});

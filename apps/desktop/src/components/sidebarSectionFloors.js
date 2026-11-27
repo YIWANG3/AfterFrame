@@ -77,9 +77,15 @@ export function applySectionFloors(nav, rows = FLOOR_ROWS) {
   });
 }
 
-// Keeps the floors current: after every render of the sidebar, and when the
-// window, a section or its list changes size (a section opening or closing
-// inside itself, rows coming or going, the interface scale).
+// Keeps the floors current: after every render of the sidebar, when a
+// section folds or unfolds, and when the window, a section or its list
+// changes size (rows coming or going, a search narrowing them, the interface
+// scale).
+//
+// A fold has to be watched for itself. Smart collections and the folders on
+// disk keep their fold in their own state, so folding one doesn't render the
+// sidebar, and the floor holds the folded section at its old height: no size
+// changes for the ResizeObserver to see, and a blank stays under the heading.
 export function useSectionFloors(navRef) {
   useLayoutEffect(() => {
     applySectionFloors(navRef.current);
@@ -95,19 +101,36 @@ export function useSectionFloors(navRef) {
     // Setting a floor resizes a section and so calls this again, but the
     // second pass finds nothing to change and it settles.
     const observer = new ResizeObserver(schedule);
+    // The nav, each of its children, and each section's list: a list is
+    // sized by its rows, so it changes size when they do even while a floor
+    // holds its section still.
     const observeAll = () => {
       observer.disconnect();
       observer.observe(nav);
       for (const child of nav.children) observer.observe(child);
+      for (const [section, list] of SECTIONS) {
+        const element = nav.querySelector(`:scope > ${section} ${list}`);
+        if (element) observer.observe(element);
+      }
     };
     observeAll();
-    // A section hidden or shown again comes and goes as a child of the nav.
-    const children = new MutationObserver(observeAll);
+    // A section hidden or shown again comes and goes as a child of the nav;
+    // one folded or unfolded flips its data-open, and its list comes or goes.
+    // Both are put right, before the next paint.
+    const refresh = () => {
+      observeAll();
+      applySectionFloors(nav);
+    };
+    const children = new MutationObserver(refresh);
     children.observe(nav, { childList: true });
+    // Only the section roots carry data-open, so this sees folds and nothing else.
+    const folds = new MutationObserver(refresh);
+    folds.observe(nav, { subtree: true, attributes: true, attributeFilter: ["data-open"] });
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       children.disconnect();
+      folds.disconnect();
     };
   }, [navRef]);
 }
