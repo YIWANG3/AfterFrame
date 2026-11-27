@@ -80,6 +80,37 @@ def _content_changed(previous: tuple[str, int, str] | None, fingerprint: str, fi
     return previous is not None and previous != (str(fingerprint), int(file_size), str(modified_time))
 
 
+def unchanged_asset_id(connection, path: Path) -> str | None:
+    """The asset this file is when the catalog holds it as it is on disk:
+    present, the same size and mtime, its XMP sidecar as it was (Lightroom
+    re-rates a RAW by writing only the sidecar). An import has nothing to
+    read in such a file; a watched folder doesn't import it at all
+    (watched.changed_media). None for anything else, unreadable files too."""
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    known = connection.execute(
+        """
+        SELECT assets.asset_id, assets.file_size, assets.modified_time, assets.exists_on_disk,
+               json_extract(assets.metadata_json, '$.sidecar_modified_time') AS sidecar_modified_time
+        FROM asset_files
+        JOIN assets ON assets.asset_id = asset_files.asset_id
+        WHERE asset_files.path = ?
+        LIMIT 1
+        """,
+        (str(path),),
+    ).fetchone()
+    if known is None or int(known["exists_on_disk"]) != 1:
+        return None
+    if int(stat.st_size) != int(known["file_size"] or 0) or iso_mtime(path, stat) != str(known["modified_time"] or ""):
+        return None
+    sidecar = sidecar_path(path)
+    if (iso_mtime(sidecar) if sidecar is not None else None) != known["sidecar_modified_time"]:
+        return None
+    return str(known["asset_id"])
+
+
 def _parse_time(value: str | None) -> datetime | None:
     """A capture time as the camera's clock showed it. Catalogs from before
     capture times dropped their (wrong) +00:00 hold both forms until
@@ -376,11 +407,20 @@ def resolve_image_batch(
     validate_sources: bool = False,
     persist_roots: bool = True,
     batch_callback=None,
+    skip_unchanged: bool = False,
 ) -> dict[str, Any]:
     """Index every media file under `image_dirs`. With `batch_callback`, the
     files are committed and handed on in batches as they are indexed
     (`batch_callback(paths, changed_paths)`), so an import can finish each
-    batch (its previews) and show it before indexing the next."""
+    batch (its previews) and show it before indexing the next.
+
+    With `skip_unchanged` (importing a folder again), a file the catalog
+    holds as it is on disk (unchanged_asset_id) is not read or matched
+    again: ExifTool and the fingerprint were most of a re-import, and grow
+    with the folder (a large one on a network drive took minutes). It still
+    counts as already in the catalog, is paired as before, and goes on with
+    its batch, so a missing thumbnail is still repaired. Matching against
+    RAW sources again (the "Match with RAW" imports) leaves it off."""
     thresholds = thresholds or Thresholds()
     counts: dict[str, int] = {
         "auto_bound": 0,
@@ -412,18 +452,33 @@ def resolve_image_batch(
         batch_changed.clear()
         last_flush = time.monotonic()
 
-    total = sum(count_image_files(image_dir.resolve()) for image_dir in image_dirs)
-    report_progress(progress_callback, phase="resolve_images", processed=0, total=total, status_counts=counts)
+    # One walk of each folder: the total is its length (counting first walked
+    # it twice, a stat a file each time, which a network drive feels).
     skipped = new_skip_counts()
+    walks = [(image_dir, list(iter_image_files([image_dir.resolve()], skipped))) for image_dir in image_dirs]
+    total = sum(len(files) for _, files in walks)
+    report_progress(progress_callback, phase="resolve_images", processed=0, total=total, status_counts=counts)
 
-    for image_dir in image_dirs:
+    # Whether each file is as the catalog holds it, asked once: by ExifTool's
+    # read-ahead (an unchanged file isn't read) or else by the loop.
+    unchanged: dict[Path, str | None] = {}
+
+    def wanted(path: Path) -> bool:
+        if is_video(path):
+            return False
+        if skip_unchanged:
+            unchanged[path] = unchanged_asset_id(connection, path)
+            return unchanged[path] is None
+        return True
+
+    for image_dir, files in walks:
         # A folder is a root whatever it holds; a lone file only when it is
         # one the catalog imports (a dropped .docx was registered as a root).
         if persist_roots and (image_dir.is_dir() or image_dir.suffix.lower() in MEDIA_EXTENSIONS):
             upsert_catalog_root(connection, "image", image_dir.resolve(), commit=False)
         # Metadata is read one file at a time below; ExifTool reads the next
         # few meanwhile.
-        for path in exiftool.read_ahead(iter_image_files([image_dir.resolve()], skipped), wanted=lambda path: not is_video(path)):
+        for path in exiftool.read_ahead(files, wanted=wanted):
             if respect_tombstones or validate_sources:
                 if _is_tombstoned(connection, tombstones, path):
                     processed += 1
@@ -445,6 +500,23 @@ def resolve_image_batch(
                     report_progress(progress_callback, phase="resolve_images", processed=processed, total=total, status_counts=counts)
                     continue
             kind = formats.kind_of(path)
+            known_asset_id = unchanged.pop(path) if path in unchanged else (
+                unchanged_asset_id(connection, path) if skip_unchanged else None
+            )
+            if known_asset_id is not None:
+                if kind != "video" and pair_asset(connection, known_asset_id):
+                    raw_pairs_made += 1
+                registry = get_registry(connection, path)
+                if registry is not None:
+                    counts.setdefault(registry["match_status"], 0)
+                    counts[registry["match_status"]] += 1
+                already_in_catalog += 1
+                batch.append(path.resolve())
+                processed += 1
+                if batch_callback and (len(batch) >= IMPORT_BATCH_SIZE or time.monotonic() - last_flush >= IMPORT_BATCH_SECONDS):
+                    flush()
+                report_progress(progress_callback, phase="resolve_images", processed=processed, total=total, status_counts=counts)
+                continue
             if kind == "video":
                 decision = index_video_file(connection, path.resolve(), commit=False)
             elif kind == "raw":
@@ -592,10 +664,6 @@ def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecisi
     )
     upsert_registry(connection, decision, commit=commit)
     return decision
-
-
-def count_image_files(image_dir: Path) -> int:
-    return sum(1 for _ in iter_image_files([image_dir.resolve()]))
 
 
 # Image exports, RAWs and videos share the "import an image folder" scan; the

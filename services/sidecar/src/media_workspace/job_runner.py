@@ -969,6 +969,9 @@ def run_import_job(
                 progress_callback=resolve_progress,
                 respect_tombstones=respect_tombstones,
                 batch_callback=batch_previews,
+                # Importing a folder again reads only what changed; matching
+                # against RAW sources again is the point of the other phase.
+                skip_unchanged=resolve_phase["key"] == "index_processed_media",
             )
             batched_thumbnails = batch_previews is not None
             changed_paths = [Path(path) for path in resolve_result.get("changed_paths", [])]

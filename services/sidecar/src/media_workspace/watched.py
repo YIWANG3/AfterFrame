@@ -15,9 +15,8 @@ from typing import Any
 
 from .catalog import CatalogPaths
 from .db import list_assets_for_preview
-from .metadata import iso_mtime, sidecar_path
 from .preview_service import PreviewService
-from .reverse_lookup import iter_image_files, resolve_image_batch
+from .reverse_lookup import iter_image_files, resolve_image_batch, unchanged_asset_id
 
 
 def scan_new_media(connection: sqlite3.Connection, directories: list[Path]) -> dict[str, Any]:
@@ -40,11 +39,6 @@ def scan_new_media(connection: sqlite3.Connection, directories: list[Path]) -> d
             seen.add(key)
             new_files.append(key)
     return {"new_files": new_files, "scanned": scanned, "known": known_hit, "tombstoned": tombstoned_hit}
-
-
-def _sidecar_mtime(path: Path) -> str | None:
-    sidecar = sidecar_path(path)
-    return iso_mtime(sidecar) if sidecar is not None else None
 
 
 def changed_media(connection: sqlite3.Connection, paths: list[str]) -> dict[str, Any]:
@@ -72,27 +66,14 @@ def changed_media(connection: sqlite3.Connection, paths: list[str]) -> dict[str,
         except OSError:
             changed.append(given)
             continue
-        known = connection.execute(
-            """
-            SELECT assets.asset_id, assets.file_size, assets.modified_time, assets.exists_on_disk,
-                   json_extract(assets.metadata_json, '$.sidecar_modified_time') AS sidecar_modified_time
-            FROM asset_files
-            JOIN assets ON assets.asset_id = asset_files.asset_id
-            WHERE asset_files.path = ?
-            LIMIT 1
-            """,
-            (str(path),),
-        ).fetchone()
-        removed = connection.execute("SELECT file_size, mtime FROM deleted_files WHERE path = ?", (str(path),)).fetchone()
-        if known is not None and (
-            int(known["exists_on_disk"]) == 1
-            and int(stat.st_size) == int(known["file_size"] or 0)
-            and iso_mtime(path, stat) == str(known["modified_time"] or "")
-            and _sidecar_mtime(path) == known["sidecar_modified_time"]
-        ):
+        asset_id = unchanged_asset_id(connection, path)
+        if asset_id is not None:
             unchanged += 1
-            present_asset_ids.append(str(known["asset_id"]))
-        elif known is None and removed is not None and (
+            present_asset_ids.append(asset_id)
+            continue
+        known = connection.execute("SELECT 1 FROM asset_files WHERE path = ? LIMIT 1", (str(path),)).fetchone()
+        removed = connection.execute("SELECT file_size, mtime FROM deleted_files WHERE path = ?", (str(path),)).fetchone()
+        if known is None and removed is not None and (
             int(stat.st_size) == int(removed["file_size"]) and abs(stat.st_mtime - float(removed["mtime"])) < 2
         ):
             unchanged += 1
