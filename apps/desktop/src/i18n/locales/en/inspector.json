@@ -29,7 +29,7 @@
     "codec": "Codec",
     "size": "Size",
     "type": "Type",
-    "asset": "Asset",
+    "asset": "File",
     "rawSource": "RAW Source",
     "showRaw": "Show the RAW in the library",
     "lastEditedBy": "Last edited by",

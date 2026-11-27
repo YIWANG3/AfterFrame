@@ -124,6 +124,8 @@ test.describe("a selected photo whose original moves, is trashed and comes back"
     await expect(h.inspectorMissing()).toHaveCount(missing ? 1 : 0, { timeout: 10_000 });
     await expect(h.inspectorPath()).toHaveAttribute("data-path", at);
     await expect(h.inspectorPath()).toHaveAttribute("data-missing", String(missing));
+    // The row is the photo's own file, an export or straight from the camera.
+    await expect(h.inspectorPath().locator("xpath=ancestor::div[contains(@class,'justify-between')][1]/div[1]")).toHaveText("File");
     await expect(ctx.window.getByRole("button", { name: /^Relink$/ })).toHaveCount(missing ? 1 : 0);
     await expect(h.inspectorRating()).toHaveAttribute("data-value", String(rating));
   }
