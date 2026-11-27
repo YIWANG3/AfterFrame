@@ -269,12 +269,14 @@ class PeopleIndexJobTest(unittest.TestCase):
             connection.close()
 
     def _slow_first_worker(self, root: Path) -> Path:
-        """A worker that logs "pid id" per request; asset-1, the first photo
-        of the job, takes a second, the rest next to none."""
+        """A worker that logs "pid id" per request, each process in a file of
+        its own (two processes appending to one file can overwrite each
+        other's line on Windows); asset-1, the first photo of the job, takes
+        a second, the rest next to none."""
         embedding = [1.0 / math.sqrt(512)] * 512
         return self._write_worker(root, f'''import json, os, pathlib, sys, time
 embedding = {json.dumps(embedding)}
-log = pathlib.Path({json.dumps(str(root / "worker-requests.log"))})
+log = pathlib.Path({json.dumps(str(root))}) / f"worker-requests-{{os.getpid()}}.log"
 for line in sys.stdin:
     request = json.loads(line)
     with log.open("a") as fh:
@@ -285,8 +287,11 @@ for line in sys.stdin:
 ''')
 
     def _requests(self, root: Path) -> list[tuple[str, str]]:
-        log = root / "worker-requests.log"
-        return [tuple(line.split(" ", 1)) for line in log.read_text().splitlines()] if log.exists() else []
+        return [
+            tuple(line.split(" ", 1))
+            for log in sorted(root.glob("worker-requests-*.log"))
+            for line in log.read_text().splitlines()
+        ]
 
     def _index(self, connection, worker: Path, job_id: str, **kwargs) -> dict:
         return run_people_index_job(
@@ -326,7 +331,8 @@ for line in sys.stdin:
             self.assertEqual(cancelled["processed"], 2)
             self.assertEqual(get_job(connection, job["job_id"])["resume_cursor"], {"offset": 0, "total": 4, "done": [1, 2]})
 
-            (root / "worker-requests.log").unlink()
+            for log in root.glob("worker-requests-*.log"):
+                log.unlink()
             resumed = self._index(connection, worker, job["job_id"], workers=2)
             self.assertEqual(sorted(asset for _, asset in self._requests(root)), sorted([order[0], order[3]]))
             self.assertEqual(resumed["processed"], 4)
@@ -353,7 +359,8 @@ for line in sys.stdin:
         def machine(cores: int, gigabytes: float):
             pages = {"SC_PAGE_SIZE": 4096, "SC_PHYS_PAGES": int(gigabytes * 2**30 / 4096)}
             return (patch.object(job_runner.os, "cpu_count", return_value=cores),
-                    patch.object(job_runner.os, "sysconf", side_effect=lambda name: pages[name]))
+                    # Windows has no os.sysconf: the Mac's is made up there.
+                    patch.object(job_runner.os, "sysconf", side_effect=lambda name: pages[name], create=True))
 
         for cores, gigabytes, expected in ((12, 18, 3), (8, 16, 2), (8, 8, 1), (4, 64, 1), (24, 128, 3)):
             cpu, memory = machine(cores, gigabytes)
