@@ -32,6 +32,9 @@ def _decode_job_row(row: sqlite3.Row | None) -> dict[str, object] | None:
         "progress": float(row["progress"] or 0),
         "priority": int(row["priority"] or 50) if "priority" in keys else 50,
         "pause_requested": bool(row["pause_requested"]) if "pause_requested" in keys else False,
+        # 2: the app paused it for an import, and resumes it once imports
+        # are done; 1 is the user's pause, which stays (request_job_pause).
+        "paused_for_import": (row["pause_requested"] == 2) if "pause_requested" in keys else False,
         "resume_cursor": json.loads(row["resume_cursor_json"] or "{}") if "resume_cursor_json" in keys else {},
         "attempt_count": int(row["attempt_count"] or 0) if "attempt_count" in keys else 0,
         "error": row["error_text"],
@@ -277,9 +280,18 @@ def _reap_stalled_jobs(connection: sqlite3.Connection, stall_cutoff: str) -> Non
 
 def request_job_cancel(connection: sqlite3.Connection, job_id: str, commit: bool = True) -> dict[str, object] | None:
     """Flag a job for cooperative cancellation. The runner notices the flag at
-    its next progress checkpoint and exits with status='cancelled'."""
+    its next progress checkpoint and exits with status='cancelled'. A paused
+    job has no runner to notice it (it exited when it paused, or never ran:
+    a people scan waiting for an import), so it is cancelled here; flagged
+    only, it stayed "cancelling" in the job list until someone resumed it."""
     connection.execute(
-        "UPDATE jobs SET cancel_requested = 1, updated_at = CURRENT_TIMESTAMP WHERE job_id = ? AND status IN ('queued', 'running', 'paused')",
+        """
+        UPDATE jobs
+        SET cancel_requested = 1,
+            status = CASE WHEN status = 'paused' THEN 'cancelled' ELSE status END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE job_id = ? AND status IN ('queued', 'running', 'paused')
+        """,
         (job_id,),
     )
     if commit:
@@ -292,18 +304,24 @@ def is_cancel_requested(connection: sqlite3.Connection, job_id: str) -> bool:
     return bool(row and row["cancel_requested"])
 
 
-def request_job_pause(connection: sqlite3.Connection, job_id: str, commit: bool = True) -> dict[str, object] | None:
+def request_job_pause(
+    connection: sqlite3.Connection, job_id: str, commit: bool = True, *, for_import: bool = False
+) -> dict[str, object] | None:
     """Request a safe checkpoint pause. A queued job pauses immediately; a
-    running job transitions after its current asset transaction completes."""
+    running job transitions after its current asset transaction completes.
+
+    `for_import`: the app's own pause while an import runs (pause_requested
+    2), which it lifts when imports are done. A job the user paused stays the
+    user's (1), whichever comes first."""
     connection.execute(
         """
         UPDATE jobs
-        SET pause_requested = 1,
+        SET pause_requested = CASE WHEN ? AND pause_requested != 1 THEN 2 ELSE 1 END,
             status = CASE WHEN status = 'queued' THEN 'paused' ELSE status END,
             updated_at = CURRENT_TIMESTAMP
         WHERE job_id = ? AND status IN ('queued', 'running', 'paused')
         """,
-        (job_id,),
+        (1 if for_import else 0, job_id),
     )
     if commit:
         connection.commit()

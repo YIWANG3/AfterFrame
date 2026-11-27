@@ -232,6 +232,10 @@ def run_people_index_job(
         raise ValueError(f"unknown people job: {job_id}")
     if job["job_type"] != "people_index":
         raise ValueError(f"job {job_id} is not a people_index job")
+    if job["status"] == "paused":
+        # Paused between its launch and now (an import began: the app pauses
+        # the scan for it, ../electron/pipeline.js). It runs when resumed.
+        return {**_as_dict(job.get("result")), "paused": True}
     resolved_worker = worker_path or Path(os.environ.get("PEOPLE_WORKER_PATH", ""))
     if not resolved_worker or not resolved_worker.is_file():
         raise FileNotFoundError("People Worker is not available; PEOPLE_WORKER_PATH must point to the packaged binary")
@@ -1288,6 +1292,7 @@ def run_annotation_job(
     asset_ids: list[str] | None = None,
     collection_id: str | None = None,
     include_descendants: bool = False,
+    import_job_ids: list[str] | None = None,
     languages: list[str] | None = None,
     max_tags: int = 10,
     max_caption_chars: int = 200,
@@ -1309,6 +1314,7 @@ def run_annotation_job(
             asset_ids=asset_ids,
             collection_id=collection_id,
             include_descendants=include_descendants,
+            import_job_ids=import_job_ids,
             limit=limit,
         )
         return _annotation.annotate_batch(

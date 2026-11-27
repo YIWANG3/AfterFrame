@@ -18,6 +18,7 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { spawnSafely } = require("../spawnSafely");
 const jobArgv = require("../sidecar/jobArgv");
+const { PRIORITY } = require("../tasks");
 const { withCatalog, catalogRequired, jobStatusHandler } = require("./guard");
 const {
   BUNDLED_ARCFACE_R100,
@@ -412,8 +413,8 @@ function register({
 
   ipcMain.handle("workspace:get-people-settings", () => state());
 
-  // The renderer reads this when an import job finishes (App.jsx), the same
-  // place annotation's autoOnImport is honoured.
+  // The import pipeline (../pipeline.js) reads it when an import ends, as it
+  // does annotation's autoOnImport.
   ipcMain.handle("workspace:set-people-auto-index", async (_event, enabled) => {
     await updateAppSettings((settings) => ({
       ...settings,
@@ -546,10 +547,21 @@ function register({
         pet_manifest_hash: pet.record.manifestHash,
         pet_threshold: Number.isFinite(pet.record.clusterThreshold) ? pet.record.clusterThreshold : BUNDLED_DINOV2_SMALL.cluster_threshold,
       } : {}),
-    }, { priority: Number.isFinite(opts.priority) ? opts.priority : 5 });
+    }, { priority: opts.auto === true ? PRIORITY.auto : PRIORITY.user });
+    // While an import runs the scan waits for it, paused the way the import
+    // pipeline pauses a running one (../pipeline.js), and starts when imports
+    // are over. The user can resume it sooner from the job list.
+    if ((await latestJobStatus("import")).running) {
+      return formatJobStatus(await commands.pauseJob(job.job_id, { forImport: true }));
+    }
     launchPeopleJob(job);
     return formatJobStatus(job);
   });
+
+  // Whether a scan could start now: a compatible model installed and chosen.
+  function canIndex() {
+    return Boolean(activeInternalRecord());
+  }
 
   async function resumePeopleIndexJob(jobId) {
     const job = await commands.getJob(jobId);
@@ -578,7 +590,7 @@ function register({
   ipcMain.handle("workspace:people-index-start", (_event, options) => startPeopleIndex(options));
   ipcMain.handle("workspace:people-index-status", jobStatusHandler({ getCatalogState, latestJobStatus, formatJobStatus }, "people_index"));
 
-  return { startPeopleIndex, resumePeopleIndexJob, recoverQueuedPeopleJobs };
+  return { startPeopleIndex, resumePeopleIndexJob, recoverQueuedPeopleJobs, canIndex };
 }
 
 module.exports = { register };

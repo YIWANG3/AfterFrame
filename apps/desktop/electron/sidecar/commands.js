@@ -613,13 +613,15 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     },
 
     // How many assets a batch annotation would touch, before starting it.
-    annotationCount({ onlyMissing = true, assetIds, collectionId, includeDescendants } = {}) {
+    // importJobIds: the photos those imports added (annotating on import).
+    annotationCount({ onlyMissing = true, assetIds, collectionId, includeDescendants, importJobIds } = {}) {
       const argv = ["annotation-count"];
       if (onlyMissing === false) argv.push("--reannotate");
       const ids = Array.isArray(assetIds) ? assetIds.filter(Boolean) : [];
       if (ids.length) argv.push("--asset-ids", ids.join(","));
       if (collectionId) argv.push("--collection-id", String(collectionId));
       if (collectionId && includeDescendants) argv.push("--include-descendants");
+      for (const jobId of Array.isArray(importJobIds) ? importJobIds.filter(Boolean) : []) argv.push("--import-job-id", String(jobId));
       return callJson(argv).then((res) => res || { count: 0 });
     },
 
@@ -728,8 +730,20 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["cancel-job", "--job-id", String(jobId)]);
     },
 
-    pauseJob(jobId) {
-      return callJson(["pause-job", "--job-id", String(jobId)]);
+    // forImport: the app's own pause while an import runs, which it lifts
+    // when imports are done; a pause the user asked for stays theirs.
+    pauseJob(jobId, { forImport = false } = {}) {
+      return callJson(["pause-job", "--job-id", String(jobId), ...(forImport ? ["--for-import"] : [])]);
+    },
+
+    // Ended imports whose follow-ups (people, annotation) aren't done, and
+    // recording what was done (../pipeline.js, db/import_followups.py).
+    pendingImportFollowups() {
+      return callJson(["pending-import-followups"]).then((rows) => (Array.isArray(rows) ? rows : []));
+    },
+
+    markImportFollowups(jobId, followups) {
+      return callJson(["mark-import-followups", "--job-id", String(jobId), "--followups-json", JSON.stringify(followups || {})]);
     },
 
     resumeJob(jobId) {

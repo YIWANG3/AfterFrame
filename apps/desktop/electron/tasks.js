@@ -12,6 +12,10 @@
 //   providerCredentials   provider tokens (keychain-backed) → { apiKey, baseUrl }
 //   resumePeopleIndexJob             ipc/people.js: a paused people job needs
 //                                    its worker relaunched, not a status flip
+//   onImportStarted                  ./pipeline.js: an import began (background
+//                                    analysis makes way for it)
+//   deferUntilImportsEnd(type, opts) ./pipeline.js: analysis asked for while an
+//                                    import runs, started once it is over
 // The job-list projection, the resume routing and the default repaint
 // provider live here too (review 2026-10-14 §D): the IPC handlers and the
 // MCP tools used to carry a copy each, and a people_index resume that only
@@ -22,6 +26,12 @@ const fs = require("node:fs");
 const crypto = require("node:crypto");
 const jobArgv = require("./sidecar/jobArgv");
 
+// What the job list sorts by (jobs.priority, highest first, then oldest):
+// what the user asked for, ahead of what the app started on its own (catch-
+// ups, follow-ups of an import, watched folders). Two kinds and nothing in
+// between; the order jobs RUN in is ./pipeline.js's, not this.
+const PRIORITY = Object.freeze({ user: 1, auto: 0 });
+
 function createTaskStarters({
   app,
   readAppSettings,
@@ -30,6 +40,8 @@ function createTaskStarters({
   addAllowedMediaDir,
   providerCredentials,
   resumePeopleIndexJob,
+  onImportStarted = () => {},
+  deferUntilImportsEnd = null,
 }) {
   function formatJobStatus(job) {
     if (!job) {
@@ -37,6 +49,7 @@ function createTaskStarters({
         running: false,
         active: false,
         paused: false,
+        pausedForImport: false,
         startedAt: null,
         finishedAt: null,
         exitCode: null,
@@ -65,6 +78,8 @@ function createTaskStarters({
       running: status === "queued" || status === "running",
       active: status === "queued" || status === "running" || status === "paused",
       paused: status === "paused",
+      // Paused by the app while an import runs (./pipeline.js), not by the user.
+      pausedForImport: status === "paused" && job.paused_for_import === true,
       startedAt: job.created_at || null,
       finishedAt: status === "succeeded" || status === "failed" ? job.updated_at || null : null,
       exitCode: status === "failed" ? 1 : status === "succeeded" ? 0 : null,
@@ -92,7 +107,19 @@ function createTaskStarters({
   }
 
   async function createJob(jobType, payload, options) {
-    return await commands.createJob(jobType, payload, options);
+    return await commands.createJob(jobType, payload, { priority: PRIORITY.user, ...(options || {}) });
+  }
+
+  // Analysis that waits for imports (docs/import-pipeline-redesign.md §5.3):
+  // asked for while an import runs, it is noted and started when imports are
+  // over, so it doesn't take the cores an import is using. `null` when it may
+  // go ahead now.
+  async function deferredForImport(type, options) {
+    if (!deferUntilImportsEnd) return null;
+    const importing = await latestJobStatus("import");
+    if (!importing.running) return null;
+    deferUntilImportsEnd(type, options || {});
+    return { ...(await latestJobStatus(type)), running: false, deferred: true };
   }
 
   // Every queued / running / paused job, as the renderer's JobDock and the
@@ -139,6 +166,9 @@ function createTaskStarters({
     return formatJobStatus(job);
   }
 
+  // A request made while an import runs is not imported here: the caller
+  // gets that import back, marked `busy`, and queues its own (the window's
+  // pendingImport; ./pipeline.js for the agent and the sample catalog).
   async function startImportTask(options) {
     const mode = String(options?.mode || "combined");
     const rawDirs = [...new Set((options?.rawDirs || []).filter(Boolean))];
@@ -153,20 +183,10 @@ function createTaskStarters({
     }
     const current = await latestJobStatus("import");
     if (current.running) {
-      // The requested dirs are NOT imported here — the caller gets someone else's
-      // job back, marked `busy`. The UI copes by queueing them (useWorkspace
-      // `pendingImport`, replayed from the import-finished handler); callers
-      // without a queue must opt into an error so they don't report a phantom
-      // success.
-      if (options?.rejectIfBusy) {
-        throw new Error(
-          `An import is already running (job ${current.jobId}); these folders were not imported. `
-          + "Wait for it to finish (poll get_job_status) and call import_directory again.",
-        );
-      }
       return { ...current, busy: true };
     }
-    const job = await createJob("import", { raw_dirs: rawDirs, image_dirs: imageDirs, mode });
+    const job = await createJob("import", { raw_dirs: rawDirs, image_dirs: imageDirs, mode },
+      { priority: options?.auto === true ? PRIORITY.auto : PRIORITY.user });
     launchSidecarJob(jobArgv.importJob({
       jobId: job.job_id,
       mode,
@@ -178,6 +198,7 @@ function createTaskStarters({
       // manual re-import is the user's way to clear one.
       respectTombstones: options?.auto === true,
     }));
+    onImportStarted(job.job_id);
     return formatJobStatus(job);
   }
 
@@ -186,6 +207,8 @@ function createTaskStarters({
     if (current.running) {
       return current;
     }
+    const deferred = await deferredForImport("preview", { kind });
+    if (deferred) return deferred;
     const job = await createJob("preview", { kind, asset_type: "image" });
     launchSidecarJob(jobArgv.previewJob({
       jobId: job.job_id, kind, assetType: "image",
@@ -199,11 +222,13 @@ function createTaskStarters({
   // common case after the first pass, so it is answered without a job.
   // `force` redoes every photo (Settings ▸ Library, after the extraction
   // changed); otherwise only the ones still without colours.
-  async function startColorsTask({ force = false, priority = 80, auto = false } = {}) {
+  async function startColorsTask({ force = false, auto = false } = {}) {
     const current = await latestJobStatus("colors");
     if (current.running) {
       return current;
     }
+    const deferred = await deferredForImport("colors", { force, auto });
+    if (deferred) return deferred;
     // The automatic catch-up honours the switch; a run asked for in
     // Settings is explicit and goes ahead regardless.
     if (auto && readAppSettings()?.previews?.analyzeColors === false) {
@@ -216,9 +241,9 @@ function createTaskStarters({
     if (!(count > 0)) {
       return { ...current, running: false, missing: 0 };
     }
-    // The automatic catch-up runs below the user's own work (imports,
-    // annotation); a run they asked for in Settings goes ahead of it.
-    const job = await createJob("colors", { count, force }, { priority });
+    // The automatic catch-up is listed below the user's own work; a run they
+    // asked for in Settings is theirs.
+    const job = await createJob("colors", { count, force }, { priority: auto ? PRIORITY.auto : PRIORITY.user });
     launchSidecarJob(jobArgv.colorsJob({ jobId: job.job_id, force }));
     return { ...formatJobStatus(job), missing: status?.missing || 0 };
   }
@@ -226,17 +251,21 @@ function createTaskStarters({
   // The look-alike index (hash and, on a Mac, feature print) for photos
   // whose preview has none yet: the catch-up after an import. Nothing to do
   // is answered without a job; `force` redoes every photo.
-  async function startVisualTask({ force = false, priority = 80 } = {}) {
+  // `auto`: the catch-up on opening a catalog (an agent's index_lookalikes is
+  // asked for).
+  async function startVisualTask({ force = false, auto = false } = {}) {
     const current = await latestJobStatus("visual");
     if (current.running) {
       return current;
     }
+    const deferred = await deferredForImport("visual", { force, auto });
+    if (deferred) return deferred;
     const status = await commands.visualStatus();
     const count = force ? (status?.hashed || 0) + (status?.missing || 0) : (status?.missing || 0);
     if (!(count > 0)) {
       return { ...current, running: false, missing: 0 };
     }
-    const job = await createJob("visual", { count, force }, { priority });
+    const job = await createJob("visual", { count, force }, { priority: auto ? PRIORITY.auto : PRIORITY.user });
     launchSidecarJob(jobArgv.visualJob({ jobId: job.job_id, force }));
     return { ...formatJobStatus(job), missing: status?.missing || 0 };
   }
@@ -244,17 +273,19 @@ function createTaskStarters({
   // How each photo shows (portrait / landscape), read off thumbnails made
   // before the shape was recorded: a catalog from an older version, once.
   // New thumbnails record theirs. Nothing to do is answered without a job.
-  async function startOrientationTask({ priority = 85 } = {}) {
+  async function startOrientationTask() {
     const current = await latestJobStatus("orientation");
     if (current.running) {
       return current;
     }
+    const deferred = await deferredForImport("orientation", {});
+    if (deferred) return deferred;
     const status = await commands.orientationStatus();
     const count = status?.missing || 0;
     if (!(count > 0)) {
       return { ...current, running: false, missing: 0 };
     }
-    const job = await createJob("orientation", { count }, { priority });
+    const job = await createJob("orientation", { count }, { priority: PRIORITY.auto });
     launchSidecarJob(jobArgv.orientationJob({ jobId: job.job_id }));
     return { ...formatJobStatus(job), missing: count };
   }
@@ -477,4 +508,4 @@ function createTaskStarters({
   };
 }
 
-module.exports = { createTaskStarters };
+module.exports = { PRIORITY, createTaskStarters };
