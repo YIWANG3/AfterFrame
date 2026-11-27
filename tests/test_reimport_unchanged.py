@@ -1,6 +1,8 @@
 """Importing a folder again reads only what changed: a file the catalog holds
-as it is on disk is not read (ExifTool, fingerprint) or matched again, the
-rule a watched folder already follows (watched.changed_media)."""
+as it is on disk is not read (ExifTool, fingerprint), the rule a watched
+folder already follows (watched.changed_media). A photo is still matched
+against the RAW sources, from what the catalog holds
+(test_rematch_stored_metadata)."""
 from __future__ import annotations
 
 import contextlib
@@ -83,7 +85,7 @@ class ReimportTest(unittest.TestCase):
         self.assertIn("IMG_2.jpg", read)
         self.assertNotIn("IMG_0.jpg", read)
 
-    def test_matching_against_raw_sources_again_reads_everything(self):
+    def test_without_skip_unchanged_every_file_is_read(self):
         self.resolve(skip_unchanged=True)
         _, read = self.resolve()
         self.assertEqual(read, ["IMG_0.jpg", "IMG_1.jpg", "IMG_2.jpg"])
