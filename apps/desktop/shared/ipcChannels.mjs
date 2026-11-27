@@ -214,6 +214,12 @@ export const CORE_IPC_METHODS = [
   ["getDevStaleness", "app:dev-staleness", 0],
   ["relaunchApp", "app:relaunch", 0],
   ["getMcpStatus", "app:mcp-status", 0],
+  // In-app updates (electron/updater.js); changes arrive on onUpdateChanged.
+  ["getUpdateState", "app:update-state", 0],
+  ["checkForUpdates", "app:update-check", 0],
+  ["downloadUpdate", "app:update-download", 0],
+  ["installUpdate", "app:update-install", 0],
+  ["setUpdateAutoCheck", "app:update-auto-check", 1],
   ["videoProxy", "app:video-proxy", 1],
   ["nativeVideoOpen", "app:native-video-open", 1],
   ["nativeVideoState", "app:native-video-state", 1],

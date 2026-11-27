@@ -26,10 +26,21 @@ module.exports = {
       "!node_modules/@img/sharp-libvips-darwin-arm64/**",
     ]
     : build.files,
+  // Its own update channel (electron/updater.js): this app reads
+  // <name>-mac.yml, never latest-mac.yml, the Apple-silicon macOS 14 app's.
+  // electron-updater tells builds apart by CPU only, so a shared file could
+  // move a macOS 12 Mac onto an app that needs 14.
+  publish: build.publish.map((entry) => ({ ...entry, channel: target.name })),
   mac: {
     ...build.mac,
     minimumSystemVersion: target.minimum,
-    target: [{ target: "dmg", arch: [target.arch] }],
+    // The zip is what the app downloads to update itself; the DMG is for a
+    // first install.
+    target: [{ target: "dmg", arch: [target.arch] }, { target: "zip", arch: [target.arch] }],
+    // The zip's name (the DMG has its own below): by default the macOS 12
+    // Apple-silicon zip would take the macOS 14 one's,
+    // AfterFrame-<version>-arm64-mac.zip, on the release.
+    artifactName: `\${productName}-\${version}-${target.artifact}-mac.\${ext}`,
     // Its helpers (scripts/build-native.sh --build <name>), and the Core ML
     // models where people and depth can run.
     extraResources: [

@@ -190,8 +190,11 @@ cd apps/desktop
 npm run dist:mac
 ```
 
-Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`. `scripts/release.sh` wraps
-the signed, notarized build and the GitHub release.
+Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`, plus what installed apps update
+themselves from: `AfterFrame-<version>-arm64-mac.zip`, its `.blockmap` and `latest-mac.yml`
+(each Mac build has its own channel file; see [auto-update.md](auto-update.md)).
+`scripts/release.sh` wraps the signed, notarized build and the GitHub release, and uploads all of
+them.
 
 `apps/desktop/build/` is gitignored except for the three files electron-builder needs: the two
 icons and `entitlements.mac.plist` (the hardened-runtime entitlements `package.json` points

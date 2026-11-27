@@ -5,6 +5,9 @@
 # for macOS 14+ and for macOS 12+, and Intel for macOS 12+. There is no Intel
 # build for macOS 14+: macOS 26 is the last macOS for Intel Macs, so an Intel
 # Mac takes the macOS 12 build (no People, Scene Depth or Stickers).
+# Each build also brings what installed apps update themselves from
+# (electron/updater.js): a zip of the app, its blockmap, and its channel's
+# <channel>-mac.yml.
 # `scripts/dist-mac-build.sh intel` still builds one by hand.
 # Wraps steps ② and ③ of the flow:
 #
@@ -12,7 +15,7 @@
 #   ② build/sign/notarize  — `npm run dist:mac:release` (arm64, macOS 14+) and
 #                            `scripts/dist-mac-build.sh <name> --release` for
 #                            the other two                  ← this script runs them
-#   ③ publish + upload     — `gh release create … *.dmg`  ← this script runs it
+#   ③ publish + upload     — `gh release create … *.dmg *.zip *.yml`  ← this script runs it
 #
 # Prerequisites
 #   - Developer ID Application cert + key in the login keychain
@@ -47,6 +50,22 @@ DMGS=(
   "release/macos12-arm64/AfterFrame-${VERSION}-macOS12-arm64.dmg"
   "release/macos12-intel/AfterFrame-${VERSION}-macOS12-Intel.dmg"
 )
+# In-app updates: each build's zip and the channel file that names it. The
+# channel is the build's (electron-builder.mac.cjs); the Apple-silicon macOS 14
+# app's is "latest".
+ZIPS=(
+  "release/AfterFrame-${VERSION}-arm64-mac.zip"
+  "release/macos12-arm64/AfterFrame-${VERSION}-macOS12-arm64-mac.zip"
+  "release/macos12-intel/AfterFrame-${VERSION}-macOS12-Intel-mac.zip"
+)
+CHANNELS=(latest macos12-arm64 macos12-intel)
+UPDATE_INFO=(
+  "release/latest-mac.yml"
+  "release/macos12-arm64/macos12-arm64-mac.yml"
+  "release/macos12-intel/macos12-intel-mac.yml"
+)
+BLOCKMAPS=()
+for zip in "${ZIPS[@]}"; do BLOCKMAPS+=("${zip}.blockmap"); done
 APPS=(
   release/mac-arm64/AfterFrame.app
   release/macos12-arm64/mac-arm64/AfterFrame.app
@@ -92,14 +111,14 @@ xcrun notarytool history --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
 # ---- 3. build + sign + notarize + DMG --------------------------------------
 echo "▶ Building (native → sidecar → vite → electron-builder, signed + notarized)…"
 export CSC_IDENTITY_AUTO_DISCOVERY=true
-rm -f "${DMGS[@]}"
+rm -f "${DMGS[@]}" "${ZIPS[@]}" "${BLOCKMAPS[@]}" "${UPDATE_INFO[@]}"
 npm run dist:mac:release
 for build in macos12-arm64 macos12-intel; do
   bash scripts/dist-mac-build.sh "$build" --release
 done
 
-for dmg in "${DMGS[@]}"; do
-  [[ -f "$dmg" ]] || { echo "✗ Expected DMG not found: $dmg" >&2; exit 1; }
+for file in "${DMGS[@]}" "${ZIPS[@]}" "${BLOCKMAPS[@]}" "${UPDATE_INFO[@]}"; do
+  [[ -f "$file" ]] || { echo "✗ Expected file not found: $file" >&2; exit 1; }
 done
 
 # ---- 4. verify the notarized apps ------------------------------------------
@@ -119,6 +138,23 @@ for APP in "${APPS_WITH_MODELS[@]}"; do
     || { echo "✗ A Core ML model is missing from $APP or altered (npm run fetch:models)." >&2; exit 1; }
 done
 
+# ---- 4b. verify what the apps update themselves from -----------------------
+# Each channel file names this version and its own zip; the zip holds a
+# signed app that reads that channel. A wrong channel would hand one build's
+# users another build's app.
+for i in "${!ZIPS[@]}"; do
+  zip="${ZIPS[$i]}"; info="${UPDATE_INFO[$i]}"; channel="${CHANNELS[$i]}"
+  echo "▶ Verifying update files: $info → $zip"
+  grep -qx "version: ${VERSION}" "$info" || { echo "✗ $info is not for ${VERSION}." >&2; exit 1; }
+  grep -qxF "  - url: $(basename "$zip")" "$info" || { echo "✗ $info does not name $(basename "$zip")." >&2; exit 1; }
+  unpacked="$(mktemp -d)"
+  ditto -x -k "$zip" "$unpacked"
+  codesign --verify --deep --strict "$unpacked/AfterFrame.app"
+  baked="$(sed -n 's/^channel: //p' "$unpacked/AfterFrame.app/Contents/Resources/app-update.yml")"
+  [[ "${baked:-latest}" == "$channel" ]] || { echo "✗ The app in $zip reads channel '${baked:-latest}', not '$channel'." >&2; exit 1; }
+  rm -rf "$unpacked"
+done
+
 for dmg in "${DMGS[@]}"; do
   echo "✓ DMG ready: $dmg"
   echo "  sha256: $(shasum -a 256 "$dmg" | awk '{print $1}')"
@@ -127,13 +163,18 @@ done
 # ---- 5. publish -------------------------------------------------------------
 if [[ "$PUBLISH" != "1" ]]; then
   echo "ℹ PUBLISH=0 — skipping GitHub release. Upload manually with:"
-  echo "  gh release create $TAG --title \"AfterFrame $VERSION\" ${DMGS[*]}"
+  echo "  gh release create $TAG --title \"AfterFrame $VERSION\" ${DMGS[*]} ${ZIPS[*]} ${BLOCKMAPS[*]} ${UPDATE_INFO[*]}"
   exit 0
 fi
 
 echo "▶ Publishing GitHub Release ${TAG}…"
 NOTES_ARGS=()
 if [[ -f "$NOTES" ]]; then NOTES_ARGS=(--notes-file "$NOTES"); else NOTES_ARGS=(--generate-notes); fi
-gh release create "$TAG" --title "AfterFrame ${VERSION}" "${NOTES_ARGS[@]}" "${DMGS[@]}"
+# A draft until every file is up: installed apps read the latest published
+# release, and one that found its channel file before the zip it names had
+# finished uploading would fail its download.
+gh release create "$TAG" --draft --title "AfterFrame ${VERSION}" "${NOTES_ARGS[@]}" \
+  "${DMGS[@]}" "${ZIPS[@]}" "${BLOCKMAPS[@]}" "${UPDATE_INFO[@]}"
+gh release edit "$TAG" --draft=false --latest
 
 echo "✅ Released: $(gh release view "$TAG" --json url -q .url)"

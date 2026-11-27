@@ -16,6 +16,7 @@ import WatermarkSettings from "./settings/WatermarkSettings";
 import ShortcutsSettings from "./settings/ShortcutsSettings";
 import { matchShortcut } from "../shortcuts/store";
 import { Button, Modal, cx } from "../ui";
+import useUpdateState, { hasUpdate } from "../hooks/useUpdateState";
 
 /* ─── SettingsOverlay ─────────────────────────────────────────
    Full-screen modal hosting all global Settings tabs. The same
@@ -69,6 +70,8 @@ export default function SettingsOverlay({
   const [tab, setTab] = useState(() => initialTab || rememberedTab());
   const { t } = useTranslation("settings");
   const rootRef = useRef(null);
+  // About carries a dot while a new version waits (electron/updater.js).
+  const updateWaiting = hasUpdate(useUpdateState());
 
   useEffect(() => { if (open) setTab(initialTab || rememberedTab()); }, [open, initialTab]);
 
@@ -151,6 +154,9 @@ export default function SettingsOverlay({
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span className="min-w-0 flex-1 truncate">{t(entry.labelKey ?? `tabs.${entry.key}`)}</span>
+                {entry.id === "about" && updateWaiting && (
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" data-update-dot="" aria-hidden="true" />
+                )}
               </button>
             );
           })}

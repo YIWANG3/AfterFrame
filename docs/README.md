@@ -12,6 +12,7 @@
 | [../apps/desktop/features/README.md](../apps/desktop/features/README.md) | feature module 的目录形状和约定（清单、`electron/`、`renderer/`、测试和 lint 怎么找到它们）；已迁：LUT（#257）、AI 重绘（#258）、贴纸提取（#259）；清单 v1 的字段表在文末；每个功能自己的 i18n namespace |
 | [agent-native-mcp.md](agent-native-mcp.md) | 内嵌 MCP server 设计与 38 个 tool 的现状（顶部状态行持续更新） |
 | [settings-scope.md](settings-scope.md) | 哪些设置属于 app、哪些属于 catalog |
+| [auto-update.md](auto-update.md) | 应用内更新：去哪找新版本、每个 Mac 包的 channel、发版要传的文件、发版前怎么手动验真替换 |
 | [naming.md](naming.md) | 产品为什么有四个名字（AfterFrame / media-workspace / …） |
 | [mcp-testing.md](mcp-testing.md) | MCP 从协议到真实 agent 的测试方法 |
 | [camera-name-rules.md](camera-name-rules.md) | 相机品牌名、机型名的决定顺序（用户改名 → 手工表 → 规则） |

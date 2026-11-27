@@ -146,11 +146,26 @@
     "license": "许可证",
     "reportIssue": "反馈问题",
     "openIssueTracker": "打开问题追踪",
-    "updatesPre": "更新",
-    "updatesNotAuto": "不是自动的",
-    "updatesMid": "，新版本发布时,从 ",
-    "githubReleases": "GitHub Releases",
-    "updatesPost": " 下载 .dmg,拖到旧的 Applications/AfterFrame.app 上覆盖即可。图库和设置会在更新后保留。"
+    "softwareUpdate": "软件更新",
+    "updateChecking": "正在检查…",
+    "updateCurrent": "已是最新版本。",
+    "updateAvailable": "AfterFrame {{version}} 已发布。",
+    "updateDownloading": "正在下载… {{percent}}%",
+    "updateReady": "{{version}} 已下载，退出时安装。",
+    "updateJobsRunning": "已下载。后台任务完成后再重启。",
+    "updateMoveToApplications": "把 AfterFrame 移到「应用程序」文件夹，才能在这里更新。",
+    "updateCheck": "立即检查",
+    "updateDownload": "下载",
+    "updateRestart": "重启以更新",
+    "updateRetry": "重试",
+    "updateFromGithub": "去 GitHub 下载",
+    "updateWhatsNew": "更新内容",
+    "updateAutoCheck": "自动检查更新",
+    "updateError": {
+      "check": "检查更新失败。",
+      "download": "下载没有完成。",
+      "install": "无法安装更新。"
+    }
   },
   "people": {
     "loading": "正在加载人物识别…",

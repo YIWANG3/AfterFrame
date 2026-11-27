@@ -176,6 +176,8 @@ function createAppShell({
         label: "AfterFrame",
         submenu: [
           { label: t("menu.about"), role: "about" },
+          // Settings ▸ About, checking (electron/updater.js).
+          { id: "check-updates", label: t("menu.checkUpdates"), click: () => sendMenuAction("app:check-updates") },
           { type: "separator" },
           { label: t("menu.settings"), accelerator: keys("app:open-settings"), click: () => sendMenuAction("app:open-settings") },
           { type: "separator" },

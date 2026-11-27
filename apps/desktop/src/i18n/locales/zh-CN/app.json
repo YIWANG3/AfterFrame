@@ -165,5 +165,9 @@
     "collectionsUpdated": "合集已更新。",
     "itemsUpdated_other": "已更新图库中的 {{count}} 个素材。",
     "someItemsUpdated": "已更新图库中的部分素材。"
+  },
+  "update": {
+    "available": "AfterFrame {{version}} 已发布",
+    "show": "查看"
   }
 }

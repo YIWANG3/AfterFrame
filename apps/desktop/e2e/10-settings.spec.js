@@ -154,6 +154,10 @@ test("Integrations tab shows the live MCP endpoint and copies a working config",
 test("About tab renders the product blurb", async () => {
   await ctx.window.getByRole("button", { name: "About" }).click();
   await expect(ctx.window.getByText(/local-first photo workspace/i)).toBeVisible();
+  // A dev run has no updater (e2e/104-auto-update.spec.js gives it a feed):
+  // About keeps the way to the releases page instead.
+  await expect(ctx.window.getByRole("button", { name: "Open Releases" })).toBeVisible();
+  await expect(ctx.window.locator("[data-update-status]")).toHaveCount(0);
 });
 
 test("Escape closes settings and restores the gallery", async () => {

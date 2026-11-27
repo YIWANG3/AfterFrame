@@ -23,4 +23,4 @@ npm run fetch:exiftool
 bash scripts/build-sidecar-mac.sh --build "$BUILD"
 [[ "$ARCH" == "x64" ]] && node scripts/install-sharp-x64.mjs
 npm run build
-AFTERFRAME_MAC_BUILD="$BUILD" AFTERFRAME_NOTARIZE="$NOTARIZE" npx electron-builder --mac "--$ARCH" --config electron-builder.mac.cjs
+AFTERFRAME_MAC_BUILD="$BUILD" AFTERFRAME_NOTARIZE="$NOTARIZE" npx electron-builder --mac "--$ARCH" --config electron-builder.mac.cjs --publish never

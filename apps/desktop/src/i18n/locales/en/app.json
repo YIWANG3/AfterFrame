@@ -178,5 +178,9 @@
     "itemsUpdated_one": "Updated {{count}} item in the library.",
     "itemsUpdated_other": "Updated {{count}} items in the library.",
     "someItemsUpdated": "Updated some items in the library."
+  },
+  "update": {
+    "available": "AfterFrame {{version}} is available",
+    "show": "Details"
   }
 }

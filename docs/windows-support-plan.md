@@ -158,7 +158,7 @@ Windows 下的管道默认使用系统的 ANSI 代码页：中文系统是 GBK�
 ### 3.5 打包与发布
 
 - 没有 Windows 代码签名，SmartScreen 会拦截"已保护你的电脑"，对普通用户非常劝退。`scripts/release.sh` 只适用于 macOS。
-- 没有自动更新：没用 `electron-updater`，也没有 `publish` 配置。Mac 版其实也缺这个。
+- ~~没有自动更新：没用 `electron-updater`，也没有 `publish` 配置。Mac 版其实也缺这个。~~ 已做，Mac 和 Windows 一起（2026-11-27，[auto-update.md](auto-update.md)）。
 - `extraResources` 会把整个 `native/` 打进 Windows 安装包，里面有 48MB 的 `.mlpackage` 和 `.swift` 源码，需要按平台过滤。
 - 图标可以直接用：`build/icon.png` 是 1024×1024，electron-builder 会自动转成 `.ico`。
 - nsis 没有指定架构，打出来的是构建机的架构。建议先只做 x64。pillow-heif 目前只有 `win_amd64` 的 wheel，ARM 版的 HEIC 会静默失败（`annotation.py:43-48` 吞掉了 ImportError）。
@@ -310,7 +310,7 @@ services/sidecar/src/media_workspace/
 1. ~~**做不做、什么时候做**~~：已决定做（2026-10-03），开发机见第 9 节。候补名单仍然有用，可以用来排阶段 3 的顺序。
 2. **架构**：只做 x64 吗？（建议先只做 x64。目前打出来的就是 x64。）最低支持哪个 Windows 版本？（建议 Win10 22H2 及以上，Mica 效果只在 Win11 上有。）
 3. **代码签名**：选 OV 证书，还是 Azure Trusted Signing？后者对个人开发者开放的地区有限，需要确认。签名之后 SmartScreen 的信誉也需要时间积累。**2026-10-03 决定暂不买证书**：安装包先不签名，下载页要教用户越过 SmartScreen。
-4. **自动更新**：要不要同时给 Mac 加上 `electron-updater`？
+4. ~~**自动更新**：要不要同时给 Mac 加上 `electron-updater`？~~ 已定：两边一起加（2026-11-27，[auto-update.md](auto-update.md)）。
 5. ~~**RAW 一致性**~~：已定。预览用相机内嵌的 JPEG（#126），尺寸和全尺寸解码用 LibRaw（#149），两个平台一样。Mac 的全尺寸渲染优先用 Image I/O，所以颜色可能和 Windows 略有差别。
 6. **安装包体积**：ffmpeg 和 ONNX 模型加起来可能让 Windows 安装包比 Mac 大不少，体积上限定多少？
    - FFmpeg（LGPL 共享库版）让安装包大了约 42MB。0.5.11 到 0.5.13 的安装包都是 236MB，0.5.11 装好后 709MB。
