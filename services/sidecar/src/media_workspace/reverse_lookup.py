@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import time
 from collections import Counter
@@ -282,7 +283,6 @@ def resolve_image(
     persist_root: bool = True,
     commit: bool = True,
 ) -> MatchDecision:
-    thresholds = thresholds or Thresholds()
     export = extract_image_candidate(image_path)
     claimed = claim_moved_original(connection, "image", export.path, export.fingerprint) is not None
     previous_signature = _previous_asset_signature(connection, image_path)
@@ -292,7 +292,98 @@ def resolve_image(
     if persist_root:
         upsert_catalog_root(connection, "image", export.path.parent, commit=commit)
     image_asset_id = upsert_image_asset(connection, export, commit=False)
+    return _match_image(
+        connection, export, image_asset_id, thresholds or Thresholds(), refresh,
+        commit=commit, content_changed=content_changed, claimed=claimed,
+    )
 
+
+# What matching reads off a photo besides its name (score_candidate,
+# recall_candidates). A photo whose stored metadata lacks one of these keys
+# (a catalog from before it recorded it) is read again rather than matched
+# without it.
+_MATCHED_METADATA = ("capture_time", "camera_model", "lens_model", "width", "height")
+# The file itself: the assets row's columns, or the path's name.
+_FILE_FIELDS = {
+    "asset_id", "path", "stem", "normalized_stem", "stem_key", "extension",
+    "fingerprint", "file_size", "modified_time",
+}
+# The rest is what a read found, which upsert_image_asset stores in
+# metadata_json under the same names.
+_STORED_FIELDS = tuple(field.name for field in dataclasses.fields(ImageCandidate) if field.name not in _FILE_FIELDS)
+
+
+def stored_image_candidate(connection, path: Path, asset_id: str) -> ImageCandidate | None:
+    """The photo at `path` as the catalog holds it, to match it again without
+    reading the file: what its last read stored (the assets row and
+    metadata_json). Its stems come from its name, as they do when the file
+    is read, so a change to how stems are keyed applies to it all the same.
+    None when the asset is not a photo or its metadata lacks what matching
+    reads: that file is read."""
+    row = connection.execute(
+        "SELECT asset_type, fingerprint, file_size, modified_time, metadata_json FROM assets WHERE asset_id = ?",
+        (asset_id,),
+    ).fetchone()
+    if row is None or row["asset_type"] != "image":
+        return None
+    try:
+        stored = json.loads(row["metadata_json"] or "{}")
+    except ValueError:
+        return None
+    if not isinstance(stored, dict) or any(key not in stored for key in _MATCHED_METADATA):
+        return None
+    return ImageCandidate(
+        asset_id=asset_id,
+        path=path,
+        stem=path.stem,
+        normalized_stem=normalize_stem(path.stem),
+        stem_key=compute_stem_key(path.stem),
+        extension=path.suffix.lower(),
+        fingerprint=str(row["fingerprint"]),
+        file_size=int(row["file_size"]),
+        modified_time=str(row["modified_time"]),
+        **{name: stored.get(name) for name in _STORED_FIELDS},
+    )
+
+
+def rematch_unchanged_image(
+    connection,
+    image_path: Path,
+    asset_id: str,
+    thresholds: Thresholds | None = None,
+    refresh: bool = False,
+    *,
+    commit: bool = True,
+) -> MatchDecision | None:
+    """Match a photo the catalog holds as it is on disk (unchanged_asset_id)
+    against the RAW sources again, from what the catalog stores about it
+    (stored_image_candidate) instead of reading it: no ExifTool, no
+    fingerprint, the same decision resolve_image makes, so a RAW source
+    added since the photo was imported still binds it. None when the
+    catalog doesn't hold what matching reads; resolve_image reads it."""
+    export = stored_image_candidate(connection, image_path.resolve(), asset_id)
+    if export is None:
+        return None
+    return _match_image(
+        connection, export, asset_id, thresholds or Thresholds(), refresh,
+        commit=commit, content_changed=False, claimed=False,
+    )
+
+
+def _match_image(
+    connection,
+    export: ImageCandidate,
+    image_asset_id: str,
+    thresholds: Thresholds,
+    refresh: bool,
+    *,
+    commit: bool,
+    content_changed: bool,
+    claimed: bool,
+) -> MatchDecision:
+    """Score the photo against the RAW sources and record the decision. A
+    manually confirmed match stands, and so does an automatic one unless
+    `refresh`."""
     existing = get_registry(connection, export.path)
     preexisting = existing is not None
 
@@ -415,12 +506,14 @@ def resolve_image_batch(
     batch (its previews) and show it before indexing the next.
 
     With `skip_unchanged` (importing a folder again), a file the catalog
-    holds as it is on disk (unchanged_asset_id) is not read or matched
-    again: ExifTool and the fingerprint were most of a re-import, and grow
-    with the folder (a large one on a network drive took minutes). It still
-    counts as already in the catalog, is paired as before, and goes on with
-    its batch, so a missing thumbnail is still repaired. Matching against
-    RAW sources again (the "Match with RAW" imports) leaves it off."""
+    holds as it is on disk (unchanged_asset_id) is not read again: ExifTool
+    and the fingerprint were most of a re-import, and grow with the folder
+    (a large one on a network drive took minutes). A photo is still matched
+    against the RAW sources, as `refresh` says, from the metadata the
+    catalog holds (rematch_unchanged_image), so a RAW source added since
+    binds it just as reading it would. RAWs and videos are not matched. The
+    file still counts as already in the catalog, is paired as before, and
+    goes on with its batch, so a missing thumbnail is still repaired."""
     thresholds = thresholds or Thresholds()
     counts: dict[str, int] = {
         "auto_bound": 0,
@@ -503,7 +596,20 @@ def resolve_image_batch(
             known_asset_id = unchanged.pop(path) if path in unchanged else (
                 unchanged_asset_id(connection, path) if skip_unchanged else None
             )
-            if known_asset_id is not None:
+            decision: MatchDecision | None = None
+            if known_asset_id is not None and kind == "image":
+                decision = rematch_unchanged_image(
+                    connection,
+                    path.resolve(),
+                    known_asset_id,
+                    thresholds=thresholds,
+                    refresh=refresh,
+                    commit=False,
+                )
+                if decision is None:
+                    # The catalog doesn't hold what matching reads: read it.
+                    known_asset_id = None
+            if known_asset_id is not None and decision is None:
                 if kind != "video" and pair_asset(connection, known_asset_id):
                     raw_pairs_made += 1
                 registry = get_registry(connection, path)
@@ -517,11 +623,11 @@ def resolve_image_batch(
                     flush()
                 report_progress(progress_callback, phase="resolve_images", processed=processed, total=total, status_counts=counts)
                 continue
-            if kind == "video":
+            if decision is None and kind == "video":
                 decision = index_video_file(connection, path.resolve(), commit=False)
-            elif kind == "raw":
+            elif decision is None and kind == "raw":
                 decision = index_raw_file(connection, path.resolve(), commit=False)
-            else:
+            elif decision is None:
                 decision = resolve_image(
                     connection,
                     path.resolve(),
