@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from media_workspace.catalog import ensure_catalog
 from media_workspace.db import connect, create_job, get_job, init_db, request_job_resume, set_catalog_path
-from media_workspace.job_runner import JobPaused, run_people_index_job
+from media_workspace.job_runner import JobCancelled, JobPaused, run_people_index_job
 
 
 class PeopleIndexJobTest(unittest.TestCase):
@@ -267,6 +267,100 @@ class PeopleIndexJobTest(unittest.TestCase):
             self.assertEqual(failed["status"], "failed")
             self.assertIn("Unable to load the Core ML model", failed["error"])
             connection.close()
+
+    def _slow_first_worker(self, root: Path) -> Path:
+        """A worker that logs "pid id" per request; asset-1, the first photo
+        of the job, takes a second, the rest next to none."""
+        embedding = [1.0 / math.sqrt(512)] * 512
+        return self._write_worker(root, f'''import json, os, pathlib, sys, time
+embedding = {json.dumps(embedding)}
+log = pathlib.Path({json.dumps(str(root / "worker-requests.log"))})
+for line in sys.stdin:
+    request = json.loads(line)
+    with log.open("a") as fh:
+        fh.write(f"{{os.getpid()}} {{request['id']}}\\n")
+    time.sleep(1.0 if request["id"] == "asset-1" else 0.05)
+    face = {{"bounding_box": [0.1, 0.1, 0.5, 0.5], "landmarks": [0.1, 0.1, 0.2, 0.1, 0.15, 0.2, 0.1, 0.3, 0.2, 0.3], "confidence": 1.0, "quality": "standard", "embedding": embedding}}
+    print(json.dumps({{"id": request["id"], "ok": True, "skipped": False, "input_hash": "h-" + request["id"], "image_size": {{"width": 100, "height": 100}}, "faces": [face], "error": None}}), flush=True)
+''')
+
+    def _requests(self, root: Path) -> list[tuple[str, str]]:
+        log = root / "worker-requests.log"
+        return [tuple(line.split(" ", 1)) for line in log.read_text().splitlines()] if log.exists() else []
+
+    def _index(self, connection, worker: Path, job_id: str, **kwargs) -> dict:
+        return run_people_index_job(
+            connection, job_id, model_id="arcface-r100", model_version="test-v1",
+            model_path=Path(connection.execute("PRAGMA database_list").fetchone()[2]).parent.parent / "ArcFaceR100.mlpackage",
+            manifest_hash="manifest-hash", worker_path=worker, **kwargs,
+        )
+
+    def test_several_workers_share_the_photos_and_every_result_is_written(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, _ = self._seed_catalog(root, assets=6)
+            worker = self._slow_first_worker(root)
+            job = create_job(connection, "people_index")
+            result = self._index(connection, worker, job["job_id"], workers=3)
+            self.assertEqual((result["analyzed"], result["faces"], result["processed"]), (6, 6, 6))
+            requests = self._requests(root)
+            self.assertEqual(sorted(asset for _, asset in requests), [f"asset-{index}" for index in range(1, 7)])
+            self.assertEqual(len({pid for pid, _ in requests}), 3)
+            self.assertEqual(get_job(connection, job["job_id"])["resume_cursor"], {"offset": 6, "total": 6})
+            connection.close()
+
+    def test_a_cancel_keeps_the_photos_done_past_the_one_still_running(self) -> None:
+        # The first photo takes a second; the next two finish meanwhile and
+        # the cancel comes before the fourth. The resume point stays at the
+        # first, with the two after it recorded as done, and a resumed run
+        # asks only for the first and the fourth.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, _ = self._seed_catalog(root, assets=4)
+            worker = self._slow_first_worker(root)
+            job = create_job(connection, "people_index")
+            with patch("media_workspace.job_runner._check_cancel", side_effect=[None, None, None, JobCancelled()]):
+                cancelled = self._index(connection, worker, job["job_id"], workers=2)
+            order = get_job(connection, job["job_id"])["payload"]["resolved_asset_ids"]
+            self.assertEqual(order[0], "asset-1")
+            self.assertEqual(cancelled["processed"], 2)
+            self.assertEqual(get_job(connection, job["job_id"])["resume_cursor"], {"offset": 0, "total": 4, "done": [1, 2]})
+
+            (root / "worker-requests.log").unlink()
+            resumed = self._index(connection, worker, job["job_id"], workers=2)
+            self.assertEqual(sorted(asset for _, asset in self._requests(root)), sorted([order[0], order[3]]))
+            self.assertEqual(resumed["processed"], 4)
+            self.assertEqual(resumed["analyzed"], 4)
+            self.assertEqual(get_job(connection, job["job_id"])["resume_cursor"], {"offset": 4, "total": 4})
+            connection.close()
+
+    def test_a_pause_lets_the_photos_already_sent_finish(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, _ = self._seed_catalog(root, assets=3)
+            worker = self._slow_first_worker(root)
+            job = create_job(connection, "people_index")
+            with patch("media_workspace.job_runner._check_pause", side_effect=[None, None, JobPaused()]):
+                paused = self._index(connection, worker, job["job_id"], workers=2)
+            self.assertEqual((paused["processed"], paused["faces"]), (2, 2))
+            self.assertEqual(get_job(connection, job["job_id"])["status"], "paused")
+            self.assertEqual(get_job(connection, job["job_id"])["resume_cursor"], {"offset": 2, "total": 3})
+            connection.close()
+
+    def test_how_many_workers_a_mac_gets(self) -> None:
+        from media_workspace import job_runner
+
+        def machine(cores: int, gigabytes: float):
+            pages = {"SC_PAGE_SIZE": 4096, "SC_PHYS_PAGES": int(gigabytes * 2**30 / 4096)}
+            return (patch.object(job_runner.os, "cpu_count", return_value=cores),
+                    patch.object(job_runner.os, "sysconf", side_effect=lambda name: pages[name]))
+
+        for cores, gigabytes, expected in ((12, 18, 3), (8, 16, 2), (8, 8, 1), (4, 64, 1), (24, 128, 3)):
+            cpu, memory = machine(cores, gigabytes)
+            with self.subTest(cores=cores, gigabytes=gigabytes), cpu, memory, patch.dict(os.environ, {"PEOPLE_WORKERS": ""}):
+                self.assertEqual(job_runner.people_worker_count(), expected)
+        with patch.dict(os.environ, {"PEOPLE_WORKERS": "2"}):
+            self.assertEqual(job_runner.people_worker_count(), 2)
 
     def _seed_catalog(self, root: Path, *, assets: int):
         catalog = ensure_catalog(root / "demo.afcatalog")
