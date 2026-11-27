@@ -16,6 +16,16 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-golden-tf-"));
 const out = (n) => path.join(tmp, n);
 const save = (window, p) => window.evaluate((x) => window.__afterframeTest.saveAs(x), p);
 const state = (window) => window.evaluate(() => window.__afterframeTest.getState());
+// A backdoor edit and a save in one evaluate, with no task between them for
+// React to render in: the save must still export the transform the edit left
+// (saveAs waits for the render, editorTestApi.js). Polling getState() first
+// let CI save a frame early, an undone rotation still rotated (2026-11-27)
+// and a 1:1 crop uncropped (2026-11-24).
+const thenSave = (window, call, p) => window.evaluate(async ([name, arg, x]) => {
+  const t = window.__afterframeTest;
+  await t[name](arg);
+  await t.saveAs(x);
+}, [call[0], call[1] ?? null, p]);
 
 async function waitPreview(window) {
   await window.waitForFunction(() => typeof window.__afterframeTest?.getPreviewReady === "function", null, { timeout: 10_000 });
@@ -96,15 +106,13 @@ test.describe("Golden: crop + transform", () => {
     expect(m.width).toBe(srcH);
     expect(m.height).toBe(srcW);
 
-    // transform history (Cmd+Z path)
-    await window.evaluate(() => window.__afterframeTest.undo());
-    await expect.poll(async () => (await state(window)).quarterTurns).toBe(0);
-    await save(window, out("rot-undo.jpg"));
+    // transform history (Cmd+Z path), each saved straight after (thenSave)
+    await thenSave(window, ["undo"], out("rot-undo.jpg"));
+    expect((await state(window)).quarterTurns).toBe(0);
     const undone = await sharp(out("rot-undo.jpg")).metadata();
     expect([undone.width, undone.height]).toEqual([srcW, srcH]);
-    await window.evaluate(() => window.__afterframeTest.redo());
-    await expect.poll(async () => (await state(window)).quarterTurns).not.toBe(0);
-    await save(window, out("rot-redo.jpg"));
+    await thenSave(window, ["redo"], out("rot-redo.jpg"));
+    expect((await state(window)).quarterTurns).not.toBe(0);
     const redone = await sharp(out("rot-redo.jpg")).metadata();
     expect([redone.width, redone.height]).toEqual([srcH, srcW]);
 
@@ -185,10 +193,8 @@ test.describe("Golden: crop + transform", () => {
   });
 
   test("aspect 1:1 → cropped output is square", async () => {
-    await window.evaluate(() => window.__afterframeTest.setAspect("1:1"));
-    await expect.poll(async () => (await state(window)).aspectKey).toBe("1:1");
-
-    await save(window, out("square.jpg"));
+    await thenSave(window, ["setAspect", "1:1"], out("square.jpg"));
+    expect((await state(window)).aspectKey).toBe("1:1");
     const m = await sharp(out("square.jpg")).metadata();
     // centered 1:1 crop → within rounding of square
     expect(Math.abs(m.width - m.height)).toBeLessThanOrEqual(2);
