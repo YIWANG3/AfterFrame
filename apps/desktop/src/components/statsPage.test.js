@@ -98,6 +98,7 @@ describe("filtersFor", () => {
     expect(filtersFor("unreviewed", {})).toEqual({ flag: "none", rating_max: 0 });
     expect(filtersFor("month", { month: "2026-02" })).toEqual({ date_from: "2026-02-01", date_to: "2026-02-28" });
     expect(filtersFor("day", { day: "2026-03-14" }, base)).toEqual({ date_from: "2026-03-14", date_to: "2026-03-14" });
+    expect(filtersFor("missing", {}, base)).toEqual({ date_from: "2026-01-01", missing: true });
   });
 
   it("keeps a year or month inside the page's range", () => {

@@ -121,7 +121,7 @@ test.describe("moved originals", () => {
     expect(clicked, "File › Verify Files should exist in the application menu").toBe(true);
     await expect(w().getByText(/files? missing/)).toBeVisible({ timeout: 15_000 });
     await w().getByRole("button", { name: "View", exact: true }).click();
-    await expect(w().locator(".app-toolbar")).toContainText("Missing Originals");
+    await expect(w().locator("[data-filter-bar]").getByRole("button", { name: "Missing", exact: true })).toBeVisible();
     await expect(cardById(ids.a)).toBeVisible({ timeout: 15_000 });
     await expect(cardById(ids.pair)).toBeVisible();
 

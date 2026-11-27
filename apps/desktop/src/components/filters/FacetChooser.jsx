@@ -11,6 +11,7 @@ import { TEXT_FACETS } from "./TextContainsPopover";
 // collection's rule, a person picked from the wall) still shows: what is
 // narrowing the grid must always be on the bar.
 export const FACET_SLOTS = [
+  { id: "missing", keys: ["missing"], capability: "fileSystem" },
   { id: "camera", keys: ["camera"] },
   { id: "lens", keys: ["lens"] },
   { id: "tag", keys: ["tag", "tag_match", "tag_group"] },

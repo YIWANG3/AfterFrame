@@ -137,6 +137,7 @@ export function filtersFor(kind, entry, base = {}) {
     case "rating": return { ...base, rating_min: entry.stars, rating_max: entry.stars };
     case "rated4": return { ...base, rating_min: 4 };
     case "flag": return { ...base, flag: entry.flag };
+    case "missing": return { ...base, missing: true };
     case "unreviewed": return { ...base, flag: "none", rating_max: 0 };
     case "orientation": return { ...base, orientation: entry.shape };
     // The sidecar groups cities by country and English name, what these two
