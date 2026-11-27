@@ -333,7 +333,7 @@ _FALSE_WORDS = {"false", "no", "0", "without"}
 
 
 def has_raw_value(raw: object) -> bool | None:
-    """The facet's value as a bool: true / false, 1 / 0, "yes" / "no", "with" / "without"; anything else is no condition."""
+    """A yes/no facet's value (has_raw, missing) as a bool: true / false, 1 / 0, "yes" / "no", "with" / "without"; anything else is no condition."""
     if isinstance(raw, bool):
         return raw
     if isinstance(raw, (int, float)):
@@ -352,6 +352,34 @@ def _has_raw(filters: dict) -> list[Clause]:
     if len(wanted) != 1:  # none given, or both: no condition
         return []
     return [(_HAS_RAW if True in wanted else f"NOT {_HAS_RAW}", [])]
+
+
+# The original file is gone from disk (moved or deleted in Finder), as the
+# last check found it: assets.exists_on_disk, kept by File ▸ Verify Files, the
+# folder watcher, and a browse that asks for this facet (the sidecar checks
+# the whole library before its first page, cli._cmd_browse_images). It used to
+# be a place of its own ("Missing Originals", status "missing", which agents
+# still have).
+_MISSING = "assets.exists_on_disk = 0"
+
+
+def _missing(filters: dict) -> list[Clause]:
+    values = _values(filters.get("missing"))
+    wanted = {has_raw_value(value) for value in values} - {None}
+    if len(wanted) != 1:  # none given, or both: no condition
+        return []
+    return [(_MISSING if True in wanted else f"NOT {_MISSING}", [])]
+
+
+def names_facet(filters: dict | None, name: str) -> bool:
+    """Whether a filter dict, or one of its any_of groups, sets this facet."""
+    if not isinstance(filters, dict):
+        return False
+    facet = next(facet for facet in FACETS if facet.name == name)
+    if facet.clauses(filters):
+        return True
+    groups = filters.get(ANY_OF_KEY)
+    return isinstance(groups, list) and any(names_facet(group, name) for group in groups)
 
 
 def _person_group(filters: dict) -> list[Clause]:
@@ -537,6 +565,7 @@ FACETS: tuple[Facet, ...] = (
     Facet("pets", ("pets",), _pets),
     Facet("annotated", ("annotated",), _annotated),
     Facet("has_raw", ("has_raw",), _has_raw),
+    Facet("missing", ("missing",), _missing),
     Facet("person_group", ("person_group",), _person_group),
     Facet("location_source", ("location_source",), _location_source),
     _place_facet("country", "country_code", upper=True),

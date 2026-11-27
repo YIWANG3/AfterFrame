@@ -68,6 +68,7 @@ from .db import (
     upsert_catalog_root,
     verify_assets,
 )
+from .db.facets import names_facet
 from .db.folders import list_folders, locate_folder
 from .job_runner import (
     run_ai_repaint_job,
@@ -1749,20 +1750,35 @@ def _browse_row_payload(row, catalog) -> dict:
     }
 
 
+def _asks_for_missing(status, filters, base) -> bool:
+    """Whether a view's membership is the missing flag: the "missing" status,
+    the missing facet (an any_of group's too), in the view or in the smart
+    collection rules it sits in."""
+    if status == "missing" or names_facet(filters, "missing"):
+        return True
+    while isinstance(base, dict):
+        if base.get("status") == "missing" or names_facet(base.get("filters"), "missing"):
+            return True
+        base = base.get("base")
+    return False
+
+
 def _cmd_browse_images(args, connection, catalog, parser):
     facet_filters = json.loads(args.filters) if args.filters else None
+    base = json.loads(args.base) if args.base else None
     payload = []
     # Lazy detection (layer 1): stat the visible page so missing badges appear
     # just by scrolling. This is the read path (re-run on every page/scroll), so
     # it must stay read-only — reconciling assets.exists_on_disk is left to the
     # explicit verify-assets sweep. The live `present` value below is what the
     # UI badges/blocks read; the DB flag only gates preview/export batches.
-    # The one exception is the Missing view, whose membership IS the flag:
-    # its first page sweeps the library first, so opening or refreshing it
-    # shows what is missing now (files put back drop out, new ones come in).
-    if args.status == "missing" and not args.offset:
+    # The one exception is a view that asks for missing originals, whose
+    # membership IS the flag: its first page sweeps the library first, so
+    # opening or refreshing it shows what is missing now (files put back drop
+    # out, new ones come in).
+    if not args.offset and _asks_for_missing(args.status, facet_filters, base):
         verify_assets(connection)
-    for row in list_image_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters, base=json.loads(args.base) if args.base else None, similar_to=args.similar_to):
+    for row in list_image_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters, base=base, similar_to=args.similar_to):
         payload.append(_browse_row_payload(row, catalog))
     print(json.dumps(payload, indent=2))
     return 0
@@ -2187,9 +2203,13 @@ def _cmd_set_asset_flag(args, connection, catalog, parser):
 
 def _cmd_browse_collection(args, connection, catalog, parser):
     payload = []
+    filters = json.loads(args.filters) if args.filters else None
+    # The missing originals of a collection: checked first, as in browse-images.
+    if not args.offset and _asks_for_missing(None, filters, None):
+        verify_assets(connection)
     rows = browse_collection(
         connection, args.collection_id, limit=args.limit, offset=args.offset,
-        search=args.search, filters=json.loads(args.filters) if args.filters else None, sort=args.sort,
+        search=args.search, filters=filters, sort=args.sort,
         include_descendants=bool(args.include_descendants),
     )
     for row in rows:

@@ -599,9 +599,24 @@ def get_facet_values(
     ).fetchall()
     raw_counts = {r["v"]: r["c"] for r in raw_rows}
 
+    # Originals missing from disk / still there, as the last check found
+    # them; only while some are missing, so a library in order never sees it.
+    missing_where, missing_params = scope_for("missing")
+    missing_rows = connection.execute(
+        f"""
+        SELECT CASE WHEN assets.exists_on_disk = 0 THEN 'true' ELSE 'false' END AS v, COUNT(*) AS c
+        {_FACET_FROM}
+        WHERE {missing_where}
+        GROUP BY v
+        """,
+        missing_params,
+    ).fetchall()
+    missing_counts = {r["v"]: r["c"] for r in missing_rows}
+
     return {
         "location_sources": [{"value": v, "count": source_counts[v]} for v in LOCATION_SOURCES if source_counts.get(v)],
         "has_raw": [{"value": v, "count": raw_counts[v]} for v in ("true", "false") if raw_counts.get(v)] if raw_counts.get("true") else [],
+        "missing": [{"value": v, "count": missing_counts[v]} for v in ("true", "false") if missing_counts.get(v)] if missing_counts.get("true") else [],
         "countries": [_country_option(r["v"], r["c"]) for r in country_rows],
         # The colour filter takes any colour, so it has no options to count;
         # the bar only needs to know whether any photo has colours yet.
