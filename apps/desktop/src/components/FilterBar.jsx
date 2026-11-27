@@ -52,6 +52,8 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
   const locationSources = facetValues?.location_sources || [];
   // With / without a bound RAW file; empty until the catalog has any pairing.
   const rawOptions = facetValues?.has_raw || [];
+  // Missing from disk / on disk; empty while nothing is missing.
+  const missingOptions = facetValues?.missing || [];
   const countries = facetValues?.countries || [];
   const cities = facetValues?.cities || [];
   // Places are stored by their canonical value (ISO code, English city name)
@@ -124,7 +126,7 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
   const slotLabel = (id) => ({
     camera: t("filter.camera"), lens: t("filter.lens"), tag: t("filter.tag"), extension: t("filter.format"),
     location_source: t("filter.locationSource.label"), country: t("filter.country"), city: t("filter.city"),
-    text: t("filter.textContains"), color: t("filter.color"), people: t("filter.people"), pets: t("filter.pets"), annotated: t("filter.annotated"), has_raw: t("filter.hasRaw.label"),
+    text: t("filter.textContains"), color: t("filter.color"), people: t("filter.people"), pets: t("filter.pets"), annotated: t("filter.annotated"), has_raw: t("filter.hasRaw.label"), missing: t("filter.missing.label"),
     person_group: t("filter.person"), in_collection: t("filter.folder"), iso: t("filter.iso"), aperture: t("filter.aperture"),
     focal: t("filter.focal"), date: t("filter.date"), rating: t("filter.rating"), flag: t("filter.flag"), orientation: t("filter.orientation.label"),
   })[id];
@@ -215,6 +217,17 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
       {/* A facet with nothing to offer is hidden — unless it is filtering: counts
           follow the other filters, so its options can run out while its own
           pick is still in force, and that pick must stay reachable. */}
+      {/* Original: offered only while something is missing, and first, so the
+          view File ▸ Verify Files opens says what it is without scrolling. */}
+      {shows("missing") && api.can("fileSystem") && (missingOptions.length > 0 || toList(f.missing).length > 0) && (
+        <ListPopover
+          label={t("filter.missing.label")}
+          value={f.missing}
+          options={missingOptions}
+          labelOf={(value) => t(`filter.missing.${value}`, { defaultValue: String(value) })}
+          onSelect={(v) => onChange(setFacet("missing", "missing", v))}
+        />
+      )}
       {shows("camera") && (cameras.length > 0 || toList(f.camera).length > 0) && (
         <ListPopover label={t("filter.camera")} value={f.camera} options={cameras} {...exclusion("camera")} onSelect={(v) => onChange(setFacet("camera", "camera", v))} />
       )}

@@ -272,9 +272,10 @@ export default function App() {
     setShowFilters(Object.keys(filters).length > 0);
     mapDrawer.showMapFor(map);
   };
-  // Opening it sweeps the library first (the sidecar's first page of the
-  // "missing" status), so it shows what is missing now.
-  showMissingRef.current = () => openDiscoverTarget({ status: "missing" });
+  // The library filtered to missing originals. Its first page sweeps the
+  // library first (the sidecar, for any browse that asks for them), so it
+  // shows what is missing now.
+  showMissingRef.current = () => openDiscoverTarget({ filters: { missing: true } });
 
   const openPersonGroup = (group) => {
     if (!group?.group_id) return;
@@ -1199,10 +1200,10 @@ export default function App() {
   const activeSmartCollection = workspace.activeSmartCollectionId
     ? (workspace.collections || []).find((c) => c.collection_id === workspace.activeSmartCollectionId) || null
     : null;
-  // The Missing Originals view: the "missing" status as a place of its own,
-  // not narrowed to a folder, a smart collection, a person or similar photos.
-  const missingView = viewMode === "assets" && workspace.status === "missing" && !workspace.activeCollectionId
-    && !activeSmartCollection && !workspace.similarTo && !peopleGroup;
+  // A view of missing originals (the filter bar's Original: Missing, in any
+  // place, or a smart collection saved with it): its bar relinks or removes
+  // them in bulk.
+  const missingView = viewMode === "assets" && workspace.showsMissingOnly;
   const missingFiles = useMissingFiles({ workspaceRef, pushToast });
   // What its bar acts on: a multi-selection of photos still in the view (a
   // relinked one has just left it), else the whole view. One photo is always

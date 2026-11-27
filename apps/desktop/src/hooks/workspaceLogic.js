@@ -180,6 +180,32 @@ const scopeNaming = (keys) => {
 export const scopeSelectsByFlag = scopeNaming(["flag"]);
 export const scopeSelectsByTag = scopeNaming(["tag", "tag_group"]);
 
+// Whether a view holds only photos whose original is missing on disk, which
+// is when the relink / remove bar (MissingFilesBar) may act on all of it: the
+// missing facet asking for missing ones (or, excluded, for "not on disk") in
+// the bar, in a smart collection's rules or the rules under them, or the old
+// "missing" status. An "any of" group does not count: the other groups bring
+// in photos that are there.
+const YES_WORDS = ["true", "yes", "1", "with"];
+const NO_WORDS = ["false", "no", "0", "without"];
+const yesNo = (value) => {
+  const word = String(value).trim().toLowerCase();
+  return YES_WORDS.includes(word) ? true : NO_WORDS.includes(word) ? false : null;
+};
+const filtersAskMissing = (filters) => {
+  if (!filters) return false;
+  const wanted = new Set(listOf(filters.missing).map(yesNo).filter((value) => value !== null));
+  if (wanted.size !== 1) return false;
+  const value = wanted.has(true);
+  return listOf(filters.exclude).includes("missing") ? !value : value;
+};
+const rulesAskMissing = (rules) => !!rules && (
+  rules.status === "missing" || filtersAskMissing(rules.filters) || rulesAskMissing(rules.base)
+);
+export const scopeShowsMissingOnly = (scope) => !!scope && (
+  (!scope.collectionId && scope.status === "missing") || filtersAskMissing(scope.filters) || rulesAskMissing(scope.base)
+);
+
 // The filters that find the rejected photos of a view: the view's own, with
 // the flag condition replaced by "rejected" (and no longer excluded).
 export function rejectedFilters(filters) {

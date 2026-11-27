@@ -295,6 +295,11 @@
       "true": "有配对 RAW",
       "false": "没有配对 RAW"
     },
+    "missing": {
+      "label": "原文件",
+      "true": "缺失",
+      "false": "在磁盘上"
+    },
     "iso": "ISO",
     "aperture": "光圈",
     "focal": "焦距",

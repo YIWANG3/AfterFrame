@@ -1,11 +1,12 @@
 // Missing originals, handled in bulk: photos whose files were moved or
-// deleted in Finder gather in a gallery view of their own (Missing
-// Originals), opened from File ▸ Verify Files' toast and from the stats
-// page's "Missing from disk" row. There the user relinks them from a folder
-// (each original looked for by name, linked only when its content matches,
-// the record kept: same id, rating, folder) or removes them from the library
-// after a confirm. Opening or refreshing the view checks the disk again, so a
-// file put back where it was leaves it; once every photo is relinked or
+// deleted in Finder are a filter (Original: Missing on the filter bar, offered
+// while something is missing), which File ▸ Verify Files' toast and the stats
+// page's "Missing from disk" row open on the library. It works in any place,
+// a collection too. A view of missing photos has a bar to relink them from a
+// folder (each original looked for by name, linked only when its content
+// matches, the record kept: same id, rating, folder) or remove them from the
+// library after a confirm. Opening or refreshing it checks the disk again, so
+// a file put back where it was leaves it; once every photo is relinked or
 // removed the view is empty. The bar's actions take a multi-selection, else
 // the whole view (one photo is always selected, the Inspector's).
 //
@@ -31,6 +32,18 @@ test.describe("the Missing Originals view", () => {
   const card = (file) => w().locator(`[data-gallery-item='true']${byImagePath(file)}`);
   const cardById = (id) => w().locator(`[data-gallery-item='true'][data-asset-id='${id}']`);
   const bar = () => w().getByTestId("missing-files-bar");
+  const filterBar = () => w().locator("[data-filter-bar]");
+  // The Original chip, showing what is picked: "Missing".
+  const missingChip = () => filterBar().getByRole("button", { name: "Missing", exact: true });
+  const verifyFiles = () => ctx.app.evaluate(({ Menu, BrowserWindow }) => {
+    const file = Menu.getApplicationMenu()?.items.find((item) => item.label === "File");
+    const item = file?.submenu?.items.find((entry) => entry.label === "Verify Files");
+    if (!item) return false;
+    const win = BrowserWindow.getAllWindows()[0];
+    item.click(undefined, win, win?.webContents);
+    return true;
+  });
+  const missingOptions = () => w().evaluate(() => window.mediaWorkspace.getFacetValues({ status: "all" }).then((values) => values.missing));
   const rows = () => w().evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 1000 }));
   const rowById = async (id) => (await rows()).find((row) => row.asset_id === id) || null;
   const folderMembers = () => w().evaluate(
@@ -90,20 +103,14 @@ test.describe("the Missing Originals view", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  test("File ▸ Verify Files says how many are missing, and View opens them", async () => {
-    const clicked = await ctx.app.evaluate(({ Menu, BrowserWindow }) => {
-      const file = Menu.getApplicationMenu()?.items.find((item) => item.label === "File");
-      const item = file?.submenu?.items.find((entry) => entry.label === "Verify Files");
-      if (!item) return false;
-      const win = BrowserWindow.getAllWindows()[0];
-      item.click(undefined, win, win?.webContents);
-      return true;
-    });
-    expect(clicked, "File › Verify Files should exist in the application menu").toBe(true);
+  test("File ▸ Verify Files says how many are missing, and View filters the library to them", async () => {
+    expect(await verifyFiles(), "File › Verify Files should exist in the application menu").toBe(true);
     await expect(w().getByText("6 files missing")).toBeVisible({ timeout: 15_000 });
     await w().getByRole("button", { name: "View", exact: true }).click();
 
-    await expect(w().locator(".app-toolbar")).toContainText("Missing Originals");
+    // Not a place of its own: All Assets, with Original: Missing on the bar.
+    await expect(w().getByTestId("gallery-title")).toHaveText("All Assets");
+    await expect(missingChip()).toBeInViewport();
     await expectShowing(["a", "b", "c", "d", "e", "f"]);
     await expect(cardById(ids.a).locator("[title='Original file moved or deleted']")).toHaveCount(1);
     await expect(bar()).toContainText("Relink All from Folder…");
@@ -158,7 +165,7 @@ test.describe("the Missing Originals view", () => {
     expect(await rowById(ids.c)).not.toBeNull();
   });
 
-  test("the stats page's Missing row opens the view; removing the last photo leaves it empty", async () => {
+  test("the stats page's Missing row opens the filter; removing the last photo leaves it empty", async () => {
     await w().getByTestId("sidebar-stats").click();
     await expect(w().getByTestId("stats-view")).toBeVisible({ timeout: 10_000 });
     const row = w().locator("[data-cleanup='missing']");
@@ -166,7 +173,8 @@ test.describe("the Missing Originals view", () => {
     await row.click();
 
     await expect(w().getByTestId("stats-view")).toHaveCount(0);
-    await expect(w().locator(".app-toolbar")).toContainText("Missing Originals");
+    await expect(w().getByTestId("gallery-title")).toHaveText("All Assets");
+    await expect(missingChip()).toBeVisible();
     await expectShowing(["c"]);
     await bar().getByRole("button", { name: "Remove All from Library…" }).click();
     await w().getByRole("button", { name: "Remove", exact: true }).click();
@@ -198,5 +206,40 @@ test.describe("the Missing Originals view", () => {
     expect(result.relinked).toBe(1);
     expect(result.items).toEqual([{ asset_id: id, status: "relinked", new_path: path.join(elsewhere, path.basename(file)) }]);
     expect((await callToolOk(ctx.mcpPort, "search_assets", { status: "missing" })).assets).toEqual([]);
+    expect((await callToolOk(ctx.mcpPort, "search_assets", { missing: true })).assets).toEqual([]);
+  });
+
+  test("Original: Missing narrows any place: in a collection, to its missing photos, and the bar acts on those", async () => {
+    // Nothing is missing now, so the bar has nothing to offer.
+    expect(await missingOptions()).toEqual([]);
+    // The collection holds a and b; a goes missing again.
+    await w().evaluate(({ id, asset }) => window.mediaWorkspace.collectionAddItems(id, [asset]), { id: folderId, asset: ids.b });
+    fs.rmSync((await rowById(ids.a)).image_path);
+    expect(await verifyFiles()).toBe(true);
+    await expect(w().getByText("1 file missing")).toBeVisible({ timeout: 15_000 });
+    expect(await missingOptions()).toEqual([{ value: "true", count: 1 }, { value: "false", count: expect.any(Number) }]);
+    // An agent asks the same with the condition.
+    expect((await callToolOk(ctx.mcpPort, "search_assets", { missing: true })).assets.map((asset) => asset.asset_id)).toEqual([ids.a]);
+
+    await w().locator(`[data-collection-id='${folderId}']`).click();
+    await expect(w().getByTestId("gallery-title")).toHaveText("Missing");
+    await expectShowing(["a", "b"]);
+    await expect(bar()).toHaveCount(0);
+    if (!await filterBar().isVisible()) await w().getByRole("button", { name: "Filters" }).click();
+    await filterBar().getByRole("button", { name: "Original", exact: true }).click();
+    await w().locator("[data-facet-option='true']").click();
+    await w().keyboard.press("Escape");
+
+    await expect(w().getByTestId("gallery-title")).toHaveText("Missing");
+    await expect(missingChip()).toBeVisible();
+    await expectShowing(["a"]);
+    await bar().getByRole("button", { name: "Remove All from Library…" }).click();
+    await expect(w().getByText("Remove this missing photo from the library?")).toBeVisible();
+    await w().getByRole("button", { name: "Remove", exact: true }).click();
+    await expect(galleryCards(w())).toHaveCount(0, { timeout: 10_000 });
+    await expect(bar()).toHaveCount(0);
+    // Only the missing one went; the collection keeps b.
+    expect(await rowById(ids.a)).toBeNull();
+    expect(await folderMembers()).toEqual([ids.b]);
   });
 });

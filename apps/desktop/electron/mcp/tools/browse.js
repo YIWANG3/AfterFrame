@@ -85,6 +85,7 @@ module.exports = (ctx) => {
           person_id: { type: "string", description: "Only photos of this person (a people group id from list_people)" },
           annotated: { type: "string", enum: ["with", "without"], description: "Whether AI annotation exists" },
           has_raw: { type: "boolean", description: "true: only photos with their RAW file paired (bound on import or confirmed by hand); false: only photos without one" },
+          missing: { type: "boolean", description: "true: only photos whose original file was moved or deleted on disk (checks the whole library first; the same as status 'missing'); false: only photos whose file is there" },
           collection_id: { type: "string", description: "Only photos in this collection (a manual collection from manage_collections)" },
           include_descendants: { type: "boolean", description: "With collection_id: photos in the collections under it count too (collections nest), each once. Default false." },
           folder: { type: "string", description: "Only photos in this folder on disk (an absolute path, as maintain_library list_folders lists them) and the folders under it" },

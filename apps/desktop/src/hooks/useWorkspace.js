@@ -12,7 +12,7 @@ import { adoptLegacyPref, bool, intIn, oneOf, readPref, writePref } from "../uti
 import { isEmptyValue,
   DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, folderBase, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, rejectedFilters, sortOutsideFolder,
-  shouldResetScopeForReveal,
+  scopeShowsMissingOnly, shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
 const PAGE_SIZE = 180;
@@ -990,6 +990,8 @@ export default function useWorkspace({ pushToast, onShowMissing } = {}) {
     includeDescendants: scope.includeDescendants !== false,
     setIncludeDescendants,
     facetScope: facetScopeOf(scope),
+    // Only photos whose original is missing: the relink / remove bar's views.
+    showsMissingOnly: scopeShowsMissingOnly(scope),
     activeSmartCollectionId: scope.smartCollectionId,
     // Filter bar: "Save as smart collection" when there is something to save,
     // "Update" when an open smart collection's conditions were changed.

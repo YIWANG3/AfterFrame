@@ -323,6 +323,11 @@
       "true": "Has paired RAW",
       "false": "No paired RAW"
     },
+    "missing": {
+      "label": "Original",
+      "true": "Missing",
+      "false": "On disk"
+    },
     "iso": "ISO",
     "aperture": "Aperture",
     "focal": "Focal",

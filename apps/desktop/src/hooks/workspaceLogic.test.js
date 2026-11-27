@@ -19,6 +19,7 @@ import {
   scopeFromRules,
   scopeKeyOf,
   scopeSelectsByRating,
+  scopeShowsMissingOnly,
   shouldResetScopeForReveal,
   sortOutsideFolder,
 } from "./workspaceLogic";
@@ -141,6 +142,34 @@ describe("scopeSelectsByFlag / scopeSelectsByTag", () => {
     expect(scopeSelectsByFlag(DEFAULT_SCOPE)).toBe(false);
     expect(scopeSelectsByFlag(scope({ filters: { flag: [] , tag: "trip" } }))).toBe(false);
     expect(scopeSelectsByTag(scope({ filters: { flag: "pick" } }))).toBe(false);
+  });
+});
+
+describe("scopeShowsMissingOnly", () => {
+  const scope = (extra) => ({ ...DEFAULT_SCOPE, ...extra });
+
+  it("is the missing facet asking for missing photos, wherever the view keeps it", () => {
+    expect(scopeShowsMissingOnly(scope({ filters: { missing: true } }))).toBe(true);
+    expect(scopeShowsMissingOnly(scope({ filters: { missing: "true", rating_min: 4 } }))).toBe(true);
+    expect(scopeShowsMissingOnly(scope({ collectionId: "trip", filters: { missing: true } }))).toBe(true);
+    // "Not on disk", flipped.
+    expect(scopeShowsMissingOnly(scope({ filters: { missing: false, exclude: ["missing"] } }))).toBe(true);
+    // A smart collection of missing photos, and one refined inside it.
+    expect(scopeShowsMissingOnly(scope({ base: { status: "all", filters: { missing: true } } }))).toBe(true);
+    expect(scopeShowsMissingOnly(scope({ base: { status: "all", filters: {}, base: { status: "all", filters: { missing: true } } } }))).toBe(true);
+    // The old place of its own, which agents still have.
+    expect(scopeShowsMissingOnly(scope({ status: "missing" }))).toBe(true);
+  });
+
+  it("is not a view that can hold photos that are there", () => {
+    expect(scopeShowsMissingOnly(DEFAULT_SCOPE)).toBe(false);
+    expect(scopeShowsMissingOnly(scope({ filters: { missing: false } }))).toBe(false);
+    expect(scopeShowsMissingOnly(scope({ filters: { missing: true, exclude: ["missing"] } }))).toBe(false);
+    expect(scopeShowsMissingOnly(scope({ filters: { missing: ["true", "false"] } }))).toBe(false);
+    // Another group brings in photos that are on disk.
+    expect(scopeShowsMissingOnly(scope({ filters: { any_of: [{ missing: true }, { rating_min: 4 }] } }))).toBe(false);
+    // The status means nothing inside a collection.
+    expect(scopeShowsMissingOnly(scope({ status: "missing", collectionId: "trip" }))).toBe(false);
   });
 });
 
