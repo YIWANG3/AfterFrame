@@ -148,11 +148,15 @@ test("unpinned, opening the details refits the photo beside them", async () => {
   expect(restored.left + restored.width / 2).toBeCloseTo(fullStage.left + fullStage.width / 2, 0);
 });
 
-test("a clicked control loses focus when the bars hide and Tab skips them", async () => {
+test("a clicked control keeps no focus, a focused one loses it when the bars hide, and Tab skips them", async () => {
   const reset = w().getByTitle("Reset to fit");
   await clickLightboxControl(w(), reset);
-  await expect(reset).toBeFocused();
+  // A click leaves no focus behind (ui/pointerFocus.js, docs/focus-design.md).
+  await expect(reset).not.toBeFocused();
 
+  // Focus that did not come from the pointer stays, until the bars hide.
+  await reset.focus();
+  await expect(reset).toBeFocused();
   await toCenter();
   await expect(reset).not.toBeFocused();
   await expect(zoomRow()).toHaveCSS("opacity", "0");

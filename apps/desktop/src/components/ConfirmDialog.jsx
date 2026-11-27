@@ -55,7 +55,7 @@ export default function ConfirmDialog({
               type="button"
               data-choice={choice.id}
               onClick={() => onChoose?.(choice.id)}
-              className={`rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors focus:outline-none ${choice.danger ? "bg-red-600 text-white hover:bg-red-500" : "border border-border bg-transparent text-text hover:bg-hover"}`}
+              className={`rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors ${choice.danger ? "bg-red-600 text-white hover:bg-red-500" : "border border-border bg-transparent text-text hover:bg-hover"}`}
             >
               {choice.label}
             </button>
@@ -63,7 +63,7 @@ export default function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-muted transition-colors hover:bg-hover hover:text-text focus:outline-none"
+            className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-muted transition-colors hover:bg-hover hover:text-text"
           >
             {cancelLabel}
           </button>
@@ -72,14 +72,14 @@ export default function ConfirmDialog({
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-[12.5px] font-medium text-text transition-colors hover:bg-hover focus:outline-none"
+          className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-[12.5px] font-medium text-text transition-colors hover:bg-hover"
         >
           {cancelLabel}
         </button>
         <button
           type="button"
           onClick={onConfirm}
-          className={`flex-1 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors focus:outline-none ${danger ? "bg-red-600 hover:bg-red-500" : "bg-accent hover:bg-accent/90"}`}
+          className={`flex-1 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors ${danger ? "bg-red-600 hover:bg-red-500" : "bg-accent hover:bg-accent/90"}`}
         >
           {confirmLabel}
         </button>

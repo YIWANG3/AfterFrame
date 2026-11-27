@@ -46,7 +46,7 @@ export default function MapResizeHandle({ mapHeight, onHeightChange, onResizingC
       onKeyDown={handleKeyDown}
       onDoubleClick={() => onHeightChange(clamp(defaultHeight))}
     >
-      <div className="h-[3px] w-10 rounded-full bg-border/70 transition-colors group-hover:bg-accent/70 group-focus-visible:bg-accent" />
+      <div className="h-[3px] w-10 rounded-full bg-border/70 transition-colors group-hover:bg-accent/70 group-[:focus-visible:not([data-pointer-focus])]:bg-accent" />
     </div>
   );
 }

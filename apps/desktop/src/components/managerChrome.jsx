@@ -23,7 +23,7 @@ export function ToolbarSortDropdown({ value, onChange, options, title, testId })
         type="button"
         data-testid={testId}
         title={title}
-        className="flex h-8 w-[120px] cursor-pointer items-center justify-center rounded-md border border-border/70 bg-app px-2 text-[12px] text-text outline-none transition-colors hover:border-border focus:border-accent/50"
+        className="flex h-8 w-[120px] cursor-pointer items-center justify-center rounded-md border border-border/70 bg-app px-2 text-[12px] text-text transition-colors hover:border-border"
         onClick={() => setOpen((c) => !c)}
       >
         <span className="truncate">{current?.label}</span>

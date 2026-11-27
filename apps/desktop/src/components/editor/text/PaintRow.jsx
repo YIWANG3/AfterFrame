@@ -29,7 +29,7 @@ export function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpac
         ref={swatchRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className="h-6 w-6 flex-shrink-0 cursor-pointer rounded p-px outline-none bg-transparent"
+        className="h-6 w-6 flex-shrink-0 cursor-pointer rounded p-px bg-transparent"
         title={isGrad ? t("text.editGradient") : t("text.editColor")}
       >
         <span className="block h-full w-full rounded-[3px]" style={{ background: swatchBg }} />

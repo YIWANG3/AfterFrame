@@ -22,6 +22,7 @@ if (/Electron/i.test(navigator.userAgent)) {
   api.onUiScale(setZoom);
 }
 import "./ui/scrollFlag";
+import "./ui/pointerFocus";
 import api from "./api";
 
 // <html lang> follows the UI language (index.html ships "en"), so Chinese

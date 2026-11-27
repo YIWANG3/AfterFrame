@@ -38,6 +38,7 @@
   --accent-ink: 20 20 20;        /* accent 上的文字 */
   --accent-soft: 40 40 44;
   --glow-accent: 245 245 245;
+  --focus-ring: var(--accent-color); /* 键盘焦点环,见 docs/focus-design.md;在这里声明,.theme-dark 里取它自己的 accent */
   --success-color: 128 172 132;
   --warn-color: 212 186 128;
   --error-color: 206 132 118;
@@ -94,6 +95,22 @@
   --fill-2: rgba(29, 29, 31, 0.1);
   --fill-3: rgba(29, 29, 31, 0.15);
 }
+
+/* 键盘焦点(docs/focus-design.md 规则 2):全 App 一种焦点环,只给键盘焦点。
+   文本输入框不在内:它们点了就有焦点,用自己的聚焦描边。鼠标给的焦点
+   (ui/pointerFocus.js 标上 data-pointer-focus)不画,点过再按键不会冒出焦点环。
+   :where() 零优先级:组件上有意写的 outline-none 仍然算数。 */
+:where(:focus-visible:not(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="button"], [type="submit"], [type="reset"]), textarea, select, [contenteditable]:not([contenteditable="false"]))) {
+  outline: 2px solid rgb(var(--focus-ring));
+  outline-offset: 2px;
+}
+/* 卡片的焦点环画在第一个子元素上(文件夹页:画在缩略图上,不圈名字) */
+:where([data-focus-ring="first-child"]:focus-visible) { outline: none; }
+:where([data-focus-ring="first-child"]:focus-visible:not([data-pointer-focus])) > :first-child {
+  outline: 2px solid rgb(var(--focus-ring));
+  outline-offset: 2px;
+}
+:where([data-pointer-focus]:focus-visible:not(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="button"], [type="submit"], [type="reset"]), textarea, select, [contenteditable]:not([contenteditable="false"]))) { outline: none; }
 
 html,
 body,
@@ -866,7 +883,6 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
   font-size: 12px; font-weight: 500; white-space: nowrap;
 }
 .welcome-actions .catalog-action { height: 40px; gap: 8px; border-radius: 12px; font-size: 13px; }
-.catalog-actions .catalog-action:focus-visible { outline: 2px solid rgb(var(--text-color) / 0.55); outline-offset: 3px; }
 .catalog-actions .catalog-action:disabled { cursor: default; opacity: 0.6; }
 /* The sample notice shares the bottom status surface; only layout is local. */
 .sample-catalog-dock { container: sample-banner / inline-size; }

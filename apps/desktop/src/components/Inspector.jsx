@@ -126,7 +126,7 @@ function PaletteStrip({ colors, onPick }) {
             onClick={() => onPick?.(swatch.hex)}
             data-swatch={swatch.hex}
             style={{ background: swatch.hex }}
-            className="h-5 w-5 rounded-full border border-white/15 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] transition-transform hover:scale-110 focus:outline-none"
+            className="h-5 w-5 rounded-full border border-white/15 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] transition-transform hover:scale-110"
           />
         ))}
       </div>

@@ -43,7 +43,7 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName, onContextMen
         title={openLabel}
         aria-label={openLabel}
         className={cx(
-          "relative block overflow-hidden rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
+          "relative block overflow-hidden rounded-xl transition",
           selected ? "ring-2 ring-accent/80" : "",
         )}
       >
@@ -276,9 +276,12 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings, catalo
       select(visible[next].group_id);
       setSelectedIds(new Set([visible[next].group_id]));
       selectionAnchorRef.current = visible[next].group_id;
-      // Keep DOM focus on the selected tile — otherwise the previously
-      // clicked tile keeps its :focus-visible ring and two tiles look active.
-      tiles[next]?.querySelector("button")?.focus({ preventScroll: true });
+      // A Tab user's focus moves with the selection, or the ring would stay on
+      // the tile they left. A clicked tile gave its focus up (ui/pointerFocus),
+      // so after a click the arrows move the selection alone and draw no ring.
+      if (gridRef.current?.contains(document.activeElement)) {
+        tiles[next]?.querySelector("button")?.focus({ preventScroll: true });
+      }
       tiles[next]?.scrollIntoView({ block: "nearest" });
     }
     window.addEventListener("keydown", onKey);
