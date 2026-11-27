@@ -13,11 +13,12 @@ from typing import BinaryIO
 import numpy as np
 from PIL import Image, ImageCms
 
-from . import formats, raw_decode, video
+from . import formats, image_io_previews, raw_decode, video
 from .catalog import CatalogPaths
 from .color_profiles import adobe_rgb_icc
+from .colors import extract_palette
 from .db import list_assets_for_preview, set_display_shape, upsert_preview_entry
-from .db.colors import analyze_asset_colors
+from .db.colors import analyze_asset_colors, replace_asset_colors
 from .db.visual import VISUAL_ASSET_TYPES, VisualAnalyzer
 from .imaging import register_heif
 from .platform_tools import has_image_io
@@ -435,15 +436,20 @@ class PreviewService:
         analyze_visual: bool = True,
     ) -> dict[str, int]:
         rows = list_assets_for_preview(connection, asset_type=asset_type, kind=kind, limit=limit, paths=paths)
-        # The thumbnail is the look-alike sample too (its hash and, on a Mac,
-        # its feature print). Measuring is done in the render threads next to
-        # the renders — the print costs ~10 ms a photo, a minute of a big
-        # import if taken one by one — and only the grouping and the write
-        # happen here. One analyzer for the batch, made when first needed.
+        # The thumbnail is the look-alike sample and the colour sample too
+        # (its hash, on a Mac its feature print, and its palette). They are
+        # read in the render threads next to the renders, while the file is
+        # still in the cache: the print costs ~10 ms a photo and the palette
+        # ~11 ms, a minute or more of a big import if taken one by one on
+        # this thread, which also does every write. Only the grouping and the
+        # writes happen here. One analyzer for the batch, made when first needed.
         visual: VisualAnalyzer | None = None
 
         def visual_applies(asset_type_of_row: str, relative_path: str | None) -> bool:
             return bool(analyze_visual and kind == "preview" and asset_type_of_row in VISUAL_ASSET_TYPES and relative_path)
+
+        def colors_apply(asset_type_of_row: str) -> bool:
+            return analyze_colors and kind == "preview" and asset_type_of_row == "image"
 
         def analyzer() -> VisualAnalyzer:
             nonlocal visual
@@ -455,12 +461,19 @@ class PreviewService:
 
         def render_and_measure(row, row_force: bool):
             """A render thread's work: the preview, and what the look-alike
-            index needs from it."""
+            index and the colour filter need from it. The palette is empty
+            when the preview can't be read; the photo is then left without
+            colours and the next colours pass tries again."""
             result = self.generate_for_row(row, kind=kind, force=row_force)
             measured = None
-            if result.status == "ready" and visual_applies(row["asset_type"], result.relative_path):
-                measured = analyzer().measure(result.asset_id, self.catalog.root / result.relative_path)
-            return result, measured
+            swatches: list[dict] = []
+            if result.status == "ready" and result.relative_path:
+                preview_path = self.catalog.root / result.relative_path
+                if visual_applies(row["asset_type"], result.relative_path):
+                    measured = analyzer().measure(result.asset_id, preview_path)
+                if colors_apply(row["asset_type"]):
+                    swatches = extract_palette(preview_path)
+            return result, measured, swatches
 
         forced = {str(path.resolve()) for path in (force_paths or [])}
         generated = 0
@@ -477,7 +490,7 @@ class PreviewService:
             row_force = force or str(Path(row["canonical_path"]).resolve()) in forced
             if row["existing_relative_path"] and row["existing_status"] == "ready" and not row_force and self._preview_on_disk(row["asset_id"], kind):
                 # A preview from before colours existed: read its colours now.
-                if analyze_colors and kind == "preview" and row["asset_type"] == "image" and not row["has_colors"]:
+                if colors_apply(row["asset_type"]) and not row["has_colors"]:
                     analyze_asset_colors(connection, row["asset_id"], self.catalog.root / row["existing_relative_path"])
                     connection.commit()
                 # A preview from before the look-alike index: measure it now.
@@ -524,12 +537,9 @@ class PreviewService:
                         for future in done:
                             row = futures[future]
                             try:
-                                result, measured = future.result()
-                                # The thumbnail is the colour sample too: same file,
-                                # already decoded once, a few ms more. Read before this
-                                # result's writes.
-                                if analyze_colors and kind == "preview" and row["asset_type"] == "image":
-                                    analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
+                                result, measured, swatches = future.result()
+                                if swatches:
+                                    replace_asset_colors(connection, result.asset_id, swatches)
                                 if measured is not None:
                                     analyzer().store(result.asset_id, row["asset_type"], *measured)
                                 # And how it shows (portrait / landscape), for the filter.
@@ -586,9 +596,20 @@ class PreviewService:
 
     def _render_image(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
         """Processed images (JPEG, PNG, HEIC, TIFF, WebP, AVIF) render with
-        Pillow on every platform; Windows has no sips. A file Pillow can't
-        read falls back to sips where it exists (macOS's Image I/O reads a
-        few formats Pillow doesn't), so nothing that rendered before fails."""
+        Pillow on every platform; Windows has no sips. On a Mac, JPEG and
+        HEIF go through Image I/O first (image_io_previews: the same preview,
+        a HEIF ten times sooner), and whatever it declines or fails on goes
+        on to Pillow. A file Pillow can't read falls back to sips where it
+        exists (macOS's Image I/O reads a few formats Pillow doesn't), so
+        nothing that rendered before fails."""
+        helper_path = image_io_previews.helper_for(source_path)
+        if helper_path is not None:
+            try:
+                return self._render_with_image_io(helper_path, source_path, output_path, size, validate=validate)
+            except SourceNotReadyError:
+                raise
+            except Exception:
+                pass  # Pillow, below
         try:
             return self._render_with_pillow(source_path, output_path, size, validate=validate)
         except SourceNotReadyError:
@@ -597,6 +618,11 @@ class PreviewService:
             if not has_image_io():
                 raise
             return self._render_with_sips(source_path, output_path, size, validate=validate)
+
+    def _render_with_image_io(self, helper_path: Path, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
+        return self._atomic(
+            output_path, lambda tmp: image_io_previews.render(helper_path, source_path, tmp, size), validate=validate
+        )
 
     def _render_with_pillow(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
         return self._atomic(output_path, lambda tmp: render_pillow_preview(source_path, tmp, size), validate=validate)

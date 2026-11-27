@@ -118,7 +118,9 @@ module.exports = (ctx) => {
         "Import media into the catalog. `image_dirs` are folders/files of processed images (JPEG, HEIF, TIFF, PSD and the like) and videos; " +
         "`raw_dirs` are folders of RAW camera files. Provide either or both. Starts an import job " +
         `(scan → match → previews) and waits up to ${IMPORT_WAIT_MS / 1000}s; if still running, returns the job_id — ` +
-        "poll with get_job_status. The job is also visible (and cancellable) in the app's JobDock.",
+        "poll with get_job_status. While another import runs, this one is queued and starts when that one ends " +
+        "(`queued: true`, no job_id yet: list_active_jobs shows it once it starts). " +
+        "The job is also visible (and cancellable) in the app's JobDock.",
       inputSchema: {
         type: "object",
         properties: {
@@ -140,10 +142,20 @@ module.exports = (ctx) => {
         const mode = imageDirs.length && rawDirs.length ? "combined" : imageDirs.length ? "processed_only" : "source_only";
         if (rawDirs.length) await registerRoots("raw", rawDirs);
         if (imageDirs.length) await registerRoots("image", imageDirs);
-        // rejectIfBusy: with an import already running, startImportTask would
-        // hand back THAT job and silently drop these dirs — the tool would then
-        // poll a stranger's job and report success for an import that never ran.
-        let status = await startImportTask({ mode, rawDirs, imageDirs, rejectIfBusy: true });
+        // With an import already running these dirs are queued behind it
+        // (../../pipeline.js) and the status is that import's: say so, and
+        // don't poll a stranger's job as if it were this one.
+        let status = await startImportTask({ mode, rawDirs, imageDirs });
+        if (status.queued) {
+          return {
+            done: false,
+            queued: true,
+            job_id: null,
+            running_job_id: status.jobId,
+            note: `An import is already running (job ${status.jobId}); these folders are queued and import when it ends. `
+              + "Poll list_active_jobs (or get_job_status on the running job) to see them start.",
+          };
+        }
         deps.broadcastCatalogChanged?.("jobs", { jobId: status.jobId, jobType: "import" });
         const deadline = Date.now() + IMPORT_WAIT_MS;
         while (status.running && status.jobId && Date.now() < deadline) {

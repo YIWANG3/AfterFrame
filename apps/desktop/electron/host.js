@@ -36,7 +36,7 @@ const HOST_KEYS = [
 // The apis a register() returns that others consume, in registration order.
 // Each is null until its module registered; a consumer registered earlier
 // (createTaskStarters needing people) reads it lazily at call time.
-const SERVICE_NAMES = ["watcher", "annotation", "people", "saveFile", "mcp"];
+const SERVICE_NAMES = ["watcher", "annotation", "people", "pipeline", "saveFile", "mcp"];
 
 function createServices(names = SERVICE_NAMES) {
   const services = {

@@ -379,6 +379,15 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     return child;
   }
 
+  // Who wants to know a job's runner is gone (the import pipeline,
+  // ../pipeline.js): called with { jobId, code, command } once it exits, for
+  // runners of the catalog that is still open.
+  const jobExitListeners = new Set();
+  function onJobExit(listener) {
+    jobExitListeners.add(listener);
+    return () => jobExitListeners.delete(listener);
+  }
+
   // `command` is always the product of sidecar/jobArgv.js (the one module
   // that spells run-*-job argv); nothing else should hand-build it.
   function launchSidecarJob(command) {
@@ -399,11 +408,17 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       && generationOf(catalogPath) === generation && !pausedCatalogs.has(catalogPath);
     if (jobId) {
       child.on("exit", (code) => {
-        if (code === 0 || code == null || !canReportFailure()) return;
-        callSidecarJsonAsync([
+        if (!canReportFailure()) return;
+        const told = code === 0 || code == null ? Promise.resolve() : callSidecarJsonAsync([
           "fail-job", "--job-id", jobId,
           "--error", `sidecar job process exited with code ${code} before reporting status`,
         ]).catch(() => {});
+        // After the failure is on record, so a listener reads the job as it ended.
+        void told.then(() => {
+          for (const listener of jobExitListeners) {
+            try { listener({ jobId, code, command }); } catch (error) { console.warn("[sidecar:job] exit listener failed", error?.message || error); }
+          }
+        });
       });
       child.on("error", () => {
         if (!canReportFailure()) return;
@@ -421,6 +436,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     callJsonAsync: callSidecarJsonAsync,
     callJsonOneShot: callSidecarJsonOneShot,
     launchJob: launchSidecarJob,
+    onJobExit,
     stopResident: stopResidentSidecar,
     withCatalogPaused,
   };

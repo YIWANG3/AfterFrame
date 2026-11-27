@@ -412,6 +412,7 @@
     "pause": "暂停",
     "resume": "继续",
     "paused": "已暂停",
+    "waitingForImport": "等导入结束",
     "queued": "排队中",
     "working": "处理中…",
     "workingProgress": "{{label}} · {{processed}}/{{total}}",
