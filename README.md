@@ -18,6 +18,7 @@ Download the latest version from [Releases](../../releases):
 
 - **Mac:** `-arm64.dmg` for Apple Silicon on macOS 14 or later. On macOS 12 or 13, or on an Intel Mac, take `-macOS12-arm64.dmg` (Apple Silicon) or `-macOS12-Intel.dmg` (Intel): the same app without People & Pets, Scene Depth and Stickers, which need macOS 14. Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
 - **Windows:** the `-setup.exe`. Windows 10 or 11, 64-bit. The installer isn't signed yet: when Windows says "Windows protected your PC", click **More info**, then **Run anyway**. Stickers, People & Pets, Scene Depth and LUTs are in the macOS app only for now.
+- **Updates:** AfterFrame checks for new versions and installs them itself, in Settings → About → Software Update. Versions before 0.5.29 can't, so update those once by hand.
 
 ![AfterFrame — Browse & Inspect](docs/assets/en/library.webp)
 
@@ -44,13 +45,13 @@ Download the latest version from [Releases](../../releases):
 The core of AfterFrame — a catalog-based workflow that keeps your originals on disk and everything else indexed and fast.
 
 - Catalog-based workflow — one `.afcatalog` per project
-- Import pipeline with automatic metadata extraction and preview generation; on a large import, photos show up a batch at a time, thumbnails included. On a Mac, drop photos, videos or folders on the Dock icon to import them
+- Import pipeline with automatic metadata extraction and preview generation; on a large import, photos show up a batch at a time, thumbnails included. On a Mac, drop photos, videos or folders on the Dock icon to import them. Importing a folder again reads only the files that changed
 - Metadata read with [ExifTool](https://exiftool.org/): camera, lens, exposure, capture time, GPS and colour space from JPEG, HEIF and RAW files, CR3 and IIQ included
 - RAW files from 1,200+ cameras read with [LibRaw](https://www.libraw.org/): the camera's embedded preview when it's big enough, a full decode when it isn't; RAW HD previews are made when you open the photo, not at import
 - Two preview tiers: fast 512px thumbnails always, plus optional 2000px HD previews (toggle in Settings → Library, off by default to save disk)
 - Optional RAW source indexing and matching by filename
 - **A RAW+JPG shot is one photo**: a camera's RAW and JPG of one shot, side by side in a folder, show as one photo badged JPG+RAW, and a rating, flag or tag applies to both files. Settings → Library shows them as two again, per catalog
-- **Missing originals in one view**: photos whose files were moved or deleted gather in Missing Originals, to relink them all from a folder (by file name, and only where the content matches) or remove them from the library
+- **Missing originals as a filter**: photos whose files were moved or deleted show under the Original: Missing filter, in All Assets or any collection, folder or smart collection, to relink them all from a folder (by file name, and only where the content matches) or remove them from the library
 - **A moved photo keeps its record**: import a file you moved or renamed in Finder, or let a synced folder find it, and the photo you already had follows it there, with its rating, tags, collections and versions, instead of a second photo being added
 - Photos, RAW and video in the formats photographers actually shoot — JPEG, HEIF (`.heic` / `.hif`), TIFF, PSD, 38 RAW types, AVCHD and the usual containers; the full list is in Settings → Library → Supported formats, and an import tells you which files it skipped. Anything the viewer can't decode itself is rendered on demand, so it shows at full resolution everywhere
 - Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
@@ -168,7 +169,7 @@ Bring your own API key. AfterFrame does not bundle or proxy any AI service — y
 Generate a caption, tags, and a location guess for your photos with your own LLM provider (Anthropic, OpenAI, or any OpenAI-compatible endpoint). As with AI Repaint, requests go directly from your machine to the API.
 
 - Annotate one photo, a multi-selection, a whole folder, or every un-annotated asset — all as tracked background jobs with live progress
-- Optional auto-annotate on import
+- Optional auto-annotate on import, of the photos each import adds
 - Bilingual tags (English / 中文), with configurable tag count and caption length
 - Hand-edit per-photo tags — remove a wrong one or add your own (with the same tag search)
 - Results power Search & Filter above; HEIC / RAW inputs handled
