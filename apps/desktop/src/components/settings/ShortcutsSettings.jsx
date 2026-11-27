@@ -55,6 +55,7 @@ function KeyRecorder({ onRecord, onCancel }) {
       ref={ref}
       type="button"
       data-shortcut-recorder="true"
+      data-keep-focus
       className="inline-flex h-6 min-w-[96px] items-center justify-center rounded border border-accent bg-accent/10 px-2 text-[11px] text-accent outline-none"
       onBlur={onCancel}
       onKeyDown={(event) => {

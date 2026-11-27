@@ -214,7 +214,7 @@ const GalleryCard = memo(function GalleryCard({
       data-image-path={item.image_path}
       data-flag={item.app_flag === 1 ? "pick" : item.app_flag === -1 ? "reject" : "none"}
       draggable
-      className="group absolute text-left focus:outline-none"
+      className="group absolute text-left"
       style={{
         width: `${width}px`,
         height: `${totalHeight}px`,

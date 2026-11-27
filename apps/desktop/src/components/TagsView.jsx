@@ -47,7 +47,7 @@ function SortDropdown({ sort, setSort }) {
       <button
         type="button"
         data-testid="tags-sort"
-        className="flex h-8 w-[110px] cursor-pointer items-center justify-center gap-1 rounded-md border border-border/70 bg-app px-2 text-[12px] text-text outline-none transition-colors hover:border-border"
+        className="flex h-8 w-[110px] cursor-pointer items-center justify-center gap-1 rounded-md border border-border/70 bg-app px-2 text-[12px] text-text transition-colors hover:border-border"
         onClick={() => setOpen((c) => !c)}
       >
         <span className="truncate">{t(`tags.sort.${sort}`)}</span>

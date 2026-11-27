@@ -104,7 +104,7 @@ export function StackedColorField({ label, color, onChange, opacity, onOpacityCh
         ref={swatchRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className="h-6 w-6 cursor-pointer rounded p-px outline-none bg-transparent"
+        className="h-6 w-6 cursor-pointer rounded p-px bg-transparent"
         title={t("text.editColor")}
       >
         <span className="block h-full w-full rounded-[3px]" style={{ background: fill }} />

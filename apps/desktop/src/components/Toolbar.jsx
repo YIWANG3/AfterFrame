@@ -146,7 +146,7 @@ function SortDropdown({ sort, setSort, inFolder = false }) {
     <div ref={ref} className="relative ml-1">
       <button
         type="button"
-        className="flex h-8 w-[100px] cursor-pointer items-center justify-center rounded-md border border-border/70 bg-app px-2 text-[12px] text-text outline-none transition-colors hover:border-border focus:border-accent/50"
+        className="flex h-8 w-[100px] cursor-pointer items-center justify-center rounded-md border border-border/70 bg-app px-2 text-[12px] text-text transition-colors hover:border-border"
         onClick={() => setOpen((c) => !c)}
       >
         <span>{current ? t(`toolbar.sort.${current}`) : t("toolbar.sortFallback")}</span>

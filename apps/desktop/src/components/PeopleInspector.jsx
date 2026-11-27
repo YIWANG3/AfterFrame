@@ -241,7 +241,7 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
                       });
                     }}
                     className={cx(
-                      "relative overflow-hidden rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
+                      "relative overflow-hidden rounded-lg transition",
                       selected ? "ring-2 ring-accent/85" : "",
                     )}
                   >

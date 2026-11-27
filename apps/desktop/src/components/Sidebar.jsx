@@ -413,9 +413,9 @@ export default function Sidebar({
                 type="button"
                 {...hideMenu(id, t(labelKey))}
                 title={!available ? tc(LOCKED_HINT_KEY) : undefined}
-                onClick={available ? (e) => { e.currentTarget.blur(); onOpenView?.(id); } : undefined}
+                onClick={available ? () => onOpenView?.(id) : undefined}
                 className={[
-                  "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
+                  "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
                   !available
                     ? "cursor-default text-muted2"
                     : current
@@ -434,9 +434,9 @@ export default function Sidebar({
             type="button"
             {...hideMenu("people", t("sidebar.people"))}
             title={!api.can("people") ? tc(LOCKED_HINT_KEY) : undefined}
-            onClick={api.can("people") ? (e) => { e.currentTarget.blur(); onOpenPeople?.(); } : undefined}
+            onClick={api.can("people") ? () => onOpenPeople?.() : undefined}
             className={[
-              "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
+              "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
               !api.can("people")
                 ? "cursor-default text-muted2"
                 : peopleMode
@@ -454,9 +454,9 @@ export default function Sidebar({
               type="button"
               data-testid="sidebar-tags"
               {...hideMenu("tags", t("sidebar.tags"))}
-              onClick={(e) => { e.currentTarget.blur(); onOpenTags(); }}
+              onClick={() => onOpenTags()}
               className={[
-                "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
+                "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
                 tagsMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
               ].join(" ")}
             >
@@ -471,9 +471,9 @@ export default function Sidebar({
               type="button"
               data-testid="sidebar-stats"
               {...hideMenu("stats", t("sidebar.stats"))}
-              onClick={(e) => { e.currentTarget.blur(); onOpenStats(); }}
+              onClick={() => onOpenStats()}
               className={[
-                "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
+                "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
                 statsMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
               ].join(" ")}
             >

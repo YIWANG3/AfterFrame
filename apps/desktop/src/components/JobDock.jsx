@@ -45,7 +45,7 @@ export default function JobDock({ jobs, queuedNote, onCancel, onPause, onResume,
                 <button
                   type="button"
                   onClick={() => (paused ? onResume?.(job.jobId) : onPause?.(job.jobId))}
-                  className="shrink-0 rounded p-1 text-muted transition-colors hover:bg-hover hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  className="shrink-0 rounded p-1 text-muted transition-colors hover:bg-hover hover:text-text"
                   title={paused ? t("activity.resume") : t("activity.pause")}
                 >
                   {paused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
@@ -56,7 +56,7 @@ export default function JobDock({ jobs, queuedNote, onCancel, onPause, onResume,
                 disabled={cancelling}
                 onClick={() => onCancel?.(job.jobId)}
                 className={[
-                  "shrink-0 rounded px-1 text-[10px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                  "shrink-0 rounded px-1 text-[10px] transition-colors",
                   cancelling ? "cursor-default text-muted2 opacity-50" : "text-muted hover:bg-hover hover:text-red-400",
                 ].join(" ")}
               >

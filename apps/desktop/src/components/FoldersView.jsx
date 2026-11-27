@@ -534,7 +534,8 @@ export default function FoldersView({
                 <div
                   key={folder.collection_id}
                   {...rowProps(folder)}
-                  className="group/card relative cursor-default select-none outline-none focus-visible:[&>div:first-child]:ring-2 focus-visible:[&>div:first-child]:ring-accent/60"
+                  data-focus-ring="first-child"
+                  className="group/card relative cursor-default select-none"
                 >
                   <div className={cx(
                     "relative aspect-square overflow-hidden rounded-xl border border-border/40 transition",
@@ -608,7 +609,7 @@ export default function FoldersView({
                     key={folder.collection_id}
                     {...rowProps(folder)}
                     className={cx(
-                      "cursor-default select-none border-t border-border/30 outline-none transition-colors focus-visible:bg-hover",
+                      "cursor-default select-none border-t border-border/30 outline-none transition-colors [&:focus-visible:not([data-pointer-focus])]:bg-hover",
                       isSelected ? "bg-selected text-text" : "text-muted hover:bg-hover hover:text-text",
                       importDrop === folder.collection_id && "bg-selected text-text shadow-[inset_0_0_0_1px_rgb(var(--accent-color)/0.8)]",
                     )}
