@@ -27,6 +27,7 @@ const api = {
   getMediaServerPort: (...args) => invoke("getMediaServerPort", ...args),
   onFullscreen: (...args) => invoke("onFullscreen", ...args),
   onUiScale: (...args) => invoke("onUiScale", ...args),
+  onUpdateChanged: (...args) => invoke("onUpdateChanged", ...args),
   onExternalImport: (...args) => invoke("onExternalImport", ...args),
   onAgentRevealAssets: (...args) => invoke("onAgentRevealAssets", ...args),
   sendAgentRevealResult: (...args) => invoke("sendAgentRevealResult", ...args),

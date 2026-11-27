@@ -63,6 +63,7 @@ const { createLocale } = require("./locale");
 const { createUiScale } = require("./uiScale");
 const { loadDevEnv } = require("./devEnv");
 const clipboardIpc = require("./ipc/clipboard");
+const { createUpdater } = require("./updater");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
 // directory so E2E tests get a clean catalog/settings/sticker library per run.
@@ -356,6 +357,11 @@ ipcMain.on("app:capabilities", (event) => {
 // files — see ./ipc/clipboard.js.
 clipboardIpc.register(host);
 
+// In-app updates (Settings ▸ About) — see ./updater.js. Its first check
+// waits until the window is up (whenReady below).
+const updater = createUpdater({ app, ipcMain, BrowserWindow, readAppSettings, updateAppSettings });
+updater.register();
+
 // Settings → Integrations: where agents connect, and whether the server came up.
 ipcMain.handle("app:mcp-status", () => services.mcp?.getStatus() ?? { status: "starting" });
 
@@ -440,6 +446,7 @@ app.whenReady().then(async () => {
     }
   }
   try { services.watcher.start(); } catch (err) { console.warn("[watcher] start failed:", err?.message || err); }
+  updater.start();
 
   // Embedded MCP server — external AI agents (Claude Code etc.) drive the app
   // through this while it runs. Failures must never affect the app itself.

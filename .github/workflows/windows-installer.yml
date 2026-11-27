@@ -110,6 +110,13 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $probe.width -ne 3840) { throw "the packaged sidecar can't read a video with the bundled FFmpeg" }
           "video probe: $($probe | ConvertTo-Json -Compress)"
           Get-ChildItem *.exe | ForEach-Object { "$($_.Name): $([math]::Round($_.Length / 1MB)) MB" }
+          # In-app updates (electron/updater.js): the installed app reads
+          # resources/app-update.yml and looks for latest.yml on the release.
+          if (-not (Test-Path "$resources/app-update.yml")) { throw "the app has no app-update.yml" }
+          $want = (Get-Content ../package.json -Raw | ConvertFrom-Json).version
+          if (-not (Select-String -Path latest.yml -Pattern "^version: $([regex]::Escape($want))$" -Quiet)) { throw "latest.yml is not for $want" }
+          $exe = (Select-String -Path latest.yml -Pattern "^path: (.+)$").Matches[0].Groups[1].Value
+          if (-not (Test-Path $exe) -or -not (Test-Path "$exe.blockmap")) { throw "latest.yml names $exe, which is not here with its blockmap" }
       - name: Check that the packaged app starts
         shell: pwsh
         working-directory: apps/desktop/release
@@ -130,7 +137,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AfterFrame-windows-${{ github.sha }}
-          path: apps/desktop/release/*.exe
+          # The installer, and what the app updates itself from: latest.yml
+          # names it, the blockmap lets a later update download only what changed.
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.exe.blockmap
+            apps/desktop/release/latest.yml
           retention-days: 14
 
   publish:
@@ -154,7 +166,9 @@ jobs:
           # The Mac build and notarization can take a while; wait up to 90 min.
           for attempt in $(seq 1 90); do
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-              gh release upload "$TAG" installer/*.exe --repo "$GITHUB_REPOSITORY" --clobber
+              gh release upload "$TAG" installer/*.exe installer/*.exe.blockmap --repo "$GITHUB_REPOSITORY" --clobber
+              # Last: an installed app that reads latest.yml finds the installer it names.
+              gh release upload "$TAG" installer/latest.yml --repo "$GITHUB_REPOSITORY" --clobber
               gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
               exit 0
             fi

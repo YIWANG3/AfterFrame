@@ -147,11 +147,26 @@
     "license": "License",
     "reportIssue": "Report an issue",
     "openIssueTracker": "Open issue tracker",
-    "updatesPre": "Updates are ",
-    "updatesNotAuto": "not automatic",
-    "updatesMid": " — when a new version ships, download the .dmg from ",
-    "githubReleases": "GitHub Releases",
-    "updatesPost": " and drag it over the old Applications/AfterFrame.app. Catalogs and settings persist across updates."
+    "softwareUpdate": "Software Update",
+    "updateChecking": "Checking…",
+    "updateCurrent": "AfterFrame is up to date.",
+    "updateAvailable": "AfterFrame {{version}} is available.",
+    "updateDownloading": "Downloading… {{percent}}%",
+    "updateReady": "{{version}} is downloaded. It installs when you quit.",
+    "updateJobsRunning": "Downloaded. Restart once the background tasks finish.",
+    "updateMoveToApplications": "Move AfterFrame to the Applications folder to update it here.",
+    "updateCheck": "Check Now",
+    "updateDownload": "Download",
+    "updateRestart": "Restart to Update",
+    "updateRetry": "Try Again",
+    "updateFromGithub": "Download from GitHub",
+    "updateWhatsNew": "What's New",
+    "updateAutoCheck": "Check for updates automatically",
+    "updateError": {
+      "check": "Couldn't check for updates.",
+      "download": "The download didn't finish.",
+      "install": "The update couldn't be installed."
+    }
   },
   "people": {
     "loading": "Loading people recognition…",

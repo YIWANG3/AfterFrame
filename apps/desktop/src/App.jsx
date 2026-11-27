@@ -28,6 +28,7 @@ import JobDock from "./components/JobDock";
 import Lightbox from "./components/Lightbox";
 import EditorOverlay from "./components/EditorOverlay";
 import SettingsOverlay from "./components/SettingsOverlay";
+import useUpdateNotice from "./hooks/useUpdateNotice";
 import WelcomeOverlay from "./components/WelcomeOverlay";
 import SampleCatalogBanner from "./components/SampleCatalogBanner";
 import MissingFilesBar from "./components/MissingFilesBar";
@@ -87,6 +88,8 @@ export default function App() {
   const { t } = useTranslation("app");
   const { t: tNav } = useTranslation("nav");
   const { t: tInspector } = useTranslation("inspector");
+  // A new version found by the daily check (Settings ▸ About).
+  useUpdateNotice({ t, pushToast });
   // The Verify Files toast's View button opens the Missing Originals view,
   // which App owns (openDiscoverTarget, defined further down).
   const showMissingRef = useRef(null);
@@ -670,6 +673,11 @@ export default function App() {
     if (!api.has("onMenuAction")) return undefined;
     return api.onMenuAction((action) => {
       if (action === "app:open-settings") openSettings();
+      // AfterFrame ▸ Check for Updates…: the answer shows in Settings ▸ About.
+      if (action === "app:check-updates") {
+        openSettings("about");
+        if (api.has("checkForUpdates")) void api.checkForUpdates();
+      }
     });
   }, []);
   // A toast's way to a settings tab (the import summary's "Supported formats"
