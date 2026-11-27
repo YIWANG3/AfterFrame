@@ -212,9 +212,10 @@ def people_worker_count() -> int:
     override = os.environ.get("PEOPLE_WORKERS", "").strip()
     if override.isdigit() and int(override) > 0:
         return int(override)
+    sysconf = getattr(os, "sysconf", None)  # Windows has none
     try:
-        memory_gb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
-    except (AttributeError, OSError, ValueError):  # Windows has no sysconf
+        memory_gb = sysconf("SC_PAGE_SIZE") * sysconf("SC_PHYS_PAGES") / 2**30 if sysconf else 8.0
+    except (OSError, ValueError):
         memory_gb = 8.0
     return max(1, min(PEOPLE_WORKERS_MAX, (os.cpu_count() or 4) // 4, int(memory_gb // 6)))
 
