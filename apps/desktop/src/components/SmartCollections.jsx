@@ -14,14 +14,17 @@ import { SectionHeading, useSectionOpen } from "./SidebarSection";
 import SectionMoreMenu from "./SectionMoreMenu";
 import { setSidebarHidden } from "./sidebarLayout";
 
-// The sidebar's first section, above the collections and the folders.
+// One of the sidebar's three sections, first unless the user moves it.
 // `view` is the sidebar's list / covers switch, shared with the collections.
-// `grow`: the collections below are folded, so this one may run past its cap,
-// as tall as its rows.
+// `grow`: the collections are folded, so this one may run past its cap, as
+// tall as its rows.
+// `headingProps` go on the heading row (its right-click menu, the drag that
+// moves the section), `rootProps` on the section itself (where a dragged
+// section lands).
 // `onNew` starts a new one (the filter bar, whose conditions it saves);
 // `onToggleView` flips the list / covers switch; `onOpenManager` opens the
 // manager on its Smart Collections tab.
-export default function SmartCollections({ collections, activeId, view = "list", grow = false, onOpen, onEditRules, onRename, onDelete, onSnapshot, onNew, onToggleView, onOpenManager, headingProps = {} }) {
+export default function SmartCollections({ collections, activeId, view = "list", grow = false, onOpen, onEditRules, onRename, onDelete, onSnapshot, onNew, onToggleView, onOpenManager, headingProps = {}, rootProps = {} }) {
   const { t } = useTranslation("nav");
   const [editingId, setEditingId] = useState(null);
   // The row right-clicked: { col, x, y }. Its actions are in that menu.
@@ -75,6 +78,7 @@ export default function SmartCollections({ collections, activeId, view = "list",
       className={!open ? "shrink-0" : grow ? "flex min-h-0 shrink flex-col" : "flex max-h-[40%] min-h-0 shrink flex-col"}
       data-smart-collections="true"
       data-open={open ? "true" : "false"}
+      {...rootProps}
     >
       <SectionHeading
         {...headingProps}

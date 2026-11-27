@@ -942,6 +942,28 @@ html.electron .discover-drag-region { pointer-events: auto; -webkit-app-region: 
   box-shadow: inset 0 0 0 1px rgb(var(--accent-color) / .6);
 }
 
+/* An entry or a section dragged to another place in the sidebar
+   (components/sidebarReorder.js): a line, like the folder rows', centred in
+   the gap where it lands. Entries are 4px apart, sections 16px. The one being
+   dragged dims while it is away. */
+[data-reorder-item] { position: relative; }
+[data-reorder-drop]::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgb(var(--accent-color) / .8);
+  pointer-events: none;
+  z-index: 20;
+}
+[data-reorder-group="entries"][data-reorder-drop="before"]::before { top: -3px; }
+[data-reorder-group="entries"][data-reorder-drop="after"]::before { bottom: -3px; }
+[data-reorder-group="sections"][data-reorder-drop="before"]::before { top: -9px; }
+[data-reorder-group="sections"][data-reorder-drop="after"]::before { bottom: -9px; }
+[data-reorder-dragging] { opacity: .5; }
+
 /* ───────── Windows 窗口外壳(html.platform-win32,见 electron/windowChrome.js) ─────────
    不透明窗口 + 36px 自绘标题条;原生最小化 / 最大化(含贴靠布局)/ 关闭按钮由 titleBarOverlay 画在标题条右端。
    上面这些 macOS 规则(26px 圆角裁剪、透明底、给红绿灯让位的 44px / 88px)在这里一一撤回;Windows 11 自己会给窗口画圆角 */

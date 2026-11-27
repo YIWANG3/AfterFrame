@@ -19,8 +19,9 @@ import { usePref } from "../hooks/usePref";
 import { oneOf } from "../utils/prefs";
 
 // `onImport` picks a folder on disk to import; `onOpenManager` opens the
-// manager on its Folders tab.
-export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, actions, onImport, onOpenManager, onDragOver, onDragLeave, onDrop, dropActive = false, headingProps = {} }) {
+// manager on its Folders tab. `headingProps` go on the heading row and
+// `rootProps` on the section itself, as for the smart collections.
+export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, actions, onImport, onOpenManager, onDragOver, onDragLeave, onDrop, dropActive = false, headingProps = {}, rootProps = {} }) {
   const { t } = useTranslation("nav");
   const [open, toggleOpen] = useSectionOpen("diskFolders");
   const [expanded, setExpanded] = useState(() => new Set());
@@ -56,6 +57,7 @@ export default function DiskFolders({ folders, watchedDirs, activePath, onOpen, 
       data-disk-folders="true"
       data-open={open ? "true" : "false"}
       data-import-drop={dropActive ? "true" : undefined}
+      {...rootProps}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}

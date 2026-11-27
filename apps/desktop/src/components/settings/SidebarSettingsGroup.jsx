@@ -1,10 +1,11 @@
-// Settings › General › Sidebar: every entry the sidebar can hide, in its
-// order, each with a switch (components/sidebarLayout.js). All Assets is not
-// listed: it can't be hidden.
+// Settings › General › Sidebar: every entry the sidebar can hide, in the
+// order the sidebar shows them (the user's, when they dragged them), each
+// with a switch (components/sidebarLayout.js). All Assets is not listed: it
+// can't be hidden.
 import { useTranslation } from "react-i18next";
 import { Toggle } from "../../ui";
 import { sidebarViews } from "../../../features/index.js";
-import { SIDEBAR_ENTRIES, setSidebarHidden, useSidebarHidden } from "../sidebarLayout";
+import { setSidebarHidden, useSidebarHidden, useSidebarOrder } from "../sidebarLayout";
 import { FieldRow, Group } from "./SettingsPrimitives";
 
 const LABELS = {
@@ -23,9 +24,9 @@ const LABELS = {
 export default function SidebarSettingsGroup() {
   const { t } = useTranslation(["settings", "nav"]);
   const hidden = useSidebarHidden();
-  const entries = SIDEBAR_ENTRIES.flatMap((id) => (
-    id === "@views" ? sidebarViews.map((view) => ({ id: view.id, labelKey: view.labelKey })) : [{ id, labelKey: LABELS[id] }]
-  ));
+  const order = useSidebarOrder(sidebarViews.map((view) => view.id));
+  const viewLabels = Object.fromEntries(sidebarViews.map((view) => [view.id, view.labelKey]));
+  const entries = [...order.entries, ...order.sections].map((id) => ({ id, labelKey: LABELS[id] || viewLabels[id] }));
   return (
     <Group title={t("general.sidebar")}>
       <div data-testid="sidebar-settings">
