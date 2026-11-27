@@ -13,7 +13,7 @@ from typing import BinaryIO
 import numpy as np
 from PIL import Image, ImageCms
 
-from . import formats, raw_decode, video
+from . import formats, image_io_previews, raw_decode, video
 from .catalog import CatalogPaths
 from .color_profiles import adobe_rgb_icc
 from .colors import extract_palette
@@ -596,9 +596,20 @@ class PreviewService:
 
     def _render_image(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
         """Processed images (JPEG, PNG, HEIC, TIFF, WebP, AVIF) render with
-        Pillow on every platform; Windows has no sips. A file Pillow can't
-        read falls back to sips where it exists (macOS's Image I/O reads a
-        few formats Pillow doesn't), so nothing that rendered before fails."""
+        Pillow on every platform; Windows has no sips. On a Mac, JPEG and
+        HEIF go through Image I/O first (image_io_previews: the same preview,
+        a HEIF ten times sooner), and whatever it declines or fails on goes
+        on to Pillow. A file Pillow can't read falls back to sips where it
+        exists (macOS's Image I/O reads a few formats Pillow doesn't), so
+        nothing that rendered before fails."""
+        helper_path = image_io_previews.helper_for(source_path)
+        if helper_path is not None:
+            try:
+                return self._render_with_image_io(helper_path, source_path, output_path, size, validate=validate)
+            except SourceNotReadyError:
+                raise
+            except Exception:
+                pass  # Pillow, below
         try:
             return self._render_with_pillow(source_path, output_path, size, validate=validate)
         except SourceNotReadyError:
@@ -607,6 +618,11 @@ class PreviewService:
             if not has_image_io():
                 raise
             return self._render_with_sips(source_path, output_path, size, validate=validate)
+
+    def _render_with_image_io(self, helper_path: Path, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
+        return self._atomic(
+            output_path, lambda tmp: image_io_previews.render(helper_path, source_path, tmp, size), validate=validate
+        )
 
     def _render_with_pillow(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
         return self._atomic(output_path, lambda tmp: render_pillow_preview(source_path, tmp, size), validate=validate)
