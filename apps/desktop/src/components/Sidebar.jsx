@@ -7,7 +7,8 @@ import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "
 import SmartCollections from "./SmartCollections";
 import DiskFolders from "./DiskFolders";
 import SectionMoreMenu from "./SectionMoreMenu";
-import { openSidebarSettings, setSidebarHidden, useSidebarHidden } from "./sidebarLayout";
+import { moveSidebarEntry, openSidebarSettings, setSidebarHidden, useSidebarHidden, useSidebarOrder } from "./sidebarLayout";
+import { useSidebarReorder } from "./sidebarReorder";
 import FaceMenu from "./FaceMenu";
 import InlineEdit from "./InlineEdit";
 import { SectionHeading, useSectionOpen } from "./SidebarSection";
@@ -193,6 +194,11 @@ export default function Sidebar({
       setEntryMenu({ id, label, x: event.clientX, y: event.clientY });
     },
   });
+  // The order the user dragged the entries and sections into
+  // (sidebarLayout.js, sidebarReorder.js).
+  const viewIds = sidebarViews.map((view) => view.id);
+  const order = useSidebarOrder(viewIds);
+  const reorder = useSidebarReorder((id, target, place) => moveSidebarEntry(id, target, place, viewIds));
   const hoverExpandRef = useRef(null);
   const folderScrollRef = useRef(null);
   const navRef = useRef(null);
@@ -340,6 +346,69 @@ export default function Sidebar({
     return [];
   }
 
+  // The entries above the sections, by id. All Assets is always there and
+  // first; the rest go in the user's order, each unless it is hidden.
+  const browseActive = (key) => !activeCollectionId && !activeSmartCollectionId && !activeFolderPath && !similarTo
+    && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && !tagsMode && !statsMode && key === status;
+  // `locked`: the feature is off on this platform, shown with its hint.
+  const entryRow = (id, { icon: RowIcon, label, active = false, locked = false, onClick, count, testId }) => {
+    const fixed = id === "all";
+    return (
+      <button
+        key={id}
+        type="button"
+        data-testid={testId}
+        {...(fixed ? {} : { ...hideMenu(id, label), ...reorder.handle("entries", id), ...reorder.item("entries", id) })}
+        title={locked ? tc(LOCKED_HINT_KEY) : undefined}
+        onClick={locked ? undefined : onClick}
+        className={[
+          "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
+          locked
+            ? "cursor-default text-muted2"
+            : active
+              ? "bg-selected text-text"
+              : "text-muted hover:bg-hover/70 hover:text-text",
+        ].join(" ")}
+      >
+        <span className="flex items-center gap-2.5">
+          <RowIcon className={`h-4 w-4 stroke-[1.6] ${active ? "text-accent" : ""}`} />
+          <span className="text-[13px]">{label}</span>
+        </span>
+        {count !== undefined && <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{count}</span>}
+      </button>
+    );
+  };
+  const entryRows = {};
+  for (const item of browse) {
+    if (item.key !== "all" && hidden.has(item.key)) continue;
+    entryRows[item.key] = entryRow(item.key, {
+      icon: ICON_MAP[item.icon], label: t(`browse.${item.key}`, item.label), count: item.count,
+      active: browseActive(item.key), onClick: () => setStatus(item.key),
+    });
+  }
+  if (onOpenDiscover && !hidden.has("discover")) {
+    entryRows.discover = entryRow("discover", { icon: Compass, label: t("sidebar.discover"), active: discoverMode, onClick: () => onOpenDiscover() });
+  }
+  // The feature modules' views (today the sticker library), each locked
+  // with the platform hint where its feature is off.
+  for (const { id, icon, labelKey, cap, unavailable } of sidebarViews) {
+    const available = api.can(cap);
+    if ((!available && unavailable === "hidden") || hidden.has(id)) continue;
+    entryRows[id] = entryRow(id, { icon, label: t(labelKey), active: available && activeView === id, locked: !available, onClick: () => onOpenView?.(id) });
+  }
+  if (!hidden.has("people")) {
+    const available = api.can("people");
+    entryRows.people = entryRow("people", { icon: UsersRound, label: t("sidebar.people"), active: available && peopleMode, locked: !available, onClick: () => onOpenPeople?.() });
+  }
+  if (onOpenTags && !hidden.has("tags")) {
+    entryRows.tags = entryRow("tags", { icon: Tags, label: t("sidebar.tags"), active: tagsMode, onClick: () => onOpenTags(), testId: "sidebar-tags" });
+  }
+  if (onOpenStats && !hidden.has("stats")) {
+    entryRows.stats = entryRow("stats", { icon: BarChart3, label: t("sidebar.stats"), active: statsMode, onClick: () => onOpenStats(), testId: "sidebar-stats" });
+  }
+  // The three sections in the user's order, a missing (hidden) one left out.
+  const arrangeSections = (sections) => order.sections.map((id) => (sections[id] ? <Fragment key={id}>{sections[id]}</Fragment> : null));
+
   return (
     <aside
       className="relative flex h-full min-h-0 flex-col overflow-hidden border-r border-border/40 bg-chrome px-3 py-3"
@@ -355,145 +424,24 @@ export default function Sidebar({
         </div>
       </div>
 
-      <nav ref={navRef} className="flex min-h-0 flex-1 flex-col gap-4">
+      <nav ref={navRef} className="flex min-h-0 flex-1 flex-col gap-4" {...reorder.container}>
         <div className="shrink-0 space-y-1">
-          {browse.map((item, idx) => {
-            const Icon = ICON_MAP[item.icon];
-            const discoverButton = idx === 0 && onOpenDiscover && !hidden.has("discover") ? (
-              <button
-                key="discover"
-                type="button"
-                onClick={() => onOpenDiscover()}
-                {...hideMenu("discover", t("sidebar.discover"))}
-                className={[
-                  "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
-                  discoverMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
-                ].join(" ")}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Compass className={`h-4 w-4 stroke-[1.6] ${discoverMode ? "text-accent" : ""}`} />
-                  <span className="text-[13px]">{t("sidebar.discover")}</span>
-                </span>
-              </button>
-            ) : null;
-            if (item.key !== "all" && hidden.has(item.key)) return discoverButton ? <Fragment key={item.key}>{discoverButton}</Fragment> : null;
-            const active = !activeCollectionId && !activeSmartCollectionId && !activeFolderPath && !similarTo && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && !tagsMode && !statsMode && item.key === status;
-            return (
-              <Fragment key={item.key}>
-              <button
-                type="button"
-                onClick={() => setStatus(item.key)}
-                {...(item.key === "all" ? {} : hideMenu(item.key, t(`browse.${item.key}`, item.label)))}
-                className={[
-                  "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
-                  active
-                    ? "bg-selected text-text"
-                    : "text-muted hover:bg-hover/70 hover:text-text",
-                ].join(" ")}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Icon className={`h-4 w-4 stroke-[1.6] ${active ? "text-accent" : ""}`} />
-                  <span className="text-[13px]">{t(`browse.${item.key}`, item.label)}</span>
-                </span>
-                <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{item.count}</span>
-              </button>
-              {discoverButton}
-              </Fragment>
-            );
-          })}
-          {/* The feature modules' views (today the sticker library), each
-              locked with the platform hint where its feature is off. */}
-          {sidebarViews.map(({ id, icon: ViewIcon, labelKey, cap, unavailable }) => {
-            const available = api.can(cap);
-            if ((!available && unavailable === "hidden") || hidden.has(id)) return null;
-            const current = activeView === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                {...hideMenu(id, t(labelKey))}
-                title={!available ? tc(LOCKED_HINT_KEY) : undefined}
-                onClick={available ? () => onOpenView?.(id) : undefined}
-                className={[
-                  "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
-                  !available
-                    ? "cursor-default text-muted2"
-                    : current
-                      ? "bg-selected text-text"
-                      : "text-muted hover:bg-hover/70 hover:text-text",
-                ].join(" ")}
-              >
-                <span className="flex items-center gap-2.5">
-                  <ViewIcon className={`h-4 w-4 stroke-[1.6] ${current ? "text-accent" : ""}`} />
-                  <span className="text-[13px]">{t(labelKey)}</span>
-                </span>
-              </button>
-            );
-          })}
-          {!hidden.has("people") && <button
-            type="button"
-            {...hideMenu("people", t("sidebar.people"))}
-            title={!api.can("people") ? tc(LOCKED_HINT_KEY) : undefined}
-            onClick={api.can("people") ? () => onOpenPeople?.() : undefined}
-            className={[
-              "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
-              !api.can("people")
-                ? "cursor-default text-muted2"
-                : peopleMode
-                  ? "bg-selected text-text"
-                  : "text-muted hover:bg-hover/70 hover:text-text",
-            ].join(" ")}
-          >
-            <span className="flex items-center gap-2.5">
-              <UsersRound className={`h-4 w-4 stroke-[1.6] ${peopleMode ? "text-accent" : ""}`} />
-              <span className="text-[13px]">{t("sidebar.people")}</span>
-            </span>
-          </button>}
-          {onOpenTags && !hidden.has("tags") && (
-            <button
-              type="button"
-              data-testid="sidebar-tags"
-              {...hideMenu("tags", t("sidebar.tags"))}
-              onClick={() => onOpenTags()}
-              className={[
-                "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
-                tagsMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
-              ].join(" ")}
-            >
-              <span className="flex items-center gap-2.5">
-                <Tags className={`h-4 w-4 stroke-[1.6] ${tagsMode ? "text-accent" : ""}`} />
-                <span className="text-[13px]">{t("sidebar.tags")}</span>
-              </span>
-            </button>
-          )}
-          {onOpenStats && !hidden.has("stats") && (
-            <button
-              type="button"
-              data-testid="sidebar-stats"
-              {...hideMenu("stats", t("sidebar.stats"))}
-              onClick={() => onOpenStats()}
-              className={[
-                "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
-                statsMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
-              ].join(" ")}
-            >
-              <span className="flex items-center gap-2.5">
-                <BarChart3 className={`h-4 w-4 stroke-[1.6] ${statsMode ? "text-accent" : ""}`} />
-                <span className="text-[13px]">{t("sidebar.stats")}</span>
-              </span>
-            </button>
-          )}
+          {entryRows.all}
+          {order.entries.map((id) => entryRows[id] || null)}
         </div>
 
 
-        {/* Three sections, top to bottom: smart collections (saved filters),
-            collections (a tree the user arranges) and folders on disk. Each is
-            as tall as its rows, up to a share of the sidebar, and scrolls
+        {/* Three sections: smart collections (saved filters), collections (a
+            tree the user arranges) and folders on disk, top to bottom unless
+            the user dragged them into another order by their headings. Each
+            is as tall as its rows, up to a share of the sidebar, and scrolls
             inside past that; when together they don't fit, each gives way in
             proportion and scrolls inside, but keeps its first rows in view
             (sidebarSectionFloors.js). The sidebar itself never scrolls. */}
-        {!hidden.has("smartCollections") && <SmartCollections
-          headingProps={hideMenu("smartCollections", t("sidebar.smartCollections"))}
+        {arrangeSections({
+        smartCollections: !hidden.has("smartCollections") && <SmartCollections
+          headingProps={{ ...hideMenu("smartCollections", t("sidebar.smartCollections")), ...reorder.handle("sections", "smartCollections") }}
+          rootProps={reorder.item("sections", "smartCollections")}
           collections={collections}
           activeId={featureViewMode || peopleMode || discoverMode || foldersMode || tagsMode || statsMode ? null : activeSmartCollectionId}
           view={folderView}
@@ -506,9 +454,10 @@ export default function Sidebar({
           onNew={onNewSmartCollection}
           onToggleView={toggleFolderView}
           onOpenManager={onOpenFolders ? () => onOpenFolders("smart") : undefined}
-        />}
-        {!hidden.has("collections") && (
+        />,
+        collections: !hidden.has("collections") && (
         <div
+          {...reorder.item("sections", "collections")}
           className={[
             foldersOpen ? "flex max-h-[45%] min-h-0 shrink flex-col" : "shrink-0",
             // The highlight shows where a Finder drop lands: the whole section.
@@ -543,6 +492,7 @@ export default function Sidebar({
           <SectionHeading
             id="folders"
             {...hideMenu("collections", t("sidebar.collections"))}
+            {...reorder.handle("sections", "collections")}
             label={t("sidebar.collections")}
             open={foldersOpen}
             onToggle={toggleFolders}
@@ -955,11 +905,11 @@ export default function Sidebar({
           </div>
           </>)}
         </div>
-        )}
-
-        {diskFolders && !hidden.has("diskFolders") && (
+        ),
+        diskFolders: diskFolders && !hidden.has("diskFolders") && (
           <DiskFolders
-            headingProps={hideMenu("diskFolders", t("sidebar.folders"))}
+            headingProps={{ ...hideMenu("diskFolders", t("sidebar.folders")), ...reorder.handle("sections", "diskFolders") }}
+            rootProps={reorder.item("sections", "diskFolders")}
             onImport={onImportFolder}
             onOpenManager={onOpenFolders ? () => onOpenFolders("folders") : undefined}
             folders={diskFolders.folders}
@@ -983,7 +933,8 @@ export default function Sidebar({
               if (paths.length) void onImportToFolders(paths);
             } : undefined}
           />
-        )}
+        ),
+        })}
       </nav>
 
       {entryMenu && (
