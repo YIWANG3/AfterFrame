@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import subprocess
 import threading
 import time
@@ -199,6 +200,95 @@ def _refresh_index_stat(connection, file_stat: os.stat_result | None, asset_id: 
     )
 
 
+# People workers that analyze photos at once. Each is one Core ML process
+# (the model, about 125 MB on disk, is loaded in each) taking about one core:
+# two ran at 1.82 times the photos a second of one (import-pipeline-redesign
+# §1.3). A quarter of the cores and a worker per 6 GB, up to three: one on
+# an 8 GB Mac, three on a 12-core 18 GB one. PEOPLE_WORKERS overrides it.
+PEOPLE_WORKERS_MAX = 3
+
+
+def people_worker_count() -> int:
+    override = os.environ.get("PEOPLE_WORKERS", "").strip()
+    if override.isdigit() and int(override) > 0:
+        return int(override)
+    sysconf = getattr(os, "sysconf", None)  # Windows has none
+    try:
+        memory_gb = sysconf("SC_PAGE_SIZE") * sysconf("SC_PHYS_PAGES") / 2**30 if sysconf else 8.0
+    except (OSError, ValueError):
+        memory_gb = 8.0
+    return max(1, min(PEOPLE_WORKERS_MAX, (os.cpu_count() or 4) // 4, int(memory_gb // 6)))
+
+
+class _PeopleWorker:
+    """One `people-worker --serve` process: a request at a time on stdin, its
+    answers read by a thread into the job's shared queue (a pipe can't be
+    waited on alongside others on Windows), its stderr drained by another."""
+
+    def __init__(self, argv: list[str], answers: queue.Queue) -> None:
+        self.process = subprocess.Popen(
+            argv,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",  # stray bytes on stderr mustn't stop the drain
+            bufsize=1,
+            **no_window(),
+        )
+        self.stderr_tail: deque[str] = deque(maxlen=50)
+        self.busy: dict[str, Any] | None = None
+        self._answers = answers
+        self._drain = threading.Thread(target=_drain_stderr, args=(self.process.stderr, self.stderr_tail), daemon=True)
+        self._drain.start()
+        self._reader = threading.Thread(target=self._read, daemon=True)
+        self._reader.start()
+
+    def _read(self) -> None:
+        stdout = self.process.stdout
+        assert stdout is not None
+        try:
+            for line in stdout:
+                self._answers.put((self, line))
+        except (OSError, ValueError):
+            pass
+        self._answers.put((self, None))  # closed: it died, or was told to stop
+
+    def send(self, request: dict[str, Any]) -> None:
+        stdin = self.process.stdin
+        assert stdin is not None
+        stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+        stdin.flush()
+
+    def died(self) -> str:
+        self._drain.join(timeout=5)
+        return "\n".join(self.stderr_tail).strip()
+
+    def close(self) -> None:
+        worker = self.process
+        if worker.stdin is not None and not worker.stdin.closed:
+            try:
+                worker.stdin.close()
+            except OSError:
+                pass
+        if worker.poll() is None:
+            try:
+                worker.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                worker.terminate()
+                try:
+                    worker.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    worker.kill()
+                    worker.wait(timeout=5)
+        self._reader.join(timeout=1)
+        if worker.stdout is not None and not worker.stdout.closed:
+            worker.stdout.close()
+        # The drain thread closes stderr when the worker's end closes.
+        self._drain.join(timeout=1)
+
+
 def run_people_index_job(
     connection,
     job_id: str,
@@ -216,12 +306,17 @@ def run_people_index_job(
     pet_model_path: Path | None = None,
     pet_manifest_hash: str | None = None,
     pet_threshold: float | None = None,
+    workers: int | None = None,
 ) -> dict[str, Any]:
     """Run one resumable batch through the precompiled native people worker.
 
-    The sidecar owns the child process and all database writes. A worker result
-    is committed at an asset boundary, then the job cursor advances, so a crash
-    never leaves a partially-written face set or an ambiguous resume point.
+    The sidecar owns the child processes and all database writes. Several
+    workers analyze photos at once (people_worker_count), and each result is
+    committed here at an asset boundary, so a crash never leaves a partially
+    written face set. Results come back out of order: the cursor is the first
+    photo not done yet, plus the few after it that are ("done"), which a
+    resumed job passes over. A pause lets the photos already sent finish; a
+    cancel doesn't wait for them.
 
     With a pet model the same pass finds cats and dogs too (one decode per
     photo): they are written under the pet model's id, each half keeps its
@@ -286,6 +381,10 @@ def run_people_index_job(
     offset = int(cursor.get("offset", 0) or 0)
     if offset < 0 or offset > len(candidates):
         offset = 0
+    done: set[int] = {
+        int(position) for position in (cursor.get("done") or [])
+        if isinstance(position, int) and offset < position < len(candidates)
+    }
     payload: dict[str, Any] = {
         **prior_payload,
         "model_id": model_id,
@@ -305,7 +404,7 @@ def run_people_index_job(
         "phase_count": 2,
     }
     stats: dict[str, Any] = {
-        "processed": max(int(prior_result.get("processed", 0) or 0), offset),
+        "processed": max(int(prior_result.get("processed", 0) or 0), offset + len(done)),
         "total": len(candidates),
         "analyzed": int(prior_result.get("analyzed", 0) or 0),
         "skipped": int(prior_result.get("skipped", 0) or 0),
@@ -319,8 +418,8 @@ def run_people_index_job(
         status="running",
         payload=payload,
         result={**stats, "current_phase": {"status": "running"}},
-        progress=_fraction(offset, len(candidates)),
-        resume_cursor={"offset": offset, "total": len(candidates)},
+        progress=_fraction(offset + len(done), len(candidates)),
+        resume_cursor={"offset": offset, "total": len(candidates), **({"done": sorted(done)} if done else {})},
         pause_requested=False,
         increment_attempt=True,
         error_text=None,
@@ -385,47 +484,51 @@ def run_people_index_job(
     if not candidates:
         return cluster_and_finish({"offset": 0, "total": 0})
 
-    worker: subprocess.Popen[str] | None = None
-    stderr_drain: threading.Thread | None = None
-    stderr_tail: deque[str] = deque(maxlen=50)
-    active_cursor = {"offset": offset, "total": len(candidates)}
+    answers: queue.Queue = queue.Queue()
+    pool: list[_PeopleWorker] = []  # the live ones
+    started: list[_PeopleWorker] = []  # all of them, to close
+    idle: list[_PeopleWorker] = []
+    worker_count = max(1, workers or people_worker_count())
+    worker_argv = [str(resolved_worker), "--model", str(model_path),
+                   *(["--pet-model", str(pet_model_path)] if pets else []), "--serve"]
+    active_cursor: dict[str, Any] = {"offset": offset, "total": len(candidates)}
     analyzed_since_cluster = 0
+    next_position = offset
 
-    def advance_cursor(position: int) -> None:
-        """Asset `position` is done (committed or skipped): move the resume point past it."""
+    def complete(position: int) -> None:
+        """Photo `position` is done (committed or skipped): the resume point
+        is the first one that isn't."""
         nonlocal active_cursor
-        active_cursor = {"offset": position + 1, "total": len(candidates)}
-        stats["processed"] = position + 1
+        done.add(position)
+        first = active_cursor["offset"]
+        while first in done:
+            done.discard(first)
+            first += 1
+        active_cursor = {"offset": first, "total": len(candidates), **({"done": sorted(done)} if done else {})}
+        stats["processed"] = first + len(done)
         update_job(
             connection,
             job_id,
             payload=payload,
             result={**stats, "current_phase": {"status": "running"}},
-            progress=_fraction(position + 1, len(candidates)),
+            progress=_fraction(int(stats["processed"]), len(candidates)),
             resume_cursor=active_cursor,
             error_text=None,
         )
 
-    try:
-        worker = subprocess.Popen(
-            [str(resolved_worker), "--model", str(model_path),
-             *(["--pet-model", str(pet_model_path)] if pets else []), "--serve"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",  # stray bytes on stderr mustn't stop the drain
-            bufsize=1,
-            **no_window(),
-        )
-        assert worker.stdin is not None
-        assert worker.stdout is not None
-        stderr_drain = threading.Thread(target=_drain_stderr, args=(worker.stderr, stderr_tail), daemon=True)
-        stderr_drain.start()
-        for position in range(offset, len(candidates)):
-            _check_cancel(connection, job_id)
-            _check_pause(connection, job_id)
+    def next_photo() -> dict[str, Any] | None:
+        """The next photo for a worker, completing on the way the ones the
+        stat gate skips; None when there are no more. Raises on a cancel or
+        pause request, before taking the photo it was asked at."""
+        nonlocal next_position
+        while next_position < len(candidates):
+            position = next_position
+            # Done already: before the resume point, or among those after it.
+            if position < active_cursor["offset"] or position in done:
+                next_position += 1
+                continue
+            checkpoint()
+            next_position += 1
             candidate = candidates[position]
             known_hash = candidate.get("input_hash") if candidate.get("index_status") == "indexed" else None
             known_pet_hash = candidate.get("pet_input_hash") if candidate.get("pet_index_status") == "indexed" else None
@@ -450,119 +553,168 @@ def run_people_index_job(
             )
             if faces_unchanged and (not pets or pets_unchanged):
                 stats["skipped"] = int(stats["skipped"]) + 1
-                advance_cursor(position)
+                complete(position)
                 continue
-            request = {
-                "id": str(candidate["asset_id"]),
-                "asset_path": str(candidate["canonical_path"]),
-                **({"known_input_hash": known_hash} if known_hash else {}),
-                **({"known_pet_input_hash": known_pet_hash} if pets and known_pet_hash else {}),
+            return {
+                "position": position,
+                "candidate": candidate,
+                "file_stat": file_stat,
+                "faces_unchanged": faces_unchanged,
+                "pets_unchanged": pets_unchanged,
+                "request": {
+                    "id": str(candidate["asset_id"]),
+                    "asset_path": str(candidate["canonical_path"]),
+                    **({"known_input_hash": known_hash} if known_hash else {}),
+                    **({"known_pet_input_hash": known_pet_hash} if pets and known_pet_hash else {}),
+                },
             }
-            worker.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
-            worker.stdin.flush()
-            raw_response = worker.stdout.readline()
-            if not raw_response:
-                stderr_drain.join(timeout=5)
-                detail = "\n".join(stderr_tail).strip()
-                raise RuntimeError(detail or "People Worker stopped before returning a response")
-            response = json.loads(raw_response)
-            if str(response.get("id", "")) != str(candidate["asset_id"]):
-                raise RuntimeError("People Worker returned a response for an unexpected asset")
-            if response.get("ok"):
-                input_hash = response.get("input_hash")
-                if not isinstance(input_hash, str) or not input_hash:
-                    raise RuntimeError("People Worker returned no input_hash")
-                analyzed = False
-                if faces_unchanged or response.get("skipped"):
-                    _refresh_index_stat(connection, file_stat, str(candidate["asset_id"]), model_id, model_version)
-                else:
-                    faces = response.get("faces")
-                    if not isinstance(faces, list):
-                        raise RuntimeError("People Worker returned an invalid faces payload")
-                    replace_asset_faces(
-                        connection,
-                        asset_id=str(candidate["asset_id"]),
-                        model_id=model_id,
-                        model_version=model_version,
-                        input_hash=input_hash,
-                        faces=faces,
-                        file_size=file_stat.st_size if file_stat is not None else None,
-                        file_mtime=file_stat.st_mtime if file_stat is not None else None,
-                        commit=False,
-                    )
-                    stats["faces"] = int(stats["faces"]) + len(faces)
-                    analyzed = True
-                if pets:
-                    animals = response.get("animals")
-                    if pets_unchanged or response.get("animals_skipped"):
-                        _refresh_index_stat(connection, file_stat, str(candidate["asset_id"]), pet_id, pet_version)
-                    elif isinstance(animals, list):
-                        replace_asset_faces(
-                            connection,
-                            asset_id=str(candidate["asset_id"]),
-                            model_id=pet_id,
-                            model_version=pet_version,
-                            input_hash=input_hash,
-                            faces=animals,
-                            file_size=file_stat.st_size if file_stat is not None else None,
-                            file_mtime=file_stat.st_mtime if file_stat is not None else None,
-                            pets=True,
-                            commit=False,
-                        )
-                        stats["pets"] = int(stats.get("pets", 0)) + len(animals)
-                        analyzed = True
-                    else:
-                        # The pet half failed while the faces came back: record
-                        # it for the pet model only, so the next scan retries.
-                        upsert_people_asset_index(
-                            connection,
-                            asset_id=str(candidate["asset_id"]),
-                            model_id=pet_id,
-                            model_version=pet_version,
-                            input_hash=None,
-                            status="failed",
-                            face_count=0,
-                            error_text=str(response.get("animals_error") or "People Worker returned no animals"),
-                            commit=False,
-                        )
-                if analyzed:
-                    stats["analyzed"] = int(stats["analyzed"]) + 1
-                    analyzed_since_cluster += 1
-                else:
-                    stats["skipped"] = int(stats["skipped"]) + 1
-                connection.commit()
-                # Long scans should surface people progressively, not only at
-                # the end: re-cluster periodically so candidates appear on the
-                # wall while the scan is still running.
-                if cluster_every > 0 and analyzed_since_cluster >= cluster_every:
-                    interim = rebuild_candidate_groups(
-                        connection,
-                        model_id=model_id,
-                        model_version=model_version,
-                        checkpoint=checkpoint,
-                        commit=False,
-                    )
-                    interim_pets = cluster_pets()
-                    connection.commit()
-                    stats["groups"] = interim["groups"]
-                    if interim_pets is not None:
-                        stats["pet_groups"] = interim_pets["groups"]
-                    analyzed_since_cluster = 0
+        return None
+
+    def record(photo: dict[str, Any], response: dict[str, Any]) -> None:
+        """Write one worker's answer for one photo."""
+        nonlocal analyzed_since_cluster
+        candidate = photo["candidate"]
+        file_stat = photo["file_stat"]
+        if str(response.get("id", "")) != str(candidate["asset_id"]):
+            raise RuntimeError("People Worker returned a response for an unexpected asset")
+        if not response.get("ok"):
+            upsert_people_asset_index(
+                connection,
+                asset_id=str(candidate["asset_id"]),
+                model_id=model_id,
+                model_version=model_version,
+                input_hash=None,
+                status="failed",
+                face_count=0,
+                error_text=str(response.get("error") or "People Worker failed"),
+                commit=True,
+            )
+            stats["failed"] = int(stats["failed"]) + 1
+            complete(photo["position"])
+            return
+        input_hash = response.get("input_hash")
+        if not isinstance(input_hash, str) or not input_hash:
+            raise RuntimeError("People Worker returned no input_hash")
+        analyzed = False
+        if photo["faces_unchanged"] or response.get("skipped"):
+            _refresh_index_stat(connection, file_stat, str(candidate["asset_id"]), model_id, model_version)
+        else:
+            faces = response.get("faces")
+            if not isinstance(faces, list):
+                raise RuntimeError("People Worker returned an invalid faces payload")
+            replace_asset_faces(
+                connection,
+                asset_id=str(candidate["asset_id"]),
+                model_id=model_id,
+                model_version=model_version,
+                input_hash=input_hash,
+                faces=faces,
+                file_size=file_stat.st_size if file_stat is not None else None,
+                file_mtime=file_stat.st_mtime if file_stat is not None else None,
+                commit=False,
+            )
+            stats["faces"] = int(stats["faces"]) + len(faces)
+            analyzed = True
+        if pets:
+            animals = response.get("animals")
+            if photo["pets_unchanged"] or response.get("animals_skipped"):
+                _refresh_index_stat(connection, file_stat, str(candidate["asset_id"]), pet_id, pet_version)
+            elif isinstance(animals, list):
+                replace_asset_faces(
+                    connection,
+                    asset_id=str(candidate["asset_id"]),
+                    model_id=pet_id,
+                    model_version=pet_version,
+                    input_hash=input_hash,
+                    faces=animals,
+                    file_size=file_stat.st_size if file_stat is not None else None,
+                    file_mtime=file_stat.st_mtime if file_stat is not None else None,
+                    pets=True,
+                    commit=False,
+                )
+                stats["pets"] = int(stats.get("pets", 0)) + len(animals)
+                analyzed = True
             else:
+                # The pet half failed while the faces came back: record
+                # it for the pet model only, so the next scan retries.
                 upsert_people_asset_index(
                     connection,
                     asset_id=str(candidate["asset_id"]),
-                    model_id=model_id,
-                    model_version=model_version,
+                    model_id=pet_id,
+                    model_version=pet_version,
                     input_hash=None,
                     status="failed",
                     face_count=0,
-                    error_text=str(response.get("error") or "People Worker failed"),
-                    commit=True,
+                    error_text=str(response.get("animals_error") or "People Worker returned no animals"),
+                    commit=False,
                 )
-                stats["failed"] = int(stats["failed"]) + 1
-            advance_cursor(position)
+        if analyzed:
+            stats["analyzed"] = int(stats["analyzed"]) + 1
+            analyzed_since_cluster += 1
+        else:
+            stats["skipped"] = int(stats["skipped"]) + 1
+        connection.commit()
+        complete(photo["position"])
+        # Long scans should surface people progressively, not only at
+        # the end: re-cluster periodically so candidates appear on the
+        # wall while the scan is still running.
+        if cluster_every > 0 and analyzed_since_cluster >= cluster_every:
+            interim = rebuild_candidate_groups(
+                connection,
+                model_id=model_id,
+                model_version=model_version,
+                checkpoint=checkpoint,
+                commit=False,
+            )
+            interim_pets = cluster_pets()
+            connection.commit()
+            stats["groups"] = interim["groups"]
+            if interim_pets is not None:
+                stats["pet_groups"] = interim_pets["groups"]
+            analyzed_since_cluster = 0
 
+    try:
+        in_flight = 0
+        pausing = False
+        while True:
+            # Keep every worker busy, one photo each. A photo is taken (and
+            # the cancel and pause checked) only when a worker is free for
+            # it, and a worker is started only for a photo that needs one.
+            while not pausing and (idle or len(pool) < worker_count):
+                try:
+                    photo = next_photo()
+                except JobPaused:
+                    pausing = True  # let the photos already sent finish
+                    break
+                if photo is None:
+                    break
+                if idle:
+                    worker = idle.pop()
+                else:
+                    worker = _PeopleWorker(worker_argv, answers)
+                    pool.append(worker)
+                    started.append(worker)
+                worker.busy = photo
+                worker.send(photo["request"])
+                in_flight += 1
+            if in_flight == 0:
+                break
+            worker, line = answers.get()
+            if worker.busy is None:
+                # An idle worker that went away: the next photo starts another.
+                if line is None and worker in pool:
+                    pool.remove(worker)
+                    if worker in idle:
+                        idle.remove(worker)
+                continue
+            photo, worker.busy = worker.busy, None
+            in_flight -= 1
+            if line is None:
+                raise RuntimeError(worker.died() or "People Worker stopped before returning a response")
+            record(photo, json.loads(line))
+            idle.append(worker)
+        if pausing:
+            raise JobPaused()
         return cluster_and_finish(active_cursor)
     except JobPaused:
         return _mark_people_paused(
@@ -571,7 +723,7 @@ def run_people_index_job(
             payload,
             stats,
             active_cursor,
-            _fraction(int(active_cursor["offset"]), len(candidates)),
+            _fraction(int(stats["processed"]), len(candidates)),
         )
     except JobCancelled:
         final = _mark_cancelled(
@@ -579,7 +731,7 @@ def run_people_index_job(
             job_id,
             payload,
             result={**stats, "resume_cursor": active_cursor},
-            progress=_fraction(int(active_cursor["offset"]), len(candidates)),
+            progress=_fraction(int(stats["processed"]), len(candidates)),
         )
         update_job(connection, job_id, resume_cursor=active_cursor)
         return final
@@ -590,30 +742,14 @@ def run_people_index_job(
             status="failed",
             payload=payload,
             result={**stats, "current_phase": None},
-            progress=_fraction(int(active_cursor["offset"]), len(candidates)),
+            progress=_fraction(int(stats["processed"]), len(candidates)),
             resume_cursor=active_cursor,
             error_text=str(error),
         )
         raise
     finally:
-        if worker is not None:
-            if worker.stdin is not None and not worker.stdin.closed:
-                worker.stdin.close()
-            if worker.poll() is None:
-                try:
-                    worker.wait(timeout=1)
-                except subprocess.TimeoutExpired:
-                    worker.terminate()
-                    try:
-                        worker.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        worker.kill()
-                        worker.wait(timeout=5)
-            if worker.stdout is not None and not worker.stdout.closed:
-                worker.stdout.close()
-            # The drain thread closes stderr when the worker's end closes.
-            if stderr_drain is not None:
-                stderr_drain.join(timeout=1)
+        for worker in started:
+            worker.close()
 
 
 _HD_PHASE = {"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0}
