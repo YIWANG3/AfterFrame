@@ -15,7 +15,8 @@
 //   2. while an import runs, pauses the people scan (a core a worker, and an
 //      import keeps most of the cores busy), the app's own pause, which it
 //      lifts once imports are over (pause_requested 2, db/jobs.py); the
-//      user's pause stays theirs. Colour, look-alike and orientation
+//      user's pause stays theirs, and a scan the user resumes meanwhile is
+//      left to run. The automatic colour, look-alike and orientation
 //      catch-ups and batch HD previews asked for meanwhile are noted and
 //      started then (tasks.js deferUntilImportsEnd);
 //   3. follows up the imports that ended (succeeded, cancelled or failed)
@@ -54,6 +55,8 @@ function createImportPipeline({
 }) {
   let queue = [];
   const deferred = new Map();
+  // Scans the user resumed while an import ran: left to run until imports end.
+  const resumedByUser = new Set();
   let sweeping = null;
   let again = false;
   let soon = null;
@@ -83,6 +86,10 @@ function createImportPipeline({
 
   function deferUntilImportsEnd(type, options) {
     if (startDeferred[type]) deferred.set(type, { ...(options || {}) });
+  }
+
+  function jobResumed(jobId) {
+    if (jobId) resumedByUser.add(String(jobId));
   }
 
   // ── the sweep ────────────────────────────────────────────────────────────
@@ -133,12 +140,13 @@ function createImportPipeline({
 
     if (importing) {
       for (const job of active) {
-        if (job.job_type !== PEOPLE || job.cancel_requested) continue;
+        if (job.job_type !== PEOPLE || job.cancel_requested || resumedByUser.has(job.job_id)) continue;
         if (job.status === "running" || job.status === "queued") {
           await commands.pauseJob(job.job_id, { forImport: true });
         }
       }
     } else {
+      resumedByUser.clear();
       for (const job of active) {
         if (job.job_type === PEOPLE && job.status === "paused" && job.paused_for_import && !job.cancel_requested) {
           const resumed = await people.resumePeopleIndexJob(job.job_id);
@@ -245,6 +253,7 @@ function createImportPipeline({
   function catalogChanged() {
     queue = [];
     deferred.clear();
+    resumedByUser.clear();
     sweepSoon();
   }
 
@@ -252,6 +261,7 @@ function createImportPipeline({
     startImport,
     importStarted,
     deferUntilImportsEnd,
+    jobResumed,
     jobExited: sweepSoon,
     catalogChanged,
     sweep,

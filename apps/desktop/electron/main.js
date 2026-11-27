@@ -227,6 +227,7 @@ const tasks = createTaskStarters({
   // So is the import pipeline (./pipeline.js), set before any window asks.
   onImportStarted: () => services.pipeline?.importStarted(),
   deferUntilImportsEnd: (type, options) => services.pipeline?.deferUntilImportsEnd(type, options),
+  onJobResumed: (jobId) => services.pipeline?.jobResumed(jobId),
 });
 const { startImportTask } = tasks;
 

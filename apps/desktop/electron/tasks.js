@@ -14,8 +14,10 @@
 //                                    its worker relaunched, not a status flip
 //   onImportStarted                  ./pipeline.js: an import began (background
 //                                    analysis makes way for it)
-//   deferUntilImportsEnd(type, opts) ./pipeline.js: analysis asked for while an
-//                                    import runs, started once it is over
+//   deferUntilImportsEnd(type, opts) ./pipeline.js: automatic analysis asked for
+//                                    while an import runs, started once it is over
+//   onJobResumed(jobId)              ./pipeline.js: the user (or an agent) resumed
+//                                    a job, which an import then doesn't pause
 // The job-list projection, the resume routing and the default repaint
 // provider live here too (review 2026-10-14 §D): the IPC handlers and the
 // MCP tools used to carry a copy each, and a people_index resume that only
@@ -42,6 +44,7 @@ function createTaskStarters({
   resumePeopleIndexJob,
   onImportStarted = () => {},
   deferUntilImportsEnd = null,
+  onJobResumed = () => {},
 }) {
   function formatJobStatus(job) {
     if (!job) {
@@ -110,10 +113,11 @@ function createTaskStarters({
     return await commands.createJob(jobType, payload, { priority: PRIORITY.user, ...(options || {}) });
   }
 
-  // Analysis that waits for imports (docs/import-pipeline-redesign.md §5.3):
-  // asked for while an import runs, it is noted and started when imports are
-  // over, so it doesn't take the cores an import is using. `null` when it may
-  // go ahead now.
+  // Automatic analysis waits for imports (docs/import-pipeline-redesign.md
+  // §5.3): a catch-up asked for while an import runs is noted and started
+  // when imports are over, so it doesn't take the cores an import is using.
+  // A run the user or an agent asked for goes ahead. `null` when it may go
+  // ahead now.
   async function deferredForImport(type, options) {
     if (!deferUntilImportsEnd) return null;
     const importing = await latestJobStatus("import");
@@ -140,6 +144,8 @@ function createTaskStarters({
     const job = await commands.getJob(jobId);
     if (job?.job_type === "people_index" && resumePeopleIndexJob) {
       const resumed = await resumePeopleIndexJob(jobId);
+      // Asked for: an import running now doesn't pause it again.
+      onJobResumed(jobId);
       if (resumed != null) return resumed;
     }
     return await commands.resumeJob(jobId);
@@ -227,7 +233,7 @@ function createTaskStarters({
     if (current.running) {
       return current;
     }
-    const deferred = await deferredForImport("colors", { force, auto });
+    const deferred = auto ? await deferredForImport("colors", { force, auto }) : null;
     if (deferred) return deferred;
     // The automatic catch-up honours the switch; a run asked for in
     // Settings is explicit and goes ahead regardless.
@@ -258,7 +264,7 @@ function createTaskStarters({
     if (current.running) {
       return current;
     }
-    const deferred = await deferredForImport("visual", { force, auto });
+    const deferred = auto ? await deferredForImport("visual", { force, auto }) : null;
     if (deferred) return deferred;
     const status = await commands.visualStatus();
     const count = force ? (status?.hashed || 0) + (status?.missing || 0) : (status?.missing || 0);
@@ -273,6 +279,7 @@ function createTaskStarters({
   // How each photo shows (portrait / landscape), read off thumbnails made
   // before the shape was recorded: a catalog from an older version, once.
   // New thumbnails record theirs. Nothing to do is answered without a job.
+  // Only ever the catch-up on opening a catalog, so it waits for imports.
   async function startOrientationTask() {
     const current = await latestJobStatus("orientation");
     if (current.running) {

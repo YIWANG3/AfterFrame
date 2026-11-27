@@ -147,6 +147,24 @@ test("when imports are over the scan the app paused goes on; the one the user pa
   assert.deepEqual(calls.resumed, ["people-app"]);
 });
 
+test("a scan the user resumes during an import is left to run, until imports are over", async () => {
+  const { pipeline, calls, state } = setup({
+    jobs: [
+      { job_id: "import-now", job_type: "import", status: "running" },
+      { job_id: "people-resumed", job_type: "people_index", status: "running" },
+    ],
+  });
+  pipeline.jobResumed("people-resumed");
+  await pipeline.sweep();
+  assert.deepEqual(calls.paused, []);
+  // Once imports are over, the next import pauses it like any other.
+  state.jobs = [{ job_id: "people-resumed", job_type: "people_index", status: "running" }];
+  await pipeline.sweep();
+  state.jobs.push({ job_id: "import-next", job_type: "import", status: "running" });
+  await pipeline.sweep();
+  assert.deepEqual(calls.paused, [["people-resumed", { forImport: true }]]);
+});
+
 test("a scan under way when the import ended doesn't see its photos: a new one starts after it", async () => {
   const { pipeline, calls, state } = setup({
     settings: { peopleRecognition: { autoIndexOnImport: true } },
