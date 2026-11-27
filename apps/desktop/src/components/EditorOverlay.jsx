@@ -976,7 +976,7 @@ export default function EditorOverlay({
   useEditorTestApi(open, {
     executeSaveRef, previewReady: !!previewSource, resetItemRef, itemKey, baseSnapshotRef, sourceImageRef,
     addTextLayer, commitLayers, loadDepthFromPath, layers, tool, setTool,
-    editorStateRef, cropRect, displayLayers, selectedIds, historyIndexRef, historyRef,
+    editorState, editorStateRef, layersRef, cropRect, displayLayers, selectedIds, historyIndexRef, historyRef,
     imageRect, screenOutputRect, screenOutputView, viewTransform, placement, viewportSize,
     commitAspect, applyCanvasPad, clearFramePreset, applyFramePreset, frameToolRef,
     deleteLayer: handleDeleteLayer, moveLayer: handleMoveLayer, selectLayers, undo: handleUndo, redo: handleRedo,

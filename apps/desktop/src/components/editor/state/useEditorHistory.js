@@ -15,9 +15,10 @@ import { dropEditedSources } from "../frameUserTemplates";
 import { cloneLayers } from "../layerStack";
 
 // Value equality for a layer array. Reference-equal short-circuits (the common
-// case when only the transform changed); otherwise a per-layer compare. Only
-// runs at commit time (not per drag frame), so the stringify fallback is fine.
-function layersEqual(a, b) {
+// case when only the transform changed); otherwise a per-layer compare. Runs
+// at commit time (not per drag frame) and in the e2e backdoor's wait before a
+// save (editorTestApi.js), so the stringify fallback is fine.
+export function layersEqual(a, b) {
   if (a === b) return true;
   if (!a || !b || a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {

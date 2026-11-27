@@ -12,12 +12,60 @@ import { useEffect, useRef } from "react";
 import { getSourceDimensions } from "./render/canvasHelpers";
 import { getStageBounds } from "./imageMath";
 import { resolveSplitOutputDir } from "./state/useSplitExport";
+import { stateEquals } from "./state/editorStateModel";
+import { layersEqual } from "./state/useEditorHistory";
 
-function buildEditorTestApi(h) {
+// An edit lands in editorStateRef / layersRef at once and in the rendered
+// state a render later, and a save reads the rendered state (EditorOverlay's
+// buildSaveArgs). A backdoor call runs outside React's events, so that render
+// waits for a task of its own, and a spec that polled getState() (the refs)
+// could save a frame early: an undone rotation still rotated, a 1:1 crop
+// uncropped (18-editor-transform on CI, 2026-11-24 and 11-27). Wait until the
+// rendered transform and layer state equal the refs, on two checks in a row
+// so a commit made by an effect of that render is waited for too. Pictures
+// those layers load (a new sticker's decode, a font) are not waited for.
+async function renderCaughtUp(latest, timeoutMs = 5000) {
+  const caughtUp = () => {
+    const h = latest();
+    return stateEquals(h.editorState, h.editorStateRef.current) && layersEqual(h.layers, h.layersRef.current);
+  };
+  const deadline = performance.now() + timeoutMs;
+  for (let inARow = 0; inARow < 2;) {
+    inARow = caughtUp() ? inARow + 1 : 0;
+    if (inARow === 2) return;
+    // A save of an older state would fail the way the race did; say why.
+    if (performance.now() > deadline) throw new Error(`saveAs: the editor had not rendered its latest state after ${timeoutMs} ms`);
+    await nextTask();
+  }
+}
+
+// A task of its own, posted the way React's scheduler posts its renders and
+// effects, so those already queued run first. Not a timer: a window that is
+// hidden or covered gets its timers throttled to one a second. One channel,
+// one message per waiter, answered in order.
+let taskChannel = null;
+const taskWaiters = [];
+function nextTask() {
+  if (!taskChannel) {
+    taskChannel = new MessageChannel();
+    taskChannel.port1.onmessage = () => taskWaiters.shift()?.();
+  }
+  return new Promise((resolve) => {
+    taskWaiters.push(resolve);
+    taskChannel.port2.postMessage(null);
+  });
+}
+
+// `latest()` is the handles bag of the latest render, for a method that
+// awaits: its own `h` is the one of the render it was called in.
+function buildEditorTestApi(h, latest) {
   return {
-    // executeSave is itself kept in a ref (see executeSaveRef) so a backdoor
-    // save after rotating never runs an older closure and saves unrotated.
-    saveAs: (path) => h.executeSaveRef.current?.(path),
+    // The save runs the latest executeSave (executeSaveRef) once the render
+    // has caught up with the edits before it (renderCaughtUp).
+    saveAs: async (path) => {
+      await renderCaughtUp(latest);
+      return latest().executeSaveRef.current?.(path);
+    },
     // Preview decoded. 18-editor-transform polls this while it deliberately
     // holds back viewport measurements, so it must not imply a measured stage.
     getPreviewReady: () => h.previewReady,
@@ -155,8 +203,10 @@ function buildEditorTestApi(h) {
 // `handles` is the bag of refs, values and callbacks the methods read; pass
 // it fresh on every render.
 export function useEditorTestApi(open, handles) {
+  const handlesRef = useRef(handles);
+  handlesRef.current = handles;
   const testApiRef = useRef(null);
-  testApiRef.current = buildEditorTestApi(handles);
+  testApiRef.current = buildEditorTestApi(handles, () => handlesRef.current);
 
   useEffect(() => {
     if (!open) return undefined;
