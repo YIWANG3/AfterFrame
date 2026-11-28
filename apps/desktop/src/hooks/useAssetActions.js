@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import api from "../api";
 import { confirm } from "../components/confirm";
 import { fileName } from "../utils/format";
+import { madeInCatalog } from "../utils/madeInCatalog";
 
 // Missing thumbnails made in one background pass: a short wait for the first
 // of them to show, and few enough processes for a long list.
@@ -21,10 +22,12 @@ export default function useAssetActions({ workspaceRef, itemById, pushToast }) {
   const deleteAssets = async (ids) => {
     const list = [...new Set((ids || []).filter(Boolean))];
     if (!list.length) return;
+    const catalogPath = workspaceRef.current?.info?.catalogPath;
+    const made = list.filter((id) => madeInCatalog(itemById.get(id)?.image_path, catalogPath)).length;
     const ok = await confirm({
       title: t("deleteTitle"),
       message: t("deleteMsg", { count: list.length }),
-      detail: t("deleteDetail"),
+      detail: made ? t("deleteDetailMade", { count: made }) : t("deleteDetail"),
       confirmLabel: t("remove"),
       cancelLabel: t("cancel"),
       danger: true,

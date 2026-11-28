@@ -2,6 +2,7 @@
 // cross-platform "reveal in Finder/Explorer".
 
 const { withCatalog } = require("./guard");
+const { removeFromLibrary } = require("../derivedFiles");
 
 function register({ ipcMain, shell, dialog, BrowserWindow, commands, media: { addAllowedMediaDir }, catalog: { state: getCatalogState }, getUserDataPath, t }) {
   const fs = require("node:fs");
@@ -173,10 +174,16 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, media: { ad
     return await commands.scanNewMedia(ds) || { new_files: [], scanned: 0 };
   });
 
+  // Remove from Library: the records go, the files stay, except the ones
+  // AfterFrame made inside the catalog (../derivedFiles.js), which go to the Trash.
   ipcMain.handle("workspace:delete-image-assets", async (_event, assetIds) => {
     const ids = [...new Set((assetIds || []).filter(Boolean))];
     if (!ids.length) return [];
-    return await commands.deleteImageAssets(ids);
+    return await removeFromLibrary({
+      commands, assetIds: ids,
+      catalogPath: getCatalogState().currentCatalogPath,
+      trashItem: (file) => shell.trashItem(file),
+    });
   });
 
   // Delete from disk: move the originals to the OS trash (recoverable), THEN

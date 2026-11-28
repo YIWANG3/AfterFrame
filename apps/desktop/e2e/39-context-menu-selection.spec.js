@@ -216,3 +216,44 @@ test("Delete from Disk… moves the file to the Trash after the in-app confirm",
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Review 2026-11-27: a photo AfterFrame made itself (here a collage, in the
+// catalog's derived folder) used to stay on disk forever once removed from
+// the library. Delete from Catalog now sends that file to the Trash, says so
+// in its confirm, and still keeps an imported original where it is.
+test("Delete from Catalog sends a collage AfterFrame made to the Trash and keeps the imported original", async () => {
+  test.setTimeout(120_000);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-remove-made-"));
+  const original = path.join(dir, "keep_me.jpg");
+  fs.writeFileSync(original, TINY_JPEG);
+  let made = null;
+  try {
+    const imported = await callTool("import_directory", { image_dirs: [dir] });
+    expect(imported.status).toBe("succeeded");
+    const keep = ctx.window.locator("[data-gallery-item='true'][data-image-path$='keep_me.jpg']");
+    await expect(keep).toBeVisible({ timeout: 15_000 });
+
+    const sources = await cards().evaluateAll((els) => els.slice(0, 2).map((el) => el.getAttribute("data-asset-id")));
+    const collage = await callTool("render_collage", { asset_ids: sources, export_width: 400 });
+    made = collage.results[0].path;
+    expect(fs.realpathSync(path.dirname(made))).toBe(fs.realpathSync(path.join(ctx.catalogDir, "derived")));
+    const mine = ctx.window.locator(`[data-gallery-item='true'][data-image-path$='${path.basename(made)}']`);
+    await expect(mine).toBeVisible({ timeout: 20_000 });
+
+    await keep.click();
+    await mine.click({ modifiers: ["ControlOrMeta"] });
+    await expect(selected()).toHaveCount(2);
+    await mine.click({ button: "right" });
+    await ctx.window.getByText("Delete from Catalog", { exact: true }).click();
+    await expect(ctx.window.getByText(/The one AfterFrame made in the catalog \(an edit, a collage, a frame\) goes to the Trash\./)).toBeVisible();
+    await ctx.window.getByRole("button", { name: "Remove", exact: true }).click();
+
+    await expect(keep).toHaveCount(0, { timeout: 15_000 });
+    await expect(mine).toHaveCount(0, { timeout: 15_000 });
+    await expect.poll(() => fs.existsSync(made), { timeout: 10_000 }).toBe(false);
+    expect(fs.existsSync(original)).toBe(true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (made) fs.rmSync(made, { force: true });
+  }
+});

@@ -1,5 +1,7 @@
 # AfterFrame Agent Native 设计：内嵌 MCP Server
 
+> 状态：2026-11-28 `delete_assets`：AfterFrame 自己在图库 `derived/` 里生成的文件（编辑、拼图、边框）随记录一起移到废纸篓，和界面上的「从图库移除」一样；导入的原文件仍然不动（`electron/derivedFiles.js`，docs/review/2026-11-27-磁盘只增不减.md）。
+
 > 状态：2026-11-27 「缺失的原文件」从单独的位置改为筛选项：search_assets 与 manage_collections 的 rules 加 `missing`（true / false；sidecar facet `missing`，db/facets.py，按 `assets.exists_on_disk`；带它的浏览第一页先校验整个图库），status "missing" 仍可用。
 
 > 状态：2026-11-17 同拍 RAW+JPG（schema 15，docs/raw-jpg-pairing-plan.md）：合并时搜索只返回 JPG，记录带 `raw_pair_path`、`has_raw: true`；update_assets / delete_assets 等写操作在 sidecar 分发处自动带上合并的 RAW，工具不变。
