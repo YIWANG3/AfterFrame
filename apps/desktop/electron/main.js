@@ -65,6 +65,7 @@ const { createUiScale } = require("./uiScale");
 const { loadDevEnv } = require("./devEnv");
 const clipboardIpc = require("./ipc/clipboard");
 const { createUpdater } = require("./updater");
+const { removeLeftoverCompiledModels } = require("./compiledModelLeftovers");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
 // directory so E2E tests get a clean catalog/settings/sticker library per run.
@@ -446,6 +447,13 @@ app.whenReady().then(async () => {
   });
   // Up to 0.5.14 the renders lived in the temp folder, which Windows never empties.
   fs.rm(path.join(os.tmpdir(), "afterframe-heic-cache"), { recursive: true, force: true }, () => {});
+  // Compiled copies of the face, pet and depth models that the native helpers
+  // left in the temp folder (./compiledModelLeftovers.js).
+  if (process.platform === "darwin") {
+    removeLeftoverCompiledModels()
+      .then((removed) => { if (removed.length) console.log(`[models] removed ${removed.length} compiled models left in the temp folder`); })
+      .catch((err) => console.warn("[models] could not remove compiled models left in the temp folder:", err?.message || err));
+  }
 
   const catalogPreparation = sample.prepareCatalogPath().finally(() => {
     // A paused task remains paused; only queued durable people tasks are
