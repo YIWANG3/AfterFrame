@@ -191,6 +191,65 @@ class CountryCityMigrationTest(unittest.TestCase):
         self.assertEqual(backup.execute("SELECT schema_version FROM catalog_info").fetchone()[0], 8)
         self.assertEqual(backup.execute("SELECT COUNT(*) FROM asset_locations").fetchone()[0], 4)
 
+    def _old_backups(self, *versions: int) -> None:
+        for version in versions:
+            self.path.with_name(f"catalog.sqlite3.schema{version}.bak").write_bytes(b"old")
+
+    def test_an_upgrade_keeps_the_two_most_recent_backups(self) -> None:
+        # Review 2026-11-27: one full copy per upgrade, never deleted, was
+        # seven copies (365 MB) beside one library.
+        connection = create_v8_catalog(self.path)
+        self.addCleanup(connection.close)
+        self._old_backups(5, 6, 7)
+        self.path.with_name("catalog.sqlite3.schema6.bak-wal").write_bytes(b"")
+        self.path.with_name("catalog.sqlite3.schema6.bak-shm").write_bytes(b"")
+        self.path.with_name("catalog.sqlite3.before-repair.bak").write_bytes(b"mine")
+        self.path.with_name("other.sqlite3.schema3.bak").write_bytes(b"not this catalog's")
+
+        init_db(connection)
+
+        self.assertEqual(
+            sorted(p.name for p in self.path.parent.iterdir() if ".bak" in p.name),
+            [
+                "catalog.sqlite3.before-repair.bak",
+                "catalog.sqlite3.schema7.bak",
+                "catalog.sqlite3.schema8.bak",
+                "other.sqlite3.schema3.bak",
+            ],
+        )
+        backup = sqlite3.connect(self.path.with_name("catalog.sqlite3.schema8.bak"))
+        self.addCleanup(backup.close)
+        self.assertEqual(backup.execute("SELECT schema_version FROM catalog_info").fetchone()[0], 8)
+
+    def test_an_up_to_date_catalog_trims_old_backups_when_opened(self) -> None:
+        # A library upgraded before the trim: its next open tidies up.
+        connection = sqlite3.connect(self.path)
+        self.addCleanup(connection.close)
+        connection.row_factory = sqlite3.Row
+        init_db(connection)
+        self._old_backups(8, 9, 10, 12)
+
+        init_db(connection)
+
+        self.assertEqual(
+            sorted(p.name for p in self.path.parent.glob("*.bak")),
+            ["catalog.sqlite3.schema10.bak", "catalog.sqlite3.schema12.bak"],
+        )
+
+    def test_a_failed_upgrade_keeps_every_backup(self) -> None:
+        connection = create_v8_catalog(self.path)
+        self.addCleanup(connection.close)
+        self._old_backups(5, 6, 7)
+
+        with patch("media_workspace.db.core.migrate", side_effect=SchemaMigrationError("boom")):
+            with self.assertRaises(SchemaMigrationError):
+                init_db(connection)
+
+        self.assertEqual(
+            sorted(p.name for p in self.path.parent.glob("*.bak")),
+            [f"catalog.sqlite3.schema{v}.bak" for v in (5, 6, 7, 8)],
+        )
+
     def test_a_new_catalog_is_not_backed_up(self) -> None:
         connection = sqlite3.connect(self.path)
         self.addCleanup(connection.close)
