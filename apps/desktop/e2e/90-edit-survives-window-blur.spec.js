@@ -25,7 +25,9 @@ const focusEmulation = (enabled) => cdp.send("Emulation.setFocusEmulationEnabled
 async function switchAway() {
   await focusEmulation(false);
   await ctx.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].blur());
-  expect(await w().evaluate(() => document.hasFocus())).toBe(false);
+  // The page hears of it a moment later, longer on a slow machine; what
+  // follows only means something once it has.
+  await expect.poll(() => w().evaluate(() => document.hasFocus())).toBe(false);
 }
 async function comeBack() {
   await ctx.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].focus());

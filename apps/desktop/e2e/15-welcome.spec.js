@@ -21,7 +21,11 @@ async function expectSampleOriginals(window, userDataDir) {
     expect(row.image_path).toBe(fs.realpathSync(path.join(userDataDir, "afterframe", "sample.afcatalog", "photos", path.basename(row.image_path))));
     expect(row.image_metadata).toMatchObject(sampleManifest[path.basename(row.image_path)]);
   }
-  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getSummary())).toMatchObject({ image_assets: sampleNames.length });
+  // Right after the import the analysis that follows it keeps the sidecar
+  // busy: on a slow Mac one summary took 6.5 s to answer.
+  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getSummary()), {
+    timeout: 30_000,
+  }).toMatchObject({ image_assets: sampleNames.length });
 }
 
 test.describe("First run (no catalog)", () => {
@@ -37,6 +41,9 @@ test.describe("First run (no catalog)", () => {
     // previous test. A worker restart after failure must not cause a false
     // "No catalog is open" failure in the next test.
     if (testInfo.title.startsWith("sample library: reset") || testInfo.title.startsWith("legacy sample previews")) {
+      // These two import the sample library before they start and again in
+      // the test: past a minute on the Intel build under Rosetta.
+      test.slow();
       await window.getByRole("button", { name: "Browse Sample Library" }).click();
       await expectSampleOriginals(window, userDataDir);
     }
