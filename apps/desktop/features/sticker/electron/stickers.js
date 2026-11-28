@@ -15,11 +15,44 @@ const sharp = require("sharp");
 
 const THUMB_MAX_EDGE = 512;
 
+// A detection's scratch folder in the temp dir is removed by the renderer
+// when it is done with it (sticker-cleanup-scratch). One left behind by a
+// window closed with detections on screen, or by a crash, is swept at the next
+// start once it is this old: no detection is in use for a day, and the age
+// keeps safe the folders of a second running copy (the dev app beside the
+// installed one share the temp dir). Windows never empties it on its own
+// (review 2026-11-27, disk growth).
+const SCRATCH_PREFIX = "afterframe-sticker-";
+const STALE_SCRATCH_MS = 24 * 60 * 60 * 1000;
+
+async function sweepStaleScratch(tempDir, now = Date.now()) {
+  let names;
+  try {
+    names = await fs.promises.readdir(tempDir);
+  } catch {
+    return [];
+  }
+  const removed = [];
+  for (const name of names) {
+    if (!name.startsWith(SCRATCH_PREFIX)) continue;
+    const dir = path.join(tempDir, name);
+    try {
+      if (now - (await fs.promises.stat(dir)).mtimeMs < STALE_SCRATCH_MS) continue;
+      await fs.promises.rm(dir, { recursive: true, force: true });
+      removed.push(dir);
+    } catch {
+      /* gone already, or not ours to remove */
+    }
+  }
+  return removed;
+}
+
 function register({ app, ipcMain, nativeBin, platform = process.platform, media: { addAllowedMediaDir } }) {
   const stickerToolPath = path.join(nativeBin, "extract-sticker");
 
   const stickerLibraryDir = path.join(app.getPath("userData"), "stickers");
   try { fs.mkdirSync(stickerLibraryDir, { recursive: true }); } catch (_) {}
+  void sweepStaleScratch(app.getPath("temp"));
 
   function manifestPath() {
     return path.join(stickerLibraryDir, "library.json");
@@ -115,9 +148,19 @@ function register({ app, ipcMain, nativeBin, platform = process.platform, media:
 
     const scratchDir = path.join(
       app.getPath("temp"),
-      `afterframe-sticker-${crypto.randomBytes(6).toString("hex")}`,
+      `${SCRATCH_PREFIX}${crypto.randomBytes(6).toString("hex")}`,
     );
     fs.mkdirSync(scratchDir, { recursive: true });
+    try {
+      return await detectInto(scratchDir, sourcePath, options);
+    } catch (err) {
+      // The folder never reaches the renderer, so nothing else would remove it.
+      fs.rmSync(scratchDir, { recursive: true, force: true });
+      throw err;
+    }
+  });
+
+  async function detectInto(scratchDir, sourcePath, options) {
     // The renderer previews detected stickers via media:// — the scratch dir
     // is outside every baseline allowlist root (system temp), so admit it
     // explicitly the moment it exists.
@@ -174,7 +217,7 @@ function register({ app, ipcMain, nativeBin, platform = process.platform, media:
       sourceHeight: manifest.sourceHeight,
       instances,
     };
-  });
+  }
 
   // Promote finished PNG bytes (outline already baked) into the permanent
   // library and return the catalog entry.
@@ -258,7 +301,7 @@ function register({ app, ipcMain, nativeBin, platform = process.platform, media:
 
   ipcMain.handle("workspace:sticker-cleanup-scratch", async (_event, scratchDir) => {
     if (!scratchDir) return false;
-    if (!scratchDir.includes("afterframe-sticker-")) return false; // safety
+    if (!scratchDir.includes(SCRATCH_PREFIX)) return false; // safety
     try {
       await fs.promises.rm(scratchDir, { recursive: true, force: true });
       return true;
@@ -268,4 +311,4 @@ function register({ app, ipcMain, nativeBin, platform = process.platform, media:
   });
 }
 
-module.exports = { register };
+module.exports = { register, sweepStaleScratch };

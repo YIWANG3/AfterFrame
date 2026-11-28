@@ -359,6 +359,21 @@ class VisualJobTest(unittest.TestCase):
         self.assertEqual(visual_status(self.connection)["missing"], 3)
 
 
+class ProbeImageTest(unittest.TestCase):
+    def test_every_process_shares_one_probe_and_none_is_left_half_written(self):
+        # Review 2026-11-27: one probe per process, never deleted, was
+        # hundreds of files a day in the temp dir.
+        from media_workspace.visual import _probe_image
+
+        with tempfile.TemporaryDirectory() as directory, patch.object(tempfile, "tempdir", directory):
+            first = _probe_image()
+            with patch("os.getpid", return_value=os.getpid() + 1):
+                self.assertEqual(_probe_image(), first, "another process gets the same file")
+            self.assertEqual(sorted(os.listdir(directory)), ["afterframe-print-probe.jpg"])
+            with Image.open(first) as probe:
+                self.assertEqual((probe.format, probe.size), ("JPEG", (128, 128)))
+
+
 class VisualMigrationTest(unittest.TestCase):
     def test_v11_catalog_gets_the_visual_table(self) -> None:
         connection = sqlite3.connect(":memory:")

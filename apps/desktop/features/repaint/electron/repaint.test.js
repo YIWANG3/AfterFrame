@@ -6,11 +6,21 @@ const path = require("node:path");
 const { createDialogs } = require("../../../electron/ipc/dialogs");
 const { register } = require("./repaint");
 
+// Every folder these tests make goes when the file is done (review
+// 2026-11-27: each run left its folders in the temp dir).
+const made = [];
+test.after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
+function tempDir(prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  made.push(dir);
+  return dir;
+}
+
 const DEFAULT_DIR = os.tmpdir();
 const BrowserWindow = { fromWebContents: (sender) => ({ id: sender.id }) };
 const event = { sender: { id: 7 } };
 
-function registered(pick, { settings = {}, userData = fs.mkdtempSync(path.join(os.tmpdir(), "af-repaint-")) } = {}) {
+function registered(pick, { settings = {}, userData = tempDir("af-repaint-") } = {}) {
   const calls = [];
   const dialog = { showOpenDialog: async (...args) => { calls.push(args); return pick; } };
   const handlers = new Map();
