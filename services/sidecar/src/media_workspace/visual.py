@@ -213,13 +213,24 @@ SLOW_PRINT_SECONDS = 0.05
 
 
 def _probe_image() -> Path:
-    """A small picture to time a print on, made once per process."""
+    """A small picture to time a print on, the same for every process.
+
+    One file in the temp dir that all of them share. It was one per process
+    (`afterframe-print-probe-<pid>.jpg`) and none was ever deleted, a new one
+    for every job runner: hundreds a day (review 2026-11-27, disk growth).
+    Written beside its name and moved in, so a process reading it while
+    another writes it never sees half a JPEG."""
     import tempfile
 
-    path = Path(tempfile.gettempdir()) / f"afterframe-print-probe-{os.getpid()}.jpg"
+    path = Path(tempfile.gettempdir()) / "afterframe-print-probe.jpg"
     if not path.exists():
         pixels = np.add.outer(np.arange(128), np.arange(128)).astype(np.uint8)
-        Image.fromarray(pixels, "L").convert("RGB").save(path, quality=85)
+        partial = path.with_name(f".afterframe-print-probe-{os.getpid()}.jpg")
+        try:
+            Image.fromarray(pixels, "L").convert("RGB").save(partial, format="JPEG", quality=85)
+            os.replace(partial, path)
+        finally:
+            partial.unlink(missing_ok=True)
     return path
 
 

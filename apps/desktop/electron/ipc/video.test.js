@@ -14,6 +14,7 @@ function setup(runVideoTool, { videoToolPath = null, timeouts } = {}) {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-video-ipc-"));
   const clip = path.join(userData, "clip.mp4");
   fs.writeFileSync(clip, "a clip");
+  made.push(userData);
   register({
     ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
     app: { getPath: () => userData },
@@ -25,6 +26,11 @@ function setup(runVideoTool, { videoToolPath = null, timeouts } = {}) {
   const ask = (channel, ...args) => handlers.get(channel)(null, ...args);
   return { ask, userData, clip };
 }
+
+// Every folder setup() makes goes when the file is done (review 2026-11-27:
+// each run left its folders in the temp dir).
+const made = [];
+test.after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
 
 test("the proxy is the sidecar's transcode, made once", async () => {
   const calls = [];
