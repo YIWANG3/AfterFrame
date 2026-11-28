@@ -154,10 +154,19 @@ test("Integrations tab shows the live MCP endpoint and copies a working config",
 test("About tab renders the product blurb", async () => {
   await ctx.window.getByRole("button", { name: "About" }).click();
   await expect(ctx.window.getByText(/local-first photo workspace/i)).toBeVisible();
-  // A dev run has no updater (e2e/104-auto-update.spec.js gives it a feed):
-  // About keeps the way to the releases page instead.
-  await expect(ctx.window.getByRole("button", { name: "Open Releases" })).toBeVisible();
-  await expect(ctx.window.locator("[data-update-status]")).toHaveCount(0);
+  const hasUpdater = await ctx.app.evaluate(({ app }) => app.isPackaged && ["darwin", "win32"].includes(process.platform));
+  if (hasUpdater) {
+    // A packaged build (AFTERFRAME_E2E_EXECUTABLE) has the updater: Software
+    // Update, waiting to be asked, since under e2e it doesn't check by itself.
+    await expect(ctx.window.locator("[data-update-status]")).toHaveAttribute("data-update-status", "idle");
+    await expect(ctx.window.getByRole("button", { name: "Check Now" })).toBeVisible();
+    await expect(ctx.window.getByRole("button", { name: "Open Releases" })).toHaveCount(0);
+  } else {
+    // A dev run has no updater (e2e/104-auto-update.spec.js gives it a feed):
+    // About keeps the way to the releases page instead.
+    await expect(ctx.window.getByRole("button", { name: "Open Releases" })).toBeVisible();
+    await expect(ctx.window.locator("[data-update-status]")).toHaveCount(0);
+  }
 });
 
 test("Escape closes settings and restores the gallery", async () => {

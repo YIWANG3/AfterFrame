@@ -97,6 +97,13 @@ test.afterAll(async () => {
 });
 
 test("a new version the app finds by itself is said once, and leads to Settings ▸ About", async () => {
+  // The Intel build run on Apple silicon (AFTERFRAME_E2E_EXECUTABLE) goes
+  // through Rosetta, and for its first half minute its page is busy most of
+  // the time: tasks of 2 to 3 s, re-rendering, while the arm64 build has none
+  // over 50 ms. The 12 s toast came and went before Playwright could see it,
+  // let alone click it. The arm64 build and a dev run test it.
+  const appArch = await ctx.app.evaluate(() => process.arch);
+  test.skip(process.platform === "darwin" && process.arch === "arm64" && appArch === "x64", "the Intel build under Rosetta is too slow for a 12 s toast");
   const w = ctx.window;
   // Nothing asked: the check a moment after launch found it.
   await expect(w.getByText(`AfterFrame ${NEXT} is available`, { exact: true })).toBeVisible({ timeout: 20_000 });
