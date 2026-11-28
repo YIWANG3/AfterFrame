@@ -9,11 +9,21 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+// The real path, symlinks (and Windows' short names) resolved. A file that is
+// gone gets its nearest existing folder's real path with the rest appended,
+// so it compares like one that is still there.
 function realOrResolved(p) {
-  try {
-    return fs.realpathSync.native(p);
-  } catch {
-    return path.resolve(p);
+  let head = path.resolve(p);
+  const rest = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync.native(head), ...rest);
+    } catch {
+      const parent = path.dirname(head);
+      if (parent === head) return path.resolve(p);
+      rest.unshift(path.basename(head));
+      head = parent;
+    }
   }
 }
 
