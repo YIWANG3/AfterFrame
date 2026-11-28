@@ -4,6 +4,7 @@
 const os = require("node:os");
 const path = require("node:path");
 const { thumbnailUrl } = require("./shared");
+const { removeFromLibrary } = require("../../derivedFiles");
 const { EXPORT_FORMATS, EXPORT_FORMAT_NAMES, exportFormatForTarget } = require("../../../shared/formats.mjs");
 
 module.exports = (ctx) => {
@@ -296,7 +297,8 @@ module.exports = (ctx) => {
       name: "delete_assets",
       description:
         "Remove assets from the catalog (records, previews, version-stack membership). The original image files " +
-        "on disk are NOT touched. Confirm with the user first unless they explicitly asked to delete.",
+        "on disk are NOT touched; files AfterFrame made inside the catalog (edits, collages, frames in <catalog>/derived) " +
+        "go to the Trash with their records. Confirm with the user first unless they explicitly asked to delete.",
       inputSchema: {
         type: "object",
         properties: {
@@ -308,7 +310,7 @@ module.exports = (ctx) => {
         requireCatalog();
         const ids = (args.asset_ids || []).map(String).filter(Boolean);
         if (!ids.length) throw new Error("asset_ids is empty.");
-        const results = await commands.deleteImageAssets(ids);
+        const results = await removeFromLibrary({ commands, assetIds: ids, catalogPath: requireCatalog(), trashItem: deps.trashItem });
         for (const id of ids) forgetPreview(id);
         deps.broadcastCatalogChanged?.("assets", { ids });
         return { deleted: results.length, results };

@@ -99,6 +99,8 @@ function createMcpServer(host, { port = DEFAULT_PORT } = {}) {
     listActiveJobsFormatted: tasks.listActiveJobsFormatted,
     resumeJob: tasks.resumeJob,
     startVisualTask: tasks.startVisualTask,
+    // Remove from Library sends the files AfterFrame made to the Trash (../derivedFiles.js).
+    trashItem: (file) => host.shell.trashItem(file),
     // What other modules registered (host.services). The server is created
     // last, after all of them; they are still read at call time.
     startAnnotationTask: (...args) => services.annotation.startAnnotationTask(...args),
