@@ -4,7 +4,9 @@ Split from the monolithic db.py (review P3-5); one module per domain.
 """
 from __future__ import annotations
 
+import glob
 import json
+import re
 import sqlite3
 import zlib
 from hashlib import sha1
@@ -122,7 +124,8 @@ def _backup_before_migration(connection: sqlite3.Connection) -> Path | None:
     for that. It is for afterwards: migrate() refuses a catalog NEWER than the
     app, so once upgraded the catalog no longer opens in the version that was
     fine an hour ago. The copy is the way back. One per old version, never
-    overwritten; in-memory and brand-new catalogs have nothing to keep.
+    overwritten, the two most recent kept (_prune_schema_backups); in-memory
+    and brand-new catalogs have nothing to keep.
     """
     row = connection.execute("PRAGMA database_list").fetchone()
     db_file = row[2] if row is not None else ""
@@ -147,10 +150,46 @@ def _backup_before_migration(connection: sqlite3.Connection) -> Path | None:
     return target
 
 
+# Schema backups kept beside a catalog: the two most recent. The newest is the
+# way back to the version the catalog was last upgraded from; an older one
+# lacks everything done since and only takes room. Kept forever, they were
+# seven full copies, 365 MB, beside one library (review 2026-11-27).
+SCHEMA_BACKUPS_KEPT = 2
+
+
+def _prune_schema_backups(connection: sqlite3.Connection) -> list[Path]:
+    """Delete this catalog's schema backups past the SCHEMA_BACKUPS_KEPT most
+    recent (by the version in the name), and the -wal / -shm a backup opened
+    with sqlite3 leaves. Any other copy next to it is not ours to delete.
+    Returns the backups deleted."""
+    row = connection.execute("PRAGMA database_list").fetchone()
+    db_file = row[2] if row is not None else ""
+    if not db_file:
+        return []
+    source = Path(db_file)
+    name = re.compile(re.escape(source.name) + r"\.schema(\d+)\.bak")
+    backups: list[tuple[int, Path]] = []
+    for path in source.parent.glob(f"{glob.escape(source.name)}.schema*.bak"):
+        match = name.fullmatch(path.name)
+        if match:
+            backups.append((int(match.group(1)), path))
+    backups.sort(reverse=True)
+    deleted: list[Path] = []
+    for _version, path in backups[SCHEMA_BACKUPS_KEPT:]:
+        try:
+            for file in (path, path.with_name(f"{path.name}-wal"), path.with_name(f"{path.name}-shm")):
+                file.unlink(missing_ok=True)
+        except OSError:
+            continue  # in use or read-only: try again next time
+        deleted.append(path)
+    return deleted
+
+
 def init_db(connection: sqlite3.Connection) -> None:
     if connection.in_transaction:
         raise SchemaMigrationError("init_db requires a connection with no active transaction")
     if _is_current(connection):
+        _prune_schema_backups(connection)
         return
 
     _backup_before_migration(connection)
@@ -192,6 +231,8 @@ def init_db(connection: sqlite3.Connection) -> None:
     except Exception:
         connection.rollback()
         raise
+    # Only once the upgrade has held: a failed one keeps every way back.
+    _prune_schema_backups(connection)
 
 
 def _apply_latest_schema(connection: sqlite3.Connection) -> None:
