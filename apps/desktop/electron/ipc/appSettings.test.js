@@ -33,7 +33,7 @@ test("open-cache-dir: creates and opens a known cache folder, refuses an unknown
   assert.deepEqual(opened, [path.join(userData, "afterframe", "luts")]);
   assert.ok(fs.existsSync(path.join(userData, "afterframe", "luts")));
   assert.equal(await handlers.get("app:open-cache-dir")({}, "etc"), false);
-  assert.deepEqual(Object.keys(cacheDirs(userData)).sort(), ["depth", "luts", "renders", "stickers", "videoProxies"]);
+  assert.deepEqual(Object.keys(cacheDirs(userData)).sort(), ["depth", "luts", "renders", "stickers", "videoFrames", "videoProxies"]);
 });
 
 test("preview settings: read the subtree, merge on save", async () => {

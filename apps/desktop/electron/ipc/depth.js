@@ -8,6 +8,11 @@ const crypto = require("crypto");
 const { spawn } = require("child_process");
 const { spawnSafely } = require("../spawnSafely");
 const { createCompiledModelCache } = require("./compiledModelCache");
+const { pruneToBudget, touch } = require("../media/cacheBudget");
+
+// Depth maps kept, the most recently used first (review 2026-11-27): one is a
+// model-resolution PNG of about 50 KB, so this is some five thousand photos.
+const DEPTH_CACHE_BUDGET_BYTES = 256 * 1024 ** 2;
 
 // A PNG's pixel size from its header: the 8-byte signature, then the IHDR
 // chunk whose width and height are big-endian at bytes 16–23. Null for
@@ -30,7 +35,10 @@ function pngSize(file) {
   }
 }
 
-function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateAppSettings }) {
+function register({
+  app, ipcMain, dialog, isPackaged, readAppSettings, updateAppSettings,
+  cacheBudgetBytes = DEPTH_CACHE_BUDGET_BYTES,
+}) {
   // Precompiled by scripts/build-native.sh (it once ran as a `swift` script,
   // which needs Xcode or the Command Line Tools on the user's Mac).
   const depthToolPath = isPackaged
@@ -90,6 +98,7 @@ function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateApp
     const checkOnly = !!options?.checkOnly;
 
     if (!force && fs.existsSync(outputPath)) {
+      touch(outputPath);
       const size = pngSize(outputPath);
       return { outputPath, cached: true, width: size?.width ?? null, height: size?.height ?? null };
     }
@@ -117,6 +126,7 @@ function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateApp
           reject(new Error(stderr.trim() || `Depth inference failed (exit ${code}).`));
           return;
         }
+        pruneToBudget(depthCacheDir, cacheBudgetBytes, { keep: [outputPath], include: (name) => name.endsWith(".png") });
         const lines = stdout.trim().split("\n");
         const sizeMatch = (lines[1] || "").match(/(\d+)x(\d+)/);
         resolve({
