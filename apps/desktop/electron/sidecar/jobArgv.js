@@ -151,9 +151,11 @@ function orientationJob({ jobId }) {
   return ["run-orientation-job", "--job-id", String(jobId)];
 }
 
-// pets: { modelId, modelVersion, modelPath, manifestHash, threshold? } runs the
-// pet model in the same pass (docs/pet-recognition-design.md), or null.
-function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash, assetIds, pets = null }) {
+// pets: { modelId, modelVersion, modelPath, manifestHash, threshold?,
+// compiledModelPath? } runs the pet model in the same pass
+// (docs/pet-recognition-design.md), or null. compiledModelPath: where the
+// workers keep that model compiled (ipc/compiledModelCache.js).
+function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, compiledModelPath, manifestHash, assetIds, pets = null }) {
   const argv = [
     "run-people-index-job",
     "--job-id", String(jobId),
@@ -162,6 +164,7 @@ function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash,
     "--model-path", String(modelPath),
     "--manifest-hash", String(manifestHash),
   ];
+  pushIf(argv, "--compiled-model-path", compiledModelPath);
   if (pets) {
     argv.push(
       "--pet-model-id", String(pets.modelId),
@@ -169,6 +172,7 @@ function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash,
       "--pet-model-path", String(pets.modelPath),
       "--pet-manifest-hash", String(pets.manifestHash),
     );
+    pushIf(argv, "--pet-compiled-model-path", pets.compiledModelPath);
     if (Number.isFinite(pets.threshold)) argv.push("--pet-threshold", String(pets.threshold));
   }
   pushEach(argv, "--asset-id", assetIds);

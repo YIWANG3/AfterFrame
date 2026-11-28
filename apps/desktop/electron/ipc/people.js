@@ -20,6 +20,7 @@ const { spawnSafely } = require("../spawnSafely");
 const jobArgv = require("../sidecar/jobArgv");
 const { PRIORITY } = require("../tasks");
 const { withCatalog, catalogRequired, jobStatusHandler } = require("./guard");
+const { createCompiledModelCache } = require("./compiledModelCache");
 const {
   BUNDLED_ARCFACE_R100,
   BUNDLED_MODEL_KEY,
@@ -158,6 +159,30 @@ function register({
   const bundledPath = bundledModelPath({ isPackaged, resourcesPath, desktopDir });
   const bundledPetPath = bundledPetModelPath({ isPackaged, resourcesPath, desktopDir });
   const bundledLoadable = canLoadBundledModel({ platform, ...(osRelease ? { osRelease } : {}) });
+  // Where the workers of a scan keep the face and pet models compiled. They
+  // used to compile them into the temporary directory each time one started
+  // and leave them there: three times a scan, 125 MB each time.
+  const compiledModels = createCompiledModelCache({
+    dir: path.join(app.getPath("userData"), "people-compiled-models"),
+    appVersion: app.getVersion(),
+  });
+
+  // The compiled copies a job's workers load, or null for a model that is
+  // compiled already. When one still has to be compiled, the copies of models
+  // no longer in use go.
+  function compiledPaths(modelPath, petModelPath) {
+    const face = compiledModels.pathFor(modelPath);
+    const pet = petModelPath ? compiledModels.pathFor(petModelPath) : null;
+    const used = [face, pet].filter(Boolean);
+    if (used.some((compiled) => !fs.existsSync(compiled))) {
+      try {
+        compiledModels.pruneExcept(...used);
+      } catch (error) {
+        console.warn("[people] could not remove compiled models no longer in use", error?.message || error);
+      }
+    }
+    return { face, pet };
+  }
 
   function getSettings() {
     const source = readAppSettings()?.peopleRecognition;
@@ -373,14 +398,17 @@ function register({
     // Once the runner has resolved the request into concrete asset ids (stored
     // on the payload) a resume must not re-send the original request.
     const resolved = Array.isArray(payload.resolved_asset_ids);
+    const pets = petsForJob(payload);
+    const compiled = compiledPaths(modelPath, pets?.modelPath);
     return jobArgv.peopleIndexJob({
       jobId: job.job_id,
       modelId,
       modelVersion,
       modelPath,
+      compiledModelPath: compiled.face,
       manifestHash,
       assetIds: !resolved && Array.isArray(payload.requested_asset_ids) ? payload.requested_asset_ids : [],
-      pets: petsForJob(payload),
+      pets: pets && { ...pets, compiledModelPath: compiled.pet },
     });
   }
 

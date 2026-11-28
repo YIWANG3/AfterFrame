@@ -307,6 +307,8 @@ def run_people_index_job(
     pet_manifest_hash: str | None = None,
     pet_threshold: float | None = None,
     workers: int | None = None,
+    compiled_model_path: Path | None = None,
+    pet_compiled_model_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run one resumable batch through the precompiled native people worker.
 
@@ -321,6 +323,11 @@ def run_people_index_job(
     With a pet model the same pass finds cats and dogs too (one decode per
     photo): they are written under the pet model's id, each half keeps its
     own index record and skips on its own, and both are clustered at the end.
+
+    compiled_model_path (pet_compiled_model_path for the pet model) is where
+    the workers keep the model compiled: the first compiles it there, the
+    others and every later scan load it. Without one each worker compiles the
+    model for itself.
     """
     job = get_job(connection, job_id)
     if not job:
@@ -494,7 +501,10 @@ def run_people_index_job(
     idle: list[_PeopleWorker] = []
     worker_count = max(1, workers or people_worker_count())
     worker_argv = [str(resolved_worker), "--model", str(model_path),
-                   *(["--pet-model", str(pet_model_path)] if pets else []), "--serve"]
+                   *(["--compiled-model", str(compiled_model_path)] if compiled_model_path else []),
+                   *(["--pet-model", str(pet_model_path)] if pets else []),
+                   *(["--pet-compiled-model", str(pet_compiled_model_path)] if pets and pet_compiled_model_path else []),
+                   "--serve"]
     active_cursor: dict[str, Any] = {"offset": offset, "total": len(candidates)}
     analyzed_since_cluster = 0
     next_position = offset

@@ -11,6 +11,13 @@
 //   people-worker --pet-model /path/to/PetEmbedding.mlpackage --self-test
 //   people-worker --model /path/to/ArcFaceR100.mlpackage [--pet-model /path/to/PetEmbedding.mlpackage] --serve
 //
+// --compiled-model <path.mlmodelc> (and --pet-compiled-model for the pet
+// model): where to keep the model's compiled copy between runs. An .mlpackage
+// has to be compiled before it loads; Core ML compiles it into the temporary
+// directory, and a worker that left the copy there left 125 MB behind each
+// time it started, three times a scan. Without the flag the copy is removed
+// when the worker exits.
+//
 // In --serve mode stdin/stdout use one JSON object per line:
 //   request:  {"id":"asset-42","asset_path":"/path/to/photo.jpg",
 //              "known_input_hash":"…","known_pet_input_hash":"…"}
@@ -224,16 +231,8 @@ private final class ArcFaceModel {
     private let outputName: String
     private let inputKind: InputKind
 
-    init(modelURL: URL) throws {
-        let resolvedURL: URL
-        if modelURL.pathExtension == "mlmodelc" {
-            resolvedURL = modelURL
-        } else {
-            resolvedURL = try MLModel.compileModel(at: modelURL)
-        }
-        let configuration = MLModelConfiguration()
-        configuration.computeUnits = .all
-        model = try MLModel(contentsOf: resolvedURL, configuration: configuration)
+    init(modelURL: URL, compiledURL: URL?) throws {
+        model = try loadModel(at: modelURL, compiledURL: compiledURL)
         guard let discoveredInput = model.modelDescription.inputDescriptionsByName.keys.sorted().first else {
             throw WorkerError.missingModelFeature("input")
         }
@@ -382,11 +381,68 @@ private func unitLength(_ embedding: [Float]) throws -> [Float] {
     return embedding.map { $0 / length }
 }
 
-private func compiledModel(at modelURL: URL) throws -> MLModel {
-    let resolvedURL = modelURL.pathExtension == "mlmodelc" ? modelURL : try MLModel.compileModel(at: modelURL)
+/// Compiled copies made for this run alone (no --compiled-model), removed
+/// when the worker exits: Core ML may read a loaded model from disk again.
+private var temporaryCompiledModels: [URL] = []
+
+private func removeTemporaryCompiledModels() {
+    for url in temporaryCompiledModels { try? FileManager.default.removeItem(at: url) }
+    temporaryCompiledModels.removeAll()
+}
+
+/// A model ready to run. An .mlmodelc loads as is; an .mlpackage loads from
+/// its compiled copy at `compiledURL`, compiled there the first time. When
+/// that copy can't be made or won't load, the worker compiles one for this
+/// run instead of replacing it: another worker may have it loaded. (A model
+/// that doesn't compile at all then fails there, with Core ML's error.)
+private func loadModel(at modelURL: URL, compiledURL: URL?) throws -> MLModel {
     let configuration = MLModelConfiguration()
     configuration.computeUnits = .all
-    return try MLModel(contentsOf: resolvedURL, configuration: configuration)
+    if modelURL.pathExtension.lowercased() == "mlmodelc" {
+        return try MLModel(contentsOf: modelURL, configuration: configuration)
+    }
+    if let compiledURL {
+        do {
+            return try MLModel(contentsOf: try compileOnce(modelURL, into: compiledURL), configuration: configuration)
+        } catch {
+            writeError("people-worker: could not use the compiled model at \(compiledURL.path) (\(error.localizedDescription)); compiling one for this run")
+        }
+    }
+    let compiled = try MLModel.compileModel(at: modelURL)
+    temporaryCompiledModels.append(compiled)
+    return try MLModel(contentsOf: compiled, configuration: configuration)
+}
+
+/// `compiledURL`, compiling `modelURL` into it unless it is there already.
+/// A scan starts its workers together: the first one compiles while holding
+/// a lock beside the copy, the others wait for it and load what it made. The
+/// copy is staged beside its final place (leaving the temporary directory can
+/// be a copy across volumes, which can be cut short) and renamed into it, so
+/// that path never holds part of a model.
+private func compileOnce(_ modelURL: URL, into compiledURL: URL) throws -> URL {
+    let fm = FileManager.default
+    if fm.fileExists(atPath: compiledURL.path) { return compiledURL }
+    let directory = compiledURL.deletingLastPathComponent()
+    try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+    let name = compiledURL.lastPathComponent
+    let lock = open(directory.appendingPathComponent(".\(name).lock").path, O_RDWR | O_CREAT | O_CLOEXEC, 0o644)
+    if lock >= 0 { flock(lock, LOCK_EX) }
+    defer { if lock >= 0 { close(lock) } }  // closing it releases the lock
+    if fm.fileExists(atPath: compiledURL.path) { return compiledURL }
+    let compiled = try MLModel.compileModel(at: modelURL)
+    defer { try? fm.removeItem(at: compiled) }  // already gone once moved
+    let staging = directory.appendingPathComponent(".\(name).\(getpid())")
+    try? fm.removeItem(at: staging)
+    defer { try? fm.removeItem(at: staging) }
+    try fm.moveItem(at: compiled, to: staging)
+    do {
+        try fm.moveItem(at: staging, to: compiledURL)
+    } catch {
+        // Put there meanwhile by a run that didn't take the lock: use theirs.
+        if !fm.fileExists(atPath: compiledURL.path) { throw error }
+    }
+    writeError("people-worker: compiled \(modelURL.lastPathComponent) into \(compiledURL.path)")
+    return compiledURL
 }
 
 /// A pet identity model: one RGB image in (any size, read from the model),
@@ -398,8 +454,8 @@ private final class PetModel {
     private let outputName: String
     private let side: Int
 
-    init(modelURL: URL) throws {
-        model = try compiledModel(at: modelURL)
+    init(modelURL: URL, compiledURL: URL?) throws {
+        model = try loadModel(at: modelURL, compiledURL: compiledURL)
         guard let input = model.modelDescription.inputDescriptionsByName.sorted(by: { $0.key < $1.key }).first,
               input.value.type == .image,
               let constraint = input.value.imageConstraint else {
@@ -975,6 +1031,8 @@ private func writeError(_ message: String) {
 private struct Arguments {
     let modelURL: URL?
     let petModelURL: URL?
+    let compiledModelURL: URL?
+    let petCompiledModelURL: URL?
     let serve: Bool
     let selfTest: Bool
 
@@ -986,10 +1044,13 @@ private struct Arguments {
         }
         modelURL = value("--model")
         petModelURL = value("--pet-model")
+        compiledModelURL = value("--compiled-model")
+        petCompiledModelURL = value("--pet-compiled-model")
         serve = arguments.contains("--serve")
         selfTest = arguments.contains("--self-test")
-        let usage = "Usage: people-worker --model <face .mlpackage|.mlmodelc> [--pet-model <pet model>] --serve\n"
-            + "       people-worker (--model <face model> | --pet-model <pet model>) --self-test"
+        let usage = "Usage: people-worker --model <face .mlpackage|.mlmodelc> [--compiled-model <path.mlmodelc>]\n"
+            + "         [--pet-model <pet model> [--pet-compiled-model <path.mlmodelc>]] --serve\n"
+            + "       people-worker (--model <face model> | --pet-model <pet model>) [--compiled-model … | --pet-compiled-model …] --self-test"
         guard serve != selfTest else { throw WorkerError.invalidArguments(usage) }
         // Serving always reads faces; the pet model rides along. A self-test
         // checks exactly one model, so the settings can vet a pet model alone.
@@ -1003,13 +1064,13 @@ do {
     let output = reserveStdoutForProtocol()
     if arguments.selfTest {
         if let petModelURL = arguments.petModelURL {
-            writeJSON(try PetModel(modelURL: petModelURL).selfTest(), to: output)
+            writeJSON(try PetModel(modelURL: petModelURL, compiledURL: arguments.petCompiledModelURL).selfTest(), to: output)
         } else if let modelURL = arguments.modelURL {
-            writeJSON(try ArcFaceModel(modelURL: modelURL).selfTest(), to: output)
+            writeJSON(try ArcFaceModel(modelURL: modelURL, compiledURL: arguments.compiledModelURL).selfTest(), to: output)
         }
     } else if let modelURL = arguments.modelURL {
-        let model = try ArcFaceModel(modelURL: modelURL)
-        let petModel = try arguments.petModelURL.map { try PetModel(modelURL: $0) }
+        let model = try ArcFaceModel(modelURL: modelURL, compiledURL: arguments.compiledModelURL)
+        let petModel = try arguments.petModelURL.map { try PetModel(modelURL: $0, compiledURL: arguments.petCompiledModelURL) }
         while let line = readLine(strippingNewline: true) {
             guard !line.isEmpty else { continue }
             do {
@@ -1020,7 +1081,9 @@ do {
             }
         }
     }
+    removeTemporaryCompiledModels()
 } catch {
+    removeTemporaryCompiledModels()
     writeError(error.localizedDescription)
     exit(2)
 }

@@ -605,6 +605,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_people_index_parser.add_argument("--model-id", required=True)
     run_people_index_parser.add_argument("--model-version", required=True)
     run_people_index_parser.add_argument("--model-path", type=Path, required=True)
+    # Where the workers keep the model compiled between scans (--pet-… for the
+    # pet model); without one each worker compiles it for itself.
+    run_people_index_parser.add_argument("--compiled-model-path", type=Path)
     run_people_index_parser.add_argument("--manifest-hash", required=True)
     run_people_index_parser.add_argument("--worker-path", type=Path)
     run_people_index_parser.add_argument("--asset-id", action="append")
@@ -613,6 +616,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_people_index_parser.add_argument("--pet-model-id")
     run_people_index_parser.add_argument("--pet-model-version")
     run_people_index_parser.add_argument("--pet-model-path", type=Path)
+    run_people_index_parser.add_argument("--pet-compiled-model-path", type=Path)
     run_people_index_parser.add_argument("--pet-manifest-hash")
     run_people_index_parser.add_argument("--pet-threshold", type=float)
 
@@ -1625,6 +1629,7 @@ def _cmd_run_people_index_job(args, connection, catalog, parser):
         model_id=args.model_id,
         model_version=args.model_version,
         model_path=args.model_path,
+        compiled_model_path=args.compiled_model_path,
         manifest_hash=args.manifest_hash,
         worker_path=args.worker_path,
         asset_ids=args.asset_id,
@@ -1632,6 +1637,7 @@ def _cmd_run_people_index_job(args, connection, catalog, parser):
         pet_model_id=args.pet_model_id,
         pet_model_version=args.pet_model_version,
         pet_model_path=args.pet_model_path,
+        pet_compiled_model_path=args.pet_compiled_model_path,
         pet_manifest_hash=args.pet_manifest_hash,
         pet_threshold=args.pet_threshold,
     )

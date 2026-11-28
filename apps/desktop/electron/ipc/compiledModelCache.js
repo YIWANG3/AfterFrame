@@ -1,7 +1,9 @@
-// Where compute-depth keeps a model's compiled copy between runs (its
-// --compiled-model argument). Core ML caches the Neural Engine build of a
-// compiled model by its location, so a stable path is what makes every photo
-// after the first take ~0.2 s instead of ~16 s.
+// Where a native helper keeps a model's compiled copy between runs (the
+// --compiled-model argument of compute-depth and people-worker). Core ML
+// caches the Neural Engine build of a compiled model by its location, so a
+// stable path is what makes every photo after the first take ~0.2 s instead
+// of ~16 s; and a model compiled anew each run lands in the temporary
+// directory, where nothing removes it.
 
 const path = require("path");
 const fs = require("fs");
@@ -19,20 +21,20 @@ function createCompiledModelCache({ dir, appVersion }) {
       try {
         real = fs.realpathSync(modelPath);
         mtime = Math.floor(fs.statSync(real).mtimeMs);
-      } catch { /* missing model: compute-depth reports it */ }
+      } catch { /* missing model: the helper reports it */ }
       const key = crypto.createHash("sha1").update(`${real}|${mtime}|${appVersion}`).digest("hex");
       return path.join(dir, `${key}.mlmodelc`);
     },
 
-    // Keep one compiled model (each is ~50 MB): before compiling a new one,
-    // drop the rest. Names containing the kept one's key are spared, so a
-    // concurrent run's staging copy of the same model survives.
-    pruneExcept(keepPath) {
-      const key = path.basename(keepPath, ".mlmodelc");
+    // Keep only the compiled models in use (each is 50 to 125 MB): before
+    // compiling a new one, drop the rest. Names containing a kept one's key
+    // are spared, so a concurrent run's staging copy and lock survive.
+    pruneExcept(...keepPaths) {
+      const keys = keepPaths.map((keepPath) => path.basename(keepPath, ".mlmodelc"));
       let entries;
       try { entries = fs.readdirSync(dir); } catch { return; }
       for (const name of entries) {
-        if (name.includes(key)) continue;
+        if (keys.some((key) => name.includes(key))) continue;
         fs.rmSync(path.join(dir, name), { recursive: true, force: true });
       }
     },
