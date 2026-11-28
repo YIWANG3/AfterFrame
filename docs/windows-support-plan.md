@@ -321,7 +321,7 @@ services/sidecar/src/media_workspace/
 
 - **正式版导出编辑后的图会丢 EXIF**：相框、文字、拼图、切图导出时用 `python3 -c` 读取原图元数据，但正式包里没有 sidecar 源码。已修复（#113，改为通过常驻 sidecar 的 `read-image-metadata` 读取），随 0.5.6 发布。
 - **深度感知文字和贴纸抠图在正式版里依赖 Xcode**：这两个功能以前在运行时用 `swift` 解释 `.swift` 源文件（`ipc/swiftRuntime.js`）。0.5.6（#114）改为打包时预编译，`swiftRuntime.js` 已删除。实测解释执行只比预编译慢约 0.5 秒，所以这一项修的是"没装开发工具就用不了"，速度不是重点。
-- **深度推理每张新照片要约 16 秒**：`compute-depth` 每次运行都把模型编译到新的临时目录，而 Core ML 对 Neural Engine 的编译缓存是按模型位置来的，所以缓存从来用不上。0.5.6 把编译结果固定存到 `userData/depth-models`，之后每张照片约 0.22 秒，输出和之前逐字节相同。`people-worker` 也是每次任务编译一遍模型，但每个任务只编译一次，影响小，尚未处理。
+- **深度推理每张新照片要约 16 秒**：`compute-depth` 每次运行都把模型编译到新的临时目录，而 Core ML 对 Neural Engine 的编译缓存是按模型位置来的，所以缓存从来用不上。0.5.6 把编译结果固定存到 `userData/depth-models`，之后每张照片约 0.22 秒，输出和之前逐字节相同。`people-worker` 原来也是每个 worker 启动时都把模型编译到临时目录，而且编完从不删除：#346 之后一次扫描起 3 个 worker，就是 3 份约 125 MB 的副本，一天能攒下几 GB。现在同样固定存到 `userData/people-compiled-models`（人脸和宠物模型各一份），同时启动的几个 worker 只有第一个编译，之后的扫描直接加载。
 - **0.5.5 的 `video-tool` 和 `people-worker` 要求 macOS 26**：`swiftc` 没有指定最低版本，默认按构建机的系统版本编译，所以视频和人物识别在 macOS 26 以下大概率启动不了。0.5.6 给每个程序指定了它能支持的最低版本：`video-tool` 13，`people-worker` 12，`compute-depth` 12，`extract-sticker` 14。Windows 版的原生引擎同样要注意这个问题。
 - ~~**PyInstaller spec 不在仓库里**~~：见 2.4。已放回仓库（#134，随 0.5.7 发布）。
 - **现有 e2e 失败**：`25-collage-batch` 里"把格子拖到另一页交换两张图"那条，在 `main` 上也会失败（2026-10-02）。

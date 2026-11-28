@@ -45,7 +45,7 @@ function registerPeople(t, { settings = {}, prepare, bundled = true, jobs = {}, 
   const handlers = {};
   const launched = [];
   const api = peopleIpc.register({
-    app: { getPath: () => userData },
+    app: { getPath: () => userData, getVersion: () => "1.0.0" },
     ipcMain: { handle: (channel, fn) => { handlers[channel] = fn; } },
     dialog: {},
     isPackaged: true,
@@ -217,6 +217,74 @@ test("a paused task started on 0.5.5's download resumes on the bundled model", a
   await people.api.resumePeopleIndexJob("j1");
   const [argv] = people.launched;
   assert.equal(argv[argv.indexOf("--model-path") + 1], people.modelPath);
+});
+
+function pausedJob(id, payload = {}) {
+  return {
+    job_id: id,
+    job_type: "people_index",
+    status: "paused",
+    payload: {
+      model_id: "arcface-r100-coreml",
+      model_version: "b51b655",
+      manifest_hash: "743cae41246e637e62e67224211bafd71f2b297dcc696523ed8b4aeaa7613d6c",
+      ...payload,
+    },
+  };
+}
+const flagValue = (argv, flag) => (argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : undefined);
+
+test("a scan's workers keep each model compiled in one place in userData, the same every launch", async (t) => {
+  const root = tempDir(t);
+  const petModel = fakeModel(path.join(root, "pets", "PetEmbedding.mlpackage"));
+  const pets = { pet_model_id: "pets", pet_model_version: "1", pet_manifest_hash: "ph", pet_model_path: petModel };
+  const people = registerPeople(t, { jobs: { j1: pausedJob("j1", pets), j2: pausedJob("j2", pets), j3: pausedJob("j3") } });
+  await people.api.resumePeopleIndexJob("j1");
+  await people.api.resumePeopleIndexJob("j2");
+  await people.api.resumePeopleIndexJob("j3");
+  const [first, second, facesOnly] = people.launched;
+
+  const face = flagValue(first, "--compiled-model-path");
+  const pet = flagValue(first, "--pet-compiled-model-path");
+  for (const compiled of [face, pet]) {
+    assert.equal(path.dirname(compiled), path.join(people.userData, "people-compiled-models"));
+    assert.match(path.basename(compiled), /^[0-9a-f]{40}\.mlmodelc$/);
+  }
+  assert.notEqual(face, pet);
+  assert.equal(flagValue(second, "--compiled-model-path"), face);
+  assert.equal(flagValue(second, "--pet-compiled-model-path"), pet);
+  assert.equal(flagValue(facesOnly, "--compiled-model-path"), face);
+  assert.equal(facesOnly.includes("--pet-compiled-model-path"), false);
+});
+
+test("a model that is compiled already is loaded as it is", async (t) => {
+  const root = tempDir(t);
+  const compiledModel = fakeModel(path.join(root, "Custom.mlmodelc"));
+  const job = pausedJob("j1", { model_id: "custom", model_version: "1", manifest_hash: "abc", model_path: compiledModel });
+  const people = registerPeople(t, { jobs: { j1: job } });
+  await people.api.resumePeopleIndexJob("j1");
+  const [argv] = people.launched;
+  assert.equal(flagValue(argv, "--model-path"), compiledModel);
+  assert.equal(argv.includes("--compiled-model-path"), false);
+});
+
+test("compiled copies of models no longer in use go when one still has to be compiled, not before", async (t) => {
+  const people = registerPeople(t, { jobs: { j1: pausedJob("j1"), j2: pausedJob("j2") } });
+  const dir = path.join(people.userData, "people-compiled-models");
+  const stale = path.join(dir, `${"0".repeat(40)}.mlmodelc`);
+  fs.mkdirSync(stale, { recursive: true });
+
+  await people.api.resumePeopleIndexJob("j1");
+  const face = flagValue(people.launched[0], "--compiled-model-path");
+  assert.equal(fs.existsSync(stale), false);
+
+  // The workers compiled it: from now on nothing is pruned at launch.
+  fs.mkdirSync(face);
+  fs.mkdirSync(stale);
+  await people.api.resumePeopleIndexJob("j2");
+  assert.equal(flagValue(people.launched[1], "--compiled-model-path"), face);
+  assert.equal(fs.existsSync(stale), true);
+  assert.equal(fs.existsSync(face), true);
 });
 
 test("the built-in model can't be removed", async (t) => {

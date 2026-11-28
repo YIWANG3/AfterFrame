@@ -60,6 +60,22 @@ test("pruning keeps the current model and its staging copy, drops the rest", (t)
   assert.deepEqual(fs.readdirSync(dir).sort(), [`.${key}.mlmodelc.4242`, `${key}.mlmodelc`].sort());
 });
 
+test("pruning keeps every model still in use: the face and the pet model of a people scan", (t) => {
+  const root = tempDir(t);
+  const dir = path.join(root, "cache");
+  const cache = createCompiledModelCache({ dir, appVersion: "1.0.0" });
+  const face = cache.pathFor(fakeModel(root, "FaceEmbedding.mlpackage"));
+  const pet = cache.pathFor(fakeModel(root, "PetEmbedding.mlpackage"));
+  const oldFace = cache.pathFor(fakeModel(root, "Custom.mlpackage"));
+  for (const compiled of [face, pet, oldFace]) fs.mkdirSync(compiled, { recursive: true });
+  // people-worker's lock beside the copy it compiles.
+  fs.writeFileSync(path.join(dir, `.${path.basename(face)}.lock`), "");
+
+  cache.pruneExcept(face, pet);
+
+  assert.deepEqual(fs.readdirSync(dir).sort(), [`.${path.basename(face)}.lock`, path.basename(face), path.basename(pet)].sort());
+});
+
 test("pruning a cache that does not exist yet is a no-op", (t) => {
   const root = tempDir(t);
   const cache = createCompiledModelCache({ dir: path.join(root, "missing"), appVersion: "1.0.0" });

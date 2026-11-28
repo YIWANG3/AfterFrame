@@ -439,12 +439,33 @@ for line in sys.stdin:
             self.assertEqual(subjects, ["dog", "person"])
             indexed = {row["model_id"]: row["status"] for row in connection.execute("SELECT model_id, status FROM people_asset_index")}
             self.assertEqual(indexed, {"arcface-r100": "indexed", "dinov2-small": "indexed"})
-            # The worker was started with both models.
+            # The worker was started with both models, and nowhere to keep them compiled.
             self.assertIn("--pet-model", (root / "worker-argv.log").read_text())
+            self.assertNotIn("compiled-model", (root / "worker-argv.log").read_text())
 
             second = self._run(connection, worker, face_model, pet_model)
             self.assertEqual((second["analyzed"], second["skipped"]), (0, 1))
             self.assertEqual(len((root / "worker-requests.log").read_text().splitlines()), 1)
+            connection.close()
+
+    def test_the_workers_are_told_where_both_models_are_kept_compiled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, face_model, pet_model = self._pet_job_setup(root)
+            worker = self._write_fake_worker(root)
+            compiled_face = root / "compiled" / "face.mlmodelc"
+            compiled_pet = root / "compiled" / "pet.mlmodelc"
+            job = create_job(connection, "people_index")
+            run_people_index_job(
+                connection, job["job_id"], model_id="arcface-r100", model_version="test-v1",
+                model_path=face_model, manifest_hash="manifest-hash", worker_path=worker,
+                compiled_model_path=compiled_face, pet_model_id="dinov2-small", pet_model_version="test",
+                pet_model_path=pet_model, pet_manifest_hash="pet-manifest", pet_compiled_model_path=compiled_pet,
+                workers=2,
+            )
+            argv = (root / "worker-argv.log").read_text()
+            self.assertIn(f"--model {face_model} --compiled-model {compiled_face}", argv)
+            self.assertIn(f"--pet-model {pet_model} --pet-compiled-model {compiled_pet}", argv)
             connection.close()
 
     def test_a_library_analyzed_for_faces_gets_its_pets_without_redoing_faces(self) -> None:
