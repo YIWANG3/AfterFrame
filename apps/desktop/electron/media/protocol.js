@@ -18,6 +18,7 @@ const { pathToFileURL } = require("node:url");
 
 // The originals media:// renders to a JPEG first, from the format registry.
 const { TRANSCODE_RE } = require("../../shared/formats.mjs");
+const { pruneToBudget, touch } = require("./cacheBudget");
 
 // Near-lossless, as the render stands in for the original in the editor too;
 // about a quarter bigger than sips' default.
@@ -37,27 +38,7 @@ async function sipsToJpeg(srcPath, outPath, { quality = TRANSCODE_JPEG_QUALITY }
 // Deletes the least recently used renders until the rest fit the budget.
 // Returns what it deleted.
 function pruneTranscodeCache(cacheDir, budgetBytes = CACHE_BUDGET_BYTES) {
-  let entries;
-  try {
-    entries = fs.readdirSync(cacheDir)
-      .filter((name) => name.endsWith(".jpg") && !name.startsWith("."))
-      .map((name) => {
-        const file = path.join(cacheDir, name);
-        const stat = fs.statSync(file);
-        return { file, size: stat.size, mtime: stat.mtimeMs };
-      });
-  } catch {
-    return [];
-  }
-  entries.sort((a, b) => b.mtime - a.mtime);
-  let total = 0;
-  const stale = [];
-  for (const entry of entries) {
-    total += entry.size;
-    if (total > budgetBytes) stale.push(entry.file);
-  }
-  for (const file of stale) fs.rmSync(file, { force: true });
-  return stale;
+  return pruneToBudget(cacheDir, budgetBytes, { include: (name) => name.endsWith(".jpg") });
 }
 
 // convert(srcPath, outPath, { quality }) writes the JPEG. Requests for the
@@ -74,8 +55,7 @@ function createTranscoder({ cacheDir, convert = sipsToJpeg, quality = TRANSCODE_
         .digest("hex");
       const outPath = path.join(cacheDir, `${key}.jpg`);
       if (fs.existsSync(outPath)) {
-        const now = new Date();
-        fs.utimesSync(outPath, now, now); // most recently used
+        touch(outPath); // most recently used
         return outPath;
       }
       fs.mkdirSync(cacheDir, { recursive: true });

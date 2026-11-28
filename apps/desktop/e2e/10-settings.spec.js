@@ -98,6 +98,12 @@ test("Library tab renders catalog/cache groups + HD preview toggle", async () =>
   // Catalog contents reflect the seeded fixture: 13 images + 1 video = 14.
   await expect(ctx.window.getByText("14 assets · 13 photos · 1 videos")).toBeVisible();
   await expect(ctx.window.getByText("Cache & storage")).toBeVisible();
+  // The caches that grow with use say what they keep (review 2026-11-27);
+  // the hover filmstrips have a row of their own.
+  await expect(ctx.window.getByText("Video hover frames", { exact: true })).toBeVisible();
+  await expect(ctx.window.getByText(/across it in the grid\. Keeps the most recent 256 MB/)).toBeVisible();
+  await expect(ctx.window.getByText(/10-bit HEVC.*Keeps the most recent 2 GB/)).toBeVisible();
+  await expect(ctx.window.getByText(/depth-aware text\. Keeps the most recent 256 MB/)).toBeVisible();
   await expect(ctx.window.getByText("Synced folders", { exact: true })).toBeVisible();
   await expect(ctx.window.getByText("No synced folders in this catalog yet.")).toBeVisible();
   // HD previews are opt-in: the toggle exists and defaults off.

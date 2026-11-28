@@ -9,16 +9,23 @@
 //                   => Promise, the sidecar running the same commands with
 //                   FFmpeg; rejects when they fail
 //   timeouts        { transcode, frames } ms overrides (tests: shorter limits)
+//   budgets         { proxies, keyframes } byte overrides (tests: small caches)
 
 const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { spawnSafely } = require("../spawnSafely");
+const { pruneToBudget, touch } = require("../media/cacheBudget");
 
 // A long 4K clip on a slow PC takes minutes to transcode in software.
 const TRANSCODE_TIMEOUT_MS = 30 * 60_000;
 const FRAMES_TIMEOUT_MS = 3 * 60_000;
+// The most recently used kept, the rest deleted (review 2026-11-27). A proxy
+// is up to about 60 MB a minute of clip, so this is the last several clips
+// played; a filmstrip is twelve 320 px JPEGs, about 250 KB, so a thousand or so.
+const PROXY_BUDGET_BYTES = 2 * 1024 ** 3;
+const KEYFRAMES_BUDGET_BYTES = 256 * 1024 ** 2;
 
 function register({
   ipcMain, app, media: allowlist, nativeBin, commands, platform = process.platform,
@@ -27,9 +34,12 @@ function register({
   // process of its own, as the resident one is serial.
   runVideoTool = platform === "darwin" ? null : (args, timeoutMs) => commands.videoTool(args, timeoutMs),
   timeouts = {},
+  budgets = {},
 }) {
   const transcodeTimeoutMs = timeouts.transcode ?? TRANSCODE_TIMEOUT_MS;
   const framesTimeoutMs = timeouts.frames ?? FRAMES_TIMEOUT_MS;
+  const proxyBudget = budgets.proxies ?? PROXY_BUDGET_BYTES;
+  const keyframesBudget = budgets.keyframes ?? KEYFRAMES_BUDGET_BYTES;
   const runTool = runVideoTool
     ? (args, timeoutMs) => runVideoTool(args, timeoutMs).then(() => true, () => false)
     : (args, timeoutMs) => new Promise((resolve) => {
@@ -58,9 +68,12 @@ function register({
       fs.mkdirSync(dir, { recursive: true });
       allowlist.addAllowedMediaDir(dir);
       const out = path.join(dir, `${key}.mp4`);
-      if (!fs.existsSync(out)) {
+      if (fs.existsSync(out)) {
+        touch(out);
+      } else {
         const ok = (await runTool(["transcode", resolved, out], transcodeTimeoutMs)) && fs.existsSync(out);
         if (!ok) { try { fs.unlinkSync(out); } catch { /* ignore */ } return null; }
+        pruneToBudget(dir, proxyBudget, { keep: [out], include: (name) => name.endsWith(".mp4") });
       }
       return out;
     } catch (err) {
@@ -79,10 +92,15 @@ function register({
       const stat = fs.statSync(resolved);
       const n = Math.max(2, Math.min(24, Number(count) || 12));
       const key = crypto.createHash("sha1").update(`${resolved}:${stat.size}:${stat.mtimeMs}:${n}`).digest("hex");
-      const dir = path.join(app.getPath("userData"), "video-keyframes", key);
-      if (!fs.existsSync(path.join(dir, "manifest.json"))) {
+      const root = path.join(app.getPath("userData"), "video-keyframes");
+      const dir = path.join(root, key);
+      if (fs.existsSync(path.join(dir, "manifest.json"))) {
+        touch(dir);
+      } else {
         fs.mkdirSync(dir, { recursive: true });
         if (!(await runTool(["frames", resolved, dir, "--count", String(n), "--max-edge", "320"], framesTimeoutMs))) return [];
+        touch(dir);
+        pruneToBudget(root, keyframesBudget, { keep: [dir] });
       }
       return fs.readdirSync(dir)
         .filter((f) => /^frame_\d+\.jpg$/.test(f))

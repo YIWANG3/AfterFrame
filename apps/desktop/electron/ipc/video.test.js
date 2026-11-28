@@ -9,7 +9,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { register } = require("./video");
 
-function setup(runVideoTool, { videoToolPath = null, timeouts } = {}) {
+function setup(runVideoTool, { videoToolPath = null, timeouts, budgets } = {}) {
   const handlers = new Map();
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-video-ipc-"));
   const clip = path.join(userData, "clip.mp4");
@@ -21,6 +21,7 @@ function setup(runVideoTool, { videoToolPath = null, timeouts } = {}) {
     videoToolPath: videoToolPath || path.join(userData, "no-video-tool"),
     runVideoTool,
     timeouts,
+    budgets,
   });
   const ask = (channel, ...args) => handlers.get(channel)(null, ...args);
   return { ask, userData, clip };
@@ -82,4 +83,46 @@ test("a video-tool that hangs is killed at the timeout and gives no proxy", asyn
   assert.equal(await ask("app:video-proxy", clip), null);
   assert.ok(Date.now() - started < 20_000, "resolved by the timeout, not by the tool finishing");
   assert.deepEqual(fs.readdirSync(path.join(userData, "video-proxies")), []);
+});
+
+// Last used `secondsAgo` (a file, or a filmstrip's folder).
+function usedAgo(entry, secondsAgo) {
+  const at = new Date(Date.now() - secondsAgo * 1000);
+  fs.utimesSync(entry, at, at);
+}
+
+test("proxies past the budget: the least recently played goes, one played again stays", async () => {
+  const { ask, userData } = setup(async (args) => {
+    fs.writeFileSync(args[2], Buffer.alloc(100));
+    return { path: args[2] };
+  }, { budgets: { proxies: 250 } });
+  const clips = ["a.mov", "b.mov", "c.mov"].map((name) => {
+    const clip = path.join(userData, name);
+    fs.writeFileSync(clip, name);
+    return clip;
+  });
+  const first = await ask("app:video-proxy", clips[0]);
+  usedAgo(first, 30);
+  const second = await ask("app:video-proxy", clips[1]);
+  usedAgo(second, 20);
+  assert.equal(await ask("app:video-proxy", clips[0]), first, "played again: now the most recent");
+  const third = await ask("app:video-proxy", clips[2]);
+  assert.deepEqual(fs.readdirSync(path.join(userData, "video-proxies")).sort(), [path.basename(first), path.basename(third)].sort());
+  assert.ok(!fs.existsSync(second));
+});
+
+test("filmstrips past the budget: the least recently hovered folder goes", async () => {
+  const { ask, userData } = setup(async (args) => {
+    for (const name of ["frame_0.jpg", "frame_1.jpg", "manifest.json"]) fs.writeFileSync(path.join(args[2], name), Buffer.alloc(100));
+    return {};
+  }, { budgets: { keyframes: 400 } });
+  const clips = ["a.mov", "b.mov"].map((name) => {
+    const clip = path.join(userData, name);
+    fs.writeFileSync(clip, name);
+    return clip;
+  });
+  const [firstFrame] = await ask("app:video-keyframes", clips[0], 12);
+  usedAgo(path.dirname(firstFrame), 30);
+  const [secondFrame] = await ask("app:video-keyframes", clips[1], 12);
+  assert.deepEqual(fs.readdirSync(path.join(userData, "video-keyframes")), [path.basename(path.dirname(secondFrame))]);
 });
